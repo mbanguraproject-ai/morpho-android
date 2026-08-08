@@ -23,6 +23,12 @@ import cc.devbangs.morpho.ui.components.IconButtonMorpho
 import cc.devbangs.morpho.ui.icon.MorphoIcon
 import cc.devbangs.morpho.ui.tool.kit.hasTextDevTool
 import cc.devbangs.morpho.ui.tool.kit.TextDevTool
+import cc.devbangs.morpho.ui.tool.kit.hasGeneratorTool
+import cc.devbangs.morpho.ui.tool.kit.GeneratorTool
+import cc.devbangs.morpho.ui.tool.kit.hasImageTool
+import cc.devbangs.morpho.ui.tool.kit.ImageTool
+import cc.devbangs.morpho.ui.tool.kit.hasPdfTool
+import cc.devbangs.morpho.ui.tool.kit.PdfTool
 import cc.devbangs.morpho.ui.theme.*
 
 @Composable
@@ -101,6 +107,9 @@ private fun StatusLabel(tool: Tool) {
 private fun ToolHost(tool: Tool) {
     when {
         hasTextDevTool(tool.id) -> TextDevTool(tool.id, tool.category.accent)
+        hasGeneratorTool(tool.id) -> GeneratorTool(tool.id, tool.category.accent)
+        hasImageTool(tool.id) -> ImageTool(tool.id, tool.category.accent)
+        hasPdfTool(tool.id) -> PdfTool(tool.id, tool.category.accent)
         else -> Placeholder(tool)
     }
 }
