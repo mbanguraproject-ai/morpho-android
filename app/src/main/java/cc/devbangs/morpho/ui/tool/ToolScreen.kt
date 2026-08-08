@@ -21,6 +21,8 @@ import cc.devbangs.morpho.data.Tool
 import cc.devbangs.morpho.data.ToolRegistry
 import cc.devbangs.morpho.ui.components.IconButtonMorpho
 import cc.devbangs.morpho.ui.icon.MorphoIcon
+import cc.devbangs.morpho.ui.tool.kit.hasTextDevTool
+import cc.devbangs.morpho.ui.tool.kit.TextDevTool
 import cc.devbangs.morpho.ui.theme.*
 
 @Composable
@@ -94,9 +96,17 @@ private fun StatusLabel(tool: Tool) {
     }
 }
 
-/** Dispatch to the real per-tool UI. For now: branded placeholder. */
+/** Dispatch to the real per-tool UI, else a branded placeholder. */
 @Composable
 private fun ToolHost(tool: Tool) {
+    when {
+        hasTextDevTool(tool.id) -> TextDevTool(tool.id, tool.category.accent)
+        else -> Placeholder(tool)
+    }
+}
+
+@Composable
+private fun Placeholder(tool: Tool) {
     Box(
         Modifier.fillMaxWidth().clip(Shape.card).background(PaperSunk).padding(Space.xl),
         contentAlignment = Alignment.Center
@@ -105,7 +115,7 @@ private fun ToolHost(tool: Tool) {
             MorphoIcon(if (tool.offline) "settings" else "clock", tint = InkFaint, size = 30.dp)
             Spacer(Modifier.height(Space.md))
             Text(
-                if (tool.offline) "Tool interface loads here."
+                if (tool.offline) "This tool arrives in the next build."
                 else "This tool needs a server engine\nand arrives in a later build.",
                 color = InkSoft, textAlign = TextAlign.Center,
                 style = MaterialTheme.typography.bodyMedium
