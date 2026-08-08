@@ -29,6 +29,8 @@ import cc.devbangs.morpho.ui.tool.kit.hasImageTool
 import cc.devbangs.morpho.ui.tool.kit.ImageTool
 import cc.devbangs.morpho.ui.tool.kit.hasPdfTool
 import cc.devbangs.morpho.ui.tool.kit.PdfTool
+import cc.devbangs.morpho.ui.tool.kit.hasConverterTool
+import cc.devbangs.morpho.ui.tool.kit.ConverterTool
 import cc.devbangs.morpho.ui.theme.*
 
 @Composable
@@ -110,6 +112,7 @@ private fun ToolHost(tool: Tool) {
         hasGeneratorTool(tool.id) -> GeneratorTool(tool.id, tool.category.accent)
         hasImageTool(tool.id) -> ImageTool(tool.id, tool.category.accent)
         hasPdfTool(tool.id) -> PdfTool(tool.id, tool.category.accent)
+        hasConverterTool(tool.id) -> ConverterTool(tool.id, tool.category.accent)
         else -> Placeholder(tool)
     }
 }

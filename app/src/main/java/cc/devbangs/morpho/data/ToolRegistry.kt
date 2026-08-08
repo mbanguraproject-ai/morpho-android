@@ -21,7 +21,7 @@ object ToolRegistry {
         Tool("jpg-to-png", "JPG to PNG Converter", "Convert JPG images to PNG format", ToolCategory.CONVERTER, "jpg-to-png", offline = true, popular = false),
         Tool("png-to-jpg", "PNG to JPG Converter", "Convert PNG images to JPG format", ToolCategory.CONVERTER, "png-to-jpg", offline = true, popular = false),
         Tool("webp-to-png", "WebP to PNG Converter", "Convert WebP images to PNG", ToolCategory.CONVERTER, "webp-to-png", offline = true, popular = false),
-        Tool("svg-to-png", "SVG to PNG Converter", "Convert SVG vectors to PNG images", ToolCategory.CONVERTER, "svg-to-png", offline = true, popular = false),
+        Tool("svg-to-png", "SVG to PNG Converter", "Convert SVG vectors to PNG images", ToolCategory.CONVERTER, "svg-to-png", offline = false, popular = false),
         Tool("heic-to-jpg", "HEIC to JPG Converter", "Convert iPhone HEIC photos to JPG", ToolCategory.CONVERTER, "heic-to-jpg", offline = true, popular = false),
         Tool("image-to-pdf", "Image to PDF Converter", "Convert images to PDF documents", ToolCategory.CONVERTER, "image-to-pdf", offline = true, popular = false),
         Tool("mp4-to-mp3", "MP4 to MP3 Converter", "Extract audio from video as MP3", ToolCategory.VIDEO, "mp4-to-mp3", offline = false, popular = false),
