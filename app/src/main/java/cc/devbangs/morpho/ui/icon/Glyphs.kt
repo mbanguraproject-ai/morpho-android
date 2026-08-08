@@ -21,6 +21,29 @@ internal fun DrawScope.drawGlyph(key: String, c: Color, u: Float, s: Stroke) {
         "cat-developer" -> { gPath(c,u,s){ m(8f,8f,u); l(4f,12f,u); l(8f,16f,u) }; gPath(c,u,s){ m(16f,8f,u); l(20f,12f,u); l(16f,16f,u) }; gLine(13.5f,6f,10.5f,18f,c,u,s) }
         "cat-ai" -> { gCircle(12f,12f,4.5f,c,u,s); gDot(12f,12f,1.1f,c,u); gLine(12f,3f,12f,6.5f,c,u,s); gLine(12f,17.5f,12f,21f,c,u,s); gLine(3f,12f,6.5f,12f,c,u,s); gLine(17.5f,12f,21f,12f,c,u,s) }
 
+        // ---------- UI CHROME ----------
+        "chevron-left" -> { gPath(c,u,s){ m(15f,5f,u); l(8f,12f,u); l(15f,19f,u) } }
+        "chevron-right" -> { gPath(c,u,s){ m(9f,5f,u); l(16f,12f,u); l(9f,19f,u) } }
+        "close" -> { gLine(6f,6f,18f,18f,c,u,s); gLine(18f,6f,6f,18f,c,u,s) }
+        "check" -> { gPath(c,u,s){ m(5f,13f,u); l(10f,18f,u); l(19f,7f,u) } }
+        "copy" -> { gRect(8f,8f,12f,12f,c,u,s,2.5f); gPath(c,u,s){ m(16f,8f,u); l(16f,5f,u); l(4f,5f,u); l(4f,17f,u); l(8f,17f,u) } }
+        "download" -> { gLine(12f,4f,12f,15f,c,u,s); gPath(c,u,s){ m(7f,11f,u); l(12f,16f,u); l(17f,11f,u) }; gPath(c,u,s){ m(5f,19f,u); l(19f,19f,u) } }
+        "upload" -> { gLine(12f,20f,12f,9f,c,u,s); gPath(c,u,s){ m(7f,13f,u); l(12f,8f,u); l(17f,13f,u) }; gPath(c,u,s){ m(5f,5f,u); l(19f,5f,u) } }
+        "share" -> { gCircle(6f,12f,2.4f,c,u,s); gCircle(18f,6f,2.4f,c,u,s); gCircle(18f,18f,2.4f,c,u,s); gLine(8f,11f,16f,7f,c,u,s); gLine(8f,13f,16f,17f,c,u,s) }
+        "plus" -> { gLine(12f,5f,12f,19f,c,u,s); gLine(5f,12f,19f,12f,c,u,s) }
+        "minus" -> { gLine(5f,12f,19f,12f,c,u,s) }
+        "refresh" -> { gPath(c,u,s){ m(19f,8f,u); l(19f,4f,u) }; gPath(c,u,s){ m(19f,8f,u); l(15f,8f,u) }; gCircle(12f,12f,7f,c,u,s) }
+        "image-add" -> { gRect(3f,5f,14f,14f,c,u,s,2.5f); gCircle(7.5f,9.5f,1.4f,c,u,s); gPath(c,u,s){ m(4f,16f,u); l(8f,12f,u); l(12f,15f,u) }; gLine(18f,6f,18f,12f,c,u,s); gLine(15f,9f,21f,9f,c,u,s) }
+        "file-add" -> { gPath(c,u,s){ m(6f,3f,u); l(14f,3f,u); l(18f,7f,u); l(18f,21f,u); l(6f,21f,u); close() }; gLine(12f,11f,12f,17f,c,u,s); gLine(9f,14f,15f,14f,c,u,s) }
+        "settings" -> { gCircle(12f,12f,3f,c,u,s); gCircle(12f,12f,7.5f,c,u,s) }
+        "clock" -> { gCircle(12f,12f,8f,c,u,s); gPath(c,u,s){ m(12f,8f,u); l(12f,12f,u); l(15f,14f,u) } }
+        "info" -> { gCircle(12f,12f,8f,c,u,s); gDot(12f,8.5f,0.9f,c,u); gLine(12f,11.5f,12f,16f,c,u,s) }
+
+        // ---------- BOTTOM-BAR TABS ----------
+        "tab-home" -> { gPath(c,u,s){ m(4f,11f,u); l(12f,4f,u); l(20f,11f,u) }; gPath(c,u,s){ m(6f,10f,u); l(6f,20f,u); l(18f,20f,u); l(18f,10f,u) }; gPath(c,u,s){ m(10f,20f,u); l(10f,14f,u); l(14f,14f,u); l(14f,20f,u) } }
+        "tab-grid" -> { gRect(4f,4f,7f,7f,c,u,s,2f); gRect(13f,4f,7f,7f,c,u,s,2f); gRect(4f,13f,7f,7f,c,u,s,2f); gRect(13f,13f,7f,7f,c,u,s,2f) }
+        "tab-search" -> { gCircle(11f,11f,6f,c,u,s); gLine(15.5f,15.5f,20f,20f,c,u,s) }
+
         // ---------- PDF ----------
         "merge-pdf" -> { gRect(4f,6f,10f,13f,c,u,s); gRect(10f,4f,10f,13f,c,u,s) }
         "pdf-splitter" -> { gRect(6f,3f,12f,18f,c,u,s); gLine(12f,3f,12f,21f,c,u,s) }
