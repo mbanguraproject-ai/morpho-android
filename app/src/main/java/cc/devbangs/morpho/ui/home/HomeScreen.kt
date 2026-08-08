@@ -39,10 +39,12 @@ fun HomeScreen(
     onOpenTool: (String) -> Unit,
     onOpenCategory: (String) -> Unit,
     onOpenSearch: () -> Unit,
+    onSeeAllCategories: () -> Unit,
     contentPadding: PaddingValues
 ) {
     val cats = ToolCategory.entries
     val popular = ToolRegistry.popular
+    val onOpenSeeAll = onSeeAllCategories
 
     LazyColumn(
         Modifier.fillMaxSize().background(Paper),
@@ -68,8 +70,8 @@ fun HomeScreen(
             }
         }
 
-        item { RowHeader("CATEGORIES", "See all 9") }
-        items(cats.chunked(2)) { row ->
+        item { RowHeader("CATEGORIES", "See all 9", onOpenSeeAll) }
+        items(cats.take(4).chunked(2)) { row ->
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = Space.gutter, vertical = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(Space.md)
@@ -149,14 +151,17 @@ private fun BigSearch(onClick: () -> Unit) {
 }
 
 @Composable
-private fun RowHeader(eyebrow: String, action: String?) {
+private fun RowHeader(eyebrow: String, action: String?, onAction: (() -> Unit)? = null) {
     Row(
         Modifier.fillMaxWidth().padding(start = Space.gutter, end = Space.gutter, top = Space.lg, bottom = Space.md),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(eyebrow, color = InkFaint, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
         Spacer(Modifier.weight(1f))
-        if (action != null) Text(action, color = Cobalt, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+        if (action != null) Text(
+            action, color = Cobalt, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+            modifier = if (onAction != null) Modifier.clickable(onClick = onAction) else Modifier
+        )
     }
 }
 

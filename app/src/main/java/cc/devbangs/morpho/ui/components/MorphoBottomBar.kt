@@ -1,7 +1,6 @@
 package cc.devbangs.morpho.ui.components
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -12,13 +11,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import cc.devbangs.morpho.core.Space
+import cc.devbangs.morpho.core.Shape
 import cc.devbangs.morpho.ui.icon.MorphoIcon
 import cc.devbangs.morpho.ui.theme.*
 
@@ -36,69 +34,57 @@ fun MorphoBottomBar(
     onSelect: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(Paper)
-            .drawBehind {
-                // top hairline
-                drawLine(
-                    color = PaperLine,
-                    start = Offset(0f, 0f),
-                    end = Offset(size.width, 0f),
-                    strokeWidth = 1f
-                )
-            }
-    ) {
+    // Outer column: transparent, hosts the floating pill + consumes nav inset.
+    Column(modifier.fillMaxWidth()) {
         Row(
             Modifier
+                .padding(horizontal = 16.dp)
                 .fillMaxWidth()
-                .height(58.dp)
-                .padding(horizontal = Space.sm),
+                .shadow(
+                    elevation = 18.dp,
+                    shape = Shape.card,
+                    clip = false,
+                    ambientColor = Ink.copy(alpha = 0.10f),
+                    spotColor = Cobalt.copy(alpha = 0.18f)
+                )
+                .clip(Shape.card)
+                .background(Paper)
+                .padding(vertical = 10.dp, horizontal = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            TABS.forEach { tab ->
-                val selected = tab.key == current
-                TabItem(tab, selected) { onSelect(tab.key) }
-            }
+            TABS.forEach { tab -> TabItem(tab, tab.key == current) { onSelect(tab.key) } }
         }
-        // consume the system nav-bar inset so content never clips
+        // float above the gesture / nav bar
         Spacer(
             Modifier
                 .fillMaxWidth()
                 .windowInsetsBottomHeight(WindowInsets.navigationBars)
-                .background(Paper)
         )
+        Spacer(Modifier.height(10.dp))
     }
 }
 
 @Composable
 private fun RowScope.TabItem(tab: BottomTab, selected: Boolean, onClick: () -> Unit) {
     val tint by animateColorAsState(if (selected) Cobalt else InkFaint, label = "tint")
-    val lift by animateFloatAsState(if (selected) 1f else 0f, label = "lift")
     Column(
-        modifier = Modifier
+        Modifier
             .weight(1f)
-            .fillMaxHeight()
+            .clip(Shape.chip)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 onClick = onClick
-            ),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+            )
+            .padding(vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        MorphoIcon(
-            key = tab.glyph,
-            tint = tint,
-            size = 23.dp,
-            strokeWidth = if (selected) 2.1f else 1.9f
-        )
+        MorphoIcon(tab.glyph, tint = tint, size = 22.dp)
         Spacer(Modifier.height(3.dp))
         Text(
             tab.label,
             color = tint,
-            fontSize = 11.sp,
+            fontSize = 10.5.sp,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium
         )
     }

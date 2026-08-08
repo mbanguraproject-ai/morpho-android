@@ -44,6 +44,12 @@ fun MorphoApp() {
                     onOpenTool = { nav.navigate(Dest.Tool(it).route) },
                     onOpenCategory = { nav.navigate(Dest.Category(it).route) },
                     onOpenSearch = { nav.navigate(Dest.Search.route) },
+                    onSeeAllCategories = {
+                        nav.navigate(Dest.Categories.route) {
+                            popUpTo(Dest.Home.route) { inclusive = false }
+                            launchSingleTop = true
+                        }
+                    },
                     contentPadding = bottomBarPadding(topLevel)
                 )
             }
@@ -108,6 +114,6 @@ fun MorphoApp() {
 @Composable
 private fun bottomBarPadding(show: Boolean): PaddingValues =
     PaddingValues(
-        bottom = if (show) 58.dp + WindowInsets.navigationBars
+        bottom = if (show) 92.dp + WindowInsets.navigationBars
             .asPaddingValues().calculateBottomPadding() else 0.dp
     )
