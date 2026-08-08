@@ -6,7 +6,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -16,8 +15,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cc.devbangs.morpho.core.Shape
@@ -25,9 +28,11 @@ import cc.devbangs.morpho.core.Space
 import cc.devbangs.morpho.data.Tool
 import cc.devbangs.morpho.data.ToolCategory
 import cc.devbangs.morpho.data.ToolRegistry
-import cc.devbangs.morpho.ui.components.*
+import cc.devbangs.morpho.ui.components.morphLift
 import cc.devbangs.morpho.ui.icon.MorphoIcon
 import cc.devbangs.morpho.ui.theme.*
+
+private val HeroTint = Color(0xFFF0F3FF)
 
 @Composable
 fun HomeScreen(
@@ -41,38 +46,52 @@ fun HomeScreen(
 
     LazyColumn(
         Modifier.fillMaxSize().background(Paper),
-        contentPadding = PaddingValues(
-            bottom = contentPadding.calculateBottomPadding() + Space.xxl
-        )
+        contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding() + Space.xxl)
     ) {
-        item { Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars)) }
-        item { Brand() }
-        item { BigSearch(onOpenSearch) }
-        item { Spacer(Modifier.height(Space.xl)) }
-
-        item { Eyebrow("BROWSE BY CATEGORY") }
+        // HERO ZONE with cobalt-tinted gradient band
         item {
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = Space.gutter),
-                horizontalArrangement = Arrangement.spacedBy(Space.sm)
+            Column(
+                Modifier.fillMaxWidth().background(
+                    Brush.verticalGradient(0f to HeroTint, 1f to Paper)
+                )
             ) {
-                items(cats, key = { it.id }) { c ->
-                    CategoryChip(c, ToolRegistry.byCategory[c]?.size ?: 0) { onOpenCategory(c.id) }
-                }
+                Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+                Brand()
+                Text(
+                    "Every file tool,\none clean app.",
+                    style = MaterialTheme.typography.displaySmall,
+                    color = Ink,
+                    modifier = Modifier.padding(start = Space.gutter, end = Space.gutter, bottom = Space.lg)
+                )
+                BigSearch(onOpenSearch)
+                Spacer(Modifier.height(Space.md))
             }
         }
-        item { Spacer(Modifier.height(Space.xl)) }
+
+        item { RowHeader("CATEGORIES", "See all 9") }
+        items(cats.chunked(2)) { row ->
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = Space.gutter, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(Space.md)
+            ) {
+                row.forEach { c ->
+                    CategoryMini(c, ToolRegistry.byCategory[c]?.size ?: 0,
+                        { onOpenCategory(c.id) }, Modifier.weight(1f))
+                }
+                if (row.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
 
         if (popular.isNotEmpty()) {
-            item { Eyebrow("POPULAR RIGHT NOW") }
+            item { Spacer(Modifier.height(Space.md)) }
+            item { RowHeader("POPULAR", null) }
             items(popular.chunked(2)) { row ->
                 Row(
-                    Modifier.fillMaxWidth()
-                        .padding(horizontal = Space.gutter, vertical = Space.xs + 2.dp),
+                    Modifier.fillMaxWidth().padding(horizontal = Space.gutter, vertical = 6.dp),
                     horizontalArrangement = Arrangement.spacedBy(Space.md)
                 ) {
                     row.forEach { t ->
-                        ToolTile(t, onClick = { onOpenTool(t.id) }, modifier = Modifier.weight(1f))
+                        PopularCard(t, { onOpenTool(t.id) }, Modifier.weight(1f))
                     }
                     if (row.size == 1) Spacer(Modifier.weight(1f))
                 }
@@ -84,76 +103,116 @@ fun HomeScreen(
 @Composable
 private fun Brand() {
     Row(
-        Modifier.padding(start = Space.gutter, end = Space.gutter, top = Space.lg, bottom = Space.xl),
+        Modifier.padding(start = Space.gutter, end = Space.gutter, top = Space.md, bottom = Space.lg),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // solid cobalt lockup mark
         Box(
-            Modifier.size(34.dp).clip(Shape.chip).background(Cobalt),
+            Modifier.size(38.dp).clip(Shape.chip).background(Cobalt),
             contentAlignment = Alignment.Center
-        ) { MorphoIcon("cat-converter", tint = Paper, size = 19.dp, strokeWidth = 2.3f) }
-        Spacer(Modifier.width(10.dp))
+        ) { MorphoIcon("cat-converter", tint = Paper, size = 21.dp) }
+        Spacer(Modifier.width(11.dp))
         Column {
-            Text("Morpho File", style = MaterialTheme.typography.titleLarge, color = Ink,
+            Text("Morpho", style = MaterialTheme.typography.titleLarge, color = Ink,
                 fontWeight = FontWeight.Bold)
-            Text("82 tools · offline-first", style = MaterialTheme.typography.labelSmall,
-                color = InkSoft)
+            Text("82 tools · offline-first", style = MaterialTheme.typography.labelSmall, color = InkSoft)
         }
+        Spacer(Modifier.weight(1f))
+        Box(
+            Modifier.size(38.dp).morphLift(Shape.chip, elevation = 4.dp),
+            contentAlignment = Alignment.Center
+        ) { MorphoIcon("settings", tint = InkSoft, size = 19.dp) }
     }
 }
 
 @Composable
 private fun BigSearch(onClick: () -> Unit) {
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
+    val i = remember { MutableInteractionSource() }
+    val pressed by i.collectIsPressedAsState()
     Row(
-        Modifier
-            .padding(horizontal = Space.gutter)
-            .fillMaxWidth()
-            .morphLift(Shape.card, elevation = 10.dp, pressed = pressed)
-            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
-            .padding(horizontal = Space.lg, vertical = 18.dp),
+        Modifier.padding(horizontal = Space.gutter).fillMaxWidth()
+            .morphLift(Shape.card, elevation = 14.dp, pressed = pressed)
+            .clickable(interactionSource = i, indication = null, onClick = onClick)
+            .padding(17.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        MorphoIcon("tab-search", tint = Cobalt, size = 22.dp, strokeWidth = 2.1f)
-        Spacer(Modifier.width(Space.md))
+        Box(
+            Modifier.size(40.dp).clip(Shape.chip).background(HeroTint),
+            contentAlignment = Alignment.Center
+        ) { MorphoIcon("tab-search", tint = Cobalt, size = 21.dp) }
+        Spacer(Modifier.width(13.dp))
         Column(Modifier.weight(1f)) {
-            Text("What do you need to do?", color = Ink,
-                style = MaterialTheme.typography.titleMedium)
-            Text("Convert, compress, generate, extract…", color = InkFaint,
-                style = MaterialTheme.typography.bodyMedium)
+            Text("What do you need to do?", style = MaterialTheme.typography.titleMedium, color = Ink)
+            Text("Convert, compress, generate, extract…", style = MaterialTheme.typography.bodyMedium, color = InkFaint)
+        }
+        MorphoIcon("chevron-right", tint = Color(0xFFC2C9D6), size = 18.dp)
+    }
+}
+
+@Composable
+private fun RowHeader(eyebrow: String, action: String?) {
+    Row(
+        Modifier.fillMaxWidth().padding(start = Space.gutter, end = Space.gutter, top = Space.lg, bottom = Space.md),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(eyebrow, color = InkFaint, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+        Spacer(Modifier.weight(1f))
+        if (action != null) Text(action, color = Cobalt, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+private fun CategoryMini(c: ToolCategory, count: Int, onClick: () -> Unit, modifier: Modifier) {
+    val i = remember { MutableInteractionSource() }
+    val pressed by i.collectIsPressedAsState()
+    Row(
+        modifier.morphLift(Shape.tile, elevation = 8.dp, pressed = pressed, accent = c.accent)
+            .clickable(interactionSource = i, indication = null, onClick = onClick)
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            Modifier.size(40.dp).clip(Shape.chip).background(c.accent),
+            contentAlignment = Alignment.Center
+        ) { MorphoIcon("cat-${c.id}", tint = Paper, size = 20.dp) }
+        Spacer(Modifier.width(12.dp))
+        Column {
+            Text(c.label, style = MaterialTheme.typography.titleMedium, color = Ink, maxLines = 1)
+            Text("$count tools", fontSize = 11.sp, color = InkFaint)
         }
     }
 }
 
 @Composable
-private fun Eyebrow(text: String) {
-    Text(
-        text,
-        color = InkFaint,
-        fontSize = 11.sp,
-        fontWeight = FontWeight.Bold,
-        letterSpacing = 1.2.sp,
-        modifier = Modifier.padding(horizontal = Space.gutter, vertical = Space.sm)
-    )
-}
-
-@Composable
-private fun CategoryChip(category: ToolCategory, count: Int, onClick: () -> Unit) {
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    Row(
-        Modifier
-            .morphLift(Shape.pill, elevation = 6.dp, pressed = pressed)
-            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
-            .padding(start = 8.dp, end = 14.dp, top = 8.dp, bottom = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
+private fun PopularCard(t: Tool, onClick: () -> Unit, modifier: Modifier) {
+    val i = remember { MutableInteractionSource() }
+    val pressed by i.collectIsPressedAsState()
+    val accent = t.category.accent
+    Column(
+        modifier.morphLift(Shape.card, elevation = 10.dp, pressed = pressed, accent = accent)
+            .clickable(interactionSource = i, indication = null, onClick = onClick)
+            // corner orb bleed
+            .drawWithContent {
+                drawContent()
+                drawCircle(accent.copy(alpha = 0.06f), radius = 46f,
+                    center = Offset(size.width - 6f, 6f))
+            }
+            .padding(15.dp)
     ) {
-        Box(
-            Modifier.size(30.dp).clip(Shape.pill).background(category.accent),
-            contentAlignment = Alignment.Center
-        ) { MorphoIcon("cat-${category.id}", tint = Paper, size = 17.dp, strokeWidth = 2.1f) }
-        Spacer(Modifier.width(8.dp))
-        Text(category.label, style = MaterialTheme.typography.titleMedium, color = Ink)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(42.dp).clip(Shape.chip).background(accent),
+                contentAlignment = Alignment.Center
+            ) { MorphoIcon(t.iconKey, tint = Paper, size = 22.dp) }
+            Spacer(Modifier.weight(1f))
+            if (t.offline) Box(
+                Modifier.size(22.dp).clip(Shape.pill).background(accent.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center
+            ) { MorphoIcon("check", tint = accent, size = 13.dp) }
+        }
+        Spacer(Modifier.height(16.dp))
+        Text(t.name, style = MaterialTheme.typography.titleMedium, color = Ink,
+            maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(t.short, style = MaterialTheme.typography.bodyMedium, color = InkSoft,
+            maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
