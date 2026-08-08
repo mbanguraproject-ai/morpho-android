@@ -16,8 +16,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -29,6 +27,7 @@ import cc.devbangs.morpho.core.Space
 import cc.devbangs.morpho.data.Tool
 import cc.devbangs.morpho.data.ToolCategory
 import cc.devbangs.morpho.data.ToolRegistry
+import cc.devbangs.morpho.ui.components.cornerPetal
 import cc.devbangs.morpho.ui.components.morphLift
 import cc.devbangs.morpho.ui.icon.MorphoIcon
 import cc.devbangs.morpho.ui.theme.*
@@ -197,12 +196,7 @@ private fun PopularCard(t: Tool, onClick: () -> Unit, modifier: Modifier) {
         modifier.morphLift(Shape.card, elevation = 10.dp, pressed = pressed, accent = accent)
             .clickable(interactionSource = i, indication = null, onClick = onClick)
             .clipToBounds()
-            // corner orb, clipped to the card
-            .drawWithContent {
-                drawContent()
-                drawCircle(accent.copy(alpha = 0.06f), radius = 46f,
-                    center = Offset(size.width - 6f, 6f))
-            }
+            .cornerPetal(accent)
             .padding(15.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
