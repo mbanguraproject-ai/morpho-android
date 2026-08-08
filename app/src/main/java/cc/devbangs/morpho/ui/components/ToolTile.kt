@@ -1,12 +1,15 @@
 package cc.devbangs.morpho.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -19,26 +22,20 @@ import cc.devbangs.morpho.data.Tool
 import cc.devbangs.morpho.ui.icon.MorphoIcon
 import cc.devbangs.morpho.ui.theme.*
 
-/** Grid tool tile — glyph badge, name, short line, offline dot. */
 @Composable
-fun ToolTile(
-    tool: Tool,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val accent = tool.category.accent
+fun ToolTile(tool: Tool, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
     Column(
         modifier = modifier
-            .clip(Shape.tile)
-            .background(Paper)
-            .border(1.dp, PaperLine, Shape.tile)
-            .clickable(onClick = onClick)
+            .morphLift(Shape.tile, elevation = 8.dp, pressed = pressed)
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
             .padding(Space.md)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconBadge(tool.iconKey, accent)
+            SolidIconChip(tool.iconKey, tool.category.accent, 40)
             Spacer(Modifier.weight(1f))
-            StatusDot(tool.offline)
+            if (tool.offline) OfflineTick(tool.category.accent)
         }
         Spacer(Modifier.height(Space.md))
         Text(
@@ -46,7 +43,8 @@ fun ToolTile(
             style = MaterialTheme.typography.titleMedium,
             color = Ink,
             maxLines = 2,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.heightIn(min = 40.dp)
         )
         Spacer(Modifier.height(2.dp))
         Text(
@@ -59,7 +57,6 @@ fun ToolTile(
     }
 }
 
-/** List-row variant (used in search + category list mode). */
 @Composable
 fun ToolRow(tool: Tool, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Row(
@@ -70,7 +67,7 @@ fun ToolRow(tool: Tool, onClick: () -> Unit, modifier: Modifier = Modifier) {
             .padding(vertical = Space.sm, horizontal = Space.xs),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        IconBadge(tool.iconKey, tool.category.accent)
+        SolidIconChip(tool.iconKey, tool.category.accent, 42)
         Spacer(Modifier.width(Space.md))
         Column(Modifier.weight(1f)) {
             Text(tool.name, style = MaterialTheme.typography.titleMedium, color = Ink,
@@ -79,19 +76,23 @@ fun ToolRow(tool: Tool, onClick: () -> Unit, modifier: Modifier = Modifier) {
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Spacer(Modifier.width(Space.sm))
-        StatusDot(tool.offline)
+        if (tool.offline) OfflineTick(tool.category.accent)
+        MorphoIcon("chevron-right", tint = InkFaint, size = 16.dp)
     }
 }
 
+/** Small "works offline" affordance: accent tick, no label noise. */
 @Composable
-fun IconBadge(iconKey: String, accent: Color, size: Int = 44) {
+private fun OfflineTick(accent: Color) {
     Box(
-        Modifier
-            .size(size.dp)
-            .clip(Shape.chip)
-            .background(accent.copy(alpha = 0.10f)),
+        Modifier.size(20.dp).clip(Shape.pill).background(accent.copy(alpha = 0.12f)),
         contentAlignment = Alignment.Center
     ) {
-        MorphoIcon(iconKey, tint = accent, size = (size * 0.5).dp, strokeWidth = 1.9f)
+        MorphoIcon("check", tint = accent, size = 12.dp, strokeWidth = 2.4f)
     }
 }
+
+/** Kept for the tool detail header. */
+@Composable
+fun IconBadge(iconKey: String, accent: Color, size: Int = 44) =
+    SolidIconChip(iconKey, accent, size)
