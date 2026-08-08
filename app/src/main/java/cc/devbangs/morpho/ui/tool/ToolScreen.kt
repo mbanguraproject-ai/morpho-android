@@ -10,14 +10,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import cc.devbangs.morpho.core.Shape
 import cc.devbangs.morpho.core.Space
+import cc.devbangs.morpho.data.Tool
 import cc.devbangs.morpho.data.ToolRegistry
-import cc.devbangs.morpho.ui.components.IconBadge
-import cc.devbangs.morpho.ui.components.MetaChip
-import cc.devbangs.morpho.ui.components.MorphoTopBar
+import cc.devbangs.morpho.ui.components.IconButtonMorpho
 import cc.devbangs.morpho.ui.icon.MorphoIcon
 import cc.devbangs.morpho.ui.theme.*
 
@@ -28,62 +30,84 @@ fun ToolScreen(
     contentPadding: PaddingValues
 ) {
     val tool = ToolRegistry.byId(toolId)
+    val tint = tool?.category?.accent ?: Cobalt
+
     Column(Modifier.fillMaxSize().background(Paper)) {
-        MorphoTopBar(title = tool?.name ?: "Tool", onBack = onBack)
+        // top zone
+        Column(
+            Modifier.fillMaxWidth().background(
+                Brush.verticalGradient(0f to tint.copy(alpha = 0.10f), 1f to Paper)
+            )
+        ) {
+            Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+            Row(
+                Modifier.fillMaxWidth().height(56.dp).padding(horizontal = Space.sm),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButtonMorpho("chevron-left", onBack)
+                Spacer(Modifier.weight(1f))
+            }
+            if (tool != null) Row(
+                Modifier.padding(start = Space.gutter, end = Space.gutter, top = 4.dp, bottom = Space.xl),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    Modifier.size(56.dp).clip(Shape.card).background(tint),
+                    contentAlignment = Alignment.Center
+                ) { MorphoIcon(tool.iconKey, tint = Paper, size = 29.dp) }
+                Spacer(Modifier.width(Space.md))
+                Column(Modifier.weight(1f)) {
+                    Text(tool.name, style = MaterialTheme.typography.headlineSmall, color = Ink)
+                    StatusLabel(tool)
+                }
+            }
+        }
+
         if (tool == null) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text("Unknown tool", color = InkSoft)
             }
             return
         }
-        Column(
-            Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(
-                    start = Space.gutter, end = Space.gutter, top = Space.md,
-                    bottom = contentPadding.calculateBottomPadding() + Space.xl
-                )
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconBadge(tool.iconKey, tool.category.accent, size = 52)
-                Spacer(Modifier.width(Space.md))
-                Column(Modifier.weight(1f)) {
-                    Text(tool.short, style = MaterialTheme.typography.bodyLarge, color = Ink)
-                    Spacer(Modifier.height(6.dp))
-                    MetaChip(
-                        if (tool.offline) "Works offline" else "Coming soon",
-                        filled = tool.offline
-                    )
-                }
-            }
-            Spacer(Modifier.height(Space.xl))
 
-            // Tool body dispatch — real implementations land here.
-            ToolBody(toolId = tool.id, offline = tool.offline)
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                .padding(start = Space.gutter, end = Space.gutter, top = Space.md,
+                    bottom = contentPadding.calculateBottomPadding() + Space.xxl)
+        ) {
+            Text(tool.short, style = MaterialTheme.typography.bodyLarge, color = InkSoft)
+            Spacer(Modifier.height(Space.xl))
+            // Real tool UIs mount here via dispatch (added next).
+            ToolHost(tool = tool)
         }
     }
 }
 
-/** Placeholder body; real per-tool UIs replace this via ToolHost dispatch. */
 @Composable
-private fun ToolBody(toolId: String, offline: Boolean) {
+private fun StatusLabel(tool: Tool) {
+    val (txt, c) = if (tool.offline) "Works offline" to tool.category.accent
+                   else "Server tool · coming soon" to InkSoft
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        MorphoIcon(if (tool.offline) "check" else "clock", tint = c, size = 13.dp)
+        Spacer(Modifier.width(5.dp))
+        Text(txt, color = c, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+/** Dispatch to the real per-tool UI. For now: branded placeholder. */
+@Composable
+private fun ToolHost(tool: Tool) {
     Box(
-        Modifier
-            .fillMaxWidth()
-            .clip(Shape.card)
-            .background(PaperSunk)
-            .padding(Space.xl),
+        Modifier.fillMaxWidth().clip(Shape.card).background(PaperSunk).padding(Space.xl),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            MorphoIcon(if (offline) "settings" else "clock", tint = InkFaint, size = 30.dp)
+            MorphoIcon(if (tool.offline) "settings" else "clock", tint = InkFaint, size = 30.dp)
             Spacer(Modifier.height(Space.md))
             Text(
-                if (offline) "Tool interface loads here."
-                else "This tool needs a server engine and\nlands in a later build.",
-                color = InkSoft,
-                textAlign = TextAlign.Center,
+                if (tool.offline) "Tool interface loads here."
+                else "This tool needs a server engine\nand arrives in a later build.",
+                color = InkSoft, textAlign = TextAlign.Center,
                 style = MaterialTheme.typography.bodyMedium
             )
         }
