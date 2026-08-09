@@ -33,6 +33,8 @@ import cc.devbangs.morpho.ui.tool.kit.hasConverterTool
 import cc.devbangs.morpho.ui.tool.kit.ConverterTool
 import cc.devbangs.morpho.ui.tool.kit.hasExtraTool
 import cc.devbangs.morpho.ui.tool.kit.ExtraTool
+import cc.devbangs.morpho.ui.tool.kit.hasMediaTool
+import cc.devbangs.morpho.ui.tool.kit.MediaTool
 import cc.devbangs.morpho.ui.tool.invoice.InvoiceTool
 import cc.devbangs.morpho.ui.tool.resume.ResumeTool
 import cc.devbangs.morpho.ui.theme.*
@@ -118,6 +120,7 @@ private fun ToolHost(tool: Tool) {
         hasPdfTool(tool.id) -> PdfTool(tool.id, tool.category.accent)
         hasConverterTool(tool.id) -> ConverterTool(tool.id, tool.category.accent)
         hasExtraTool(tool.id) -> ExtraTool(tool.id, tool.category.accent)
+        hasMediaTool(tool.id) -> MediaTool(tool.id, tool.category.accent)
         tool.id == "invoice-generator" -> InvoiceTool(tool.category.accent)
         tool.id == "resume-builder" -> ResumeTool(tool.category.accent)
         else -> Placeholder(tool)
