@@ -1,5 +1,8 @@
 package cc.devbangs.morpho.ui.home
 
+import androidx.compose.animation.core.EaseOutCubic
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -8,18 +11,25 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cc.devbangs.morpho.core.Shape
@@ -72,9 +82,10 @@ fun HomeScreen(
         item { SearchBar(onOpenSearch) }
 
         item { RowHeader("CATEGORIES", "All 9", onSeeAllCategories) }
-        items(cats.take(4).chunked(2)) { row ->
+        itemsIndexed(cats.take(4).chunked(2)) { idx, row ->
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = Space.gutter, vertical = 5.dp),
+                Modifier.fillMaxWidth().padding(horizontal = Space.gutter, vertical = 5.dp)
+                    .reveal(idx),
                 horizontalArrangement = Arrangement.spacedBy(Space.md)
             ) {
                 row.forEach { c ->
@@ -87,9 +98,10 @@ fun HomeScreen(
 
         if (popular.isNotEmpty()) {
             item { RowHeader("POPULAR", null) }
-            items(popular.chunked(2)) { row ->
+            itemsIndexed(popular.chunked(2)) { idx, row ->
                 Row(
-                    Modifier.fillMaxWidth().padding(horizontal = Space.gutter, vertical = 5.dp),
+                    Modifier.fillMaxWidth().padding(horizontal = Space.gutter, vertical = 5.dp)
+                        .reveal(idx + 2),
                     horizontalArrangement = Arrangement.spacedBy(Space.md)
                 ) {
                     row.forEach { t -> PopularCard(t, { onOpenTool(t.id) }, Modifier.weight(1f)) }
@@ -195,4 +207,18 @@ private fun PopularCard(t: Tool, onClick: () -> Unit, modifier: Modifier) {
         Text(t.short, style = MaterialTheme.typography.bodyMedium, color = InkSoft,
             maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
+}
+
+/** Staggered rise + fade-in reveal for list items. */
+@Composable
+private fun Modifier.reveal(indexKey: Int): Modifier {
+    var shown by remember(indexKey) { mutableStateOf(false) }
+    LaunchedEffect(indexKey) { shown = true }
+    val p by animateFloatAsState(
+        targetValue = if (shown) 1f else 0f,
+        animationSpec = tween(durationMillis = 420, delayMillis = (indexKey.coerceAtMost(8)) * 45, easing = EaseOutCubic),
+        label = "reveal"
+    )
+    return this
+        .graphicsLayer { translationY = (1f - p) * 34f; this.alpha = p }
 }
