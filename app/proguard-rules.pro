@@ -1,2 +1,33 @@
-# Morpho File — keep Compose runtime happy under R8
+# ---- Compose ----
 -keepclassmembers class ** { @androidx.compose.runtime.Composable *; }
+
+# ---- PDFBox-Android (tom_roush) — uses reflection + resources ----
+-keep class com.tom_roush.** { *; }
+-dontwarn com.tom_roush.**
+-keep class org.apache.** { *; }
+-dontwarn org.apache.**
+-keep class org.bouncycastle.** { *; }
+-dontwarn org.bouncycastle.**
+-dontwarn javax.**
+
+# ---- ML Kit text recognition ----
+-keep class com.google.mlkit.** { *; }
+-keep class com.google.android.gms.internal.mlkit_** { *; }
+-dontwarn com.google.mlkit.**
+
+# ---- ZXing ----
+-keep class com.google.zxing.** { *; }
+-dontwarn com.google.zxing.**
+
+# ---- Phosphor icons (vector properties accessed lazily) ----
+-keep class com.adamglin.** { *; }
+
+# ---- Kotlin coroutines ----
+-keepclassmembers class kotlinx.coroutines.** { volatile <fields>; }
+-dontwarn kotlinx.coroutines.**
+
+# ---- Keep our data classes / models (used by UI reflection-free but safe) ----
+-keep class cc.devbangs.morpho.data.** { *; }
+
+# ---- General Android ----
+-keepattributes *Annotation*, Signature, InnerClasses, EnclosingMethod
