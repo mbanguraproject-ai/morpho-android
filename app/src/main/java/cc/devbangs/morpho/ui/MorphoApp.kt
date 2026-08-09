@@ -28,6 +28,9 @@ import cc.devbangs.morpho.ui.settings.SettingsScreen
 import cc.devbangs.morpho.ui.plus.PlusScreen
 import cc.devbangs.morpho.ui.tool.ToolScreen
 import cc.devbangs.morpho.ui.theme.Paper
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.haze
+import androidx.compose.runtime.remember
 
 @Composable
 fun MorphoApp() {
@@ -36,6 +39,7 @@ fun MorphoApp() {
     val route = backStack?.destination?.route
 
     val topLevel = route == Dest.Home.route || route == Dest.Categories.route
+    val barHaze = remember { HazeState() }
     val currentTab = when (route) {
         Dest.Categories.route -> "categories"
         else -> "home"
@@ -45,7 +49,7 @@ fun MorphoApp() {
         NavHost(
             navController = nav,
             startDestination = Dest.Home.route,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().haze(barHaze),
             enterTransition = {
                 slideInHorizontally(tween(320)) { it / 5 } + fadeIn(tween(320))
             },
@@ -127,6 +131,7 @@ fun MorphoApp() {
 
         if (topLevel) {
             MorphoBottomBar(
+                hazeState = barHaze,
                 current = currentTab,
                 onSelect = { tab ->
                     val dest = if (tab == "categories") Dest.Categories.route

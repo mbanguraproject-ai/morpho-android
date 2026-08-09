@@ -4,6 +4,7 @@ import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.ui.zIndex
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -41,6 +42,11 @@ import cc.devbangs.morpho.ui.components.cornerPetal
 import cc.devbangs.morpho.ui.components.morphLift
 import cc.devbangs.morpho.ui.icon.MorphoIcon
 import cc.devbangs.morpho.ui.theme.*
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeChild
+import dev.chrisbanes.haze.haze
+import dev.chrisbanes.haze.materials.HazeMaterials
+import androidx.compose.runtime.remember
 
 @Composable
 fun HomeScreen(
@@ -53,33 +59,21 @@ fun HomeScreen(
 ) {
     val cats = ToolCategory.entries
     val popular = ToolRegistry.popular
+    val hazeState = remember { HazeState() }
 
-    LazyColumn(
-        Modifier.fillMaxSize().background(Paper),
-        contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding() + Space.xxl)
-    ) {
-        // Tight top bar — brand left, settings right. No tagline, no marketing.
-        item {
-            Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
-            Row(
-                Modifier.fillMaxWidth().padding(start = Space.gutter, end = Space.gutter,
-                    top = Space.md, bottom = Space.md),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    Modifier.size(34.dp).clip(Shape.chip).background(Cobalt),
-                    contentAlignment = Alignment.Center
-                ) { MorphoIcon("cat-converter", tint = Paper, size = 19.dp) }
-                Spacer(Modifier.width(10.dp))
-                Text("Morpho", style = MaterialTheme.typography.titleLarge, color = Ink,
-                    fontWeight = FontWeight.Bold)
-                Spacer(Modifier.weight(1f))
-                SettingsButton(onOpenSettings)
+    Box(Modifier.fillMaxSize().background(Paper)) {
+        LazyColumn(
+            Modifier.fillMaxSize().haze(hazeState),
+            contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding() + Space.xxl)
+        ) {
+            // top spacer: reserve space for the pinned frosted bar (status bar + 56dp)
+            item {
+                Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+                Spacer(Modifier.height(60.dp))
             }
-        }
 
-        // Real search box: compact, short placeholder, no clutter
-        item { SearchBar(onOpenSearch) }
+            // Real search box: compact, short placeholder, no clutter
+            item { SearchBar(onOpenSearch) }
 
         item { RowHeader("CATEGORIES", "All 9", onSeeAllCategories) }
         itemsIndexed(cats.take(4).chunked(2)) { idx, row ->
@@ -108,6 +102,26 @@ fun HomeScreen(
                     if (row.size == 1) Spacer(Modifier.weight(1f))
                 }
             }
+        }
+        } // end LazyColumn
+
+        // Pinned frosted top bar (content scrolls & blurs underneath)
+        Row(
+            Modifier.fillMaxWidth().zIndex(1f)
+                .hazeChild(hazeState, style = HazeMaterials.ultraThin(Paper))
+                .windowInsetsPadding(WindowInsets.statusBars)
+                .padding(start = Space.gutter, end = Space.gutter, top = Space.sm, bottom = Space.sm),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                Modifier.size(34.dp).clip(Shape.chip).background(Cobalt),
+                contentAlignment = Alignment.Center
+            ) { MorphoIcon("cat-converter", tint = Paper, size = 19.dp) }
+            Spacer(Modifier.width(10.dp))
+            Text("Morpho", style = MaterialTheme.typography.titleLarge, color = Ink,
+                fontWeight = FontWeight.Bold)
+            Spacer(Modifier.weight(1f))
+            SettingsButton(onOpenSettings)
         }
     }
 }

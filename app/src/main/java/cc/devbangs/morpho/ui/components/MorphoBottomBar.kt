@@ -19,6 +19,9 @@ import androidx.compose.ui.unit.sp
 import cc.devbangs.morpho.core.Shape
 import cc.devbangs.morpho.ui.icon.MorphoIcon
 import cc.devbangs.morpho.ui.theme.*
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeChild
+import dev.chrisbanes.haze.materials.HazeMaterials
 
 data class BottomTab(val key: String, val label: String, val glyph: String)
 
@@ -30,6 +33,7 @@ private val TABS = listOf(
 
 @Composable
 fun MorphoBottomBar(
+    hazeState: HazeState,
     current: String,
     onSelect: (String) -> Unit,
     modifier: Modifier = Modifier
@@ -48,7 +52,7 @@ fun MorphoBottomBar(
                     spotColor = Cobalt.copy(alpha = 0.18f)
                 )
                 .clip(Shape.card)
-                .background(Paper)
+                .hazeChild(hazeState, style = HazeMaterials.thin(Paper))
                 .padding(vertical = 10.dp, horizontal = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
