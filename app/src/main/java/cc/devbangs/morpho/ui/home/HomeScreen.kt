@@ -47,6 +47,7 @@ import cc.devbangs.morpho.ui.components.cornerPetal
 import cc.devbangs.morpho.ui.components.morphLift
 import cc.devbangs.morpho.ui.icon.MorphoIcon
 import cc.devbangs.morpho.ui.theme.*
+import cc.devbangs.morpho.ads.AdState
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeChild
 import dev.chrisbanes.haze.haze
@@ -123,6 +124,8 @@ fun HomeScreen(
             Text("Morpho", style = MaterialTheme.typography.titleLarge, color = Ink,
                 fontWeight = FontWeight.Bold)
             Spacer(Modifier.weight(1f))
+            PlanPill()
+            Spacer(Modifier.width(8.dp))
             SettingsButton(onOpenSettings)
         }
     }
@@ -261,6 +264,23 @@ private fun WingsMark() {
                 // slight vertical squash as wings spread, like a real flap settle
                 scaleY = 0.9f + (wingSpread * 0.1f)
             }
+        )
+    }
+}
+
+/** Small non-intrusive plan indicator: "Free" or "Plus". */
+@Composable
+private fun PlanPill() {
+    val isPlus = AdState.isPlus.value
+    val bg = if (isPlus) Cobalt else PaperSunk
+    val fg = if (isPlus) Paper else InkSoft
+    Box(
+        Modifier.clip(Shape.pill).background(bg)
+            .padding(horizontal = 10.dp, vertical = 4.dp)
+    ) {
+        Text(
+            if (isPlus) "Plus" else "Free",
+            color = fg, fontSize = 12.sp, fontWeight = FontWeight.SemiBold
         )
     }
 }

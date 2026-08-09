@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import cc.devbangs.morpho.ui.MorphoApp
 import cc.devbangs.morpho.ads.ConsentManager
+import cc.devbangs.morpho.billing.BillingManager
 import cc.devbangs.morpho.ads.InterstitialManager
 import cc.devbangs.morpho.ui.theme.MorphoTheme
 import cc.devbangs.morpho.ui.theme.Paper
@@ -43,6 +44,7 @@ class MainActivity : ComponentActivity() {
                 InterstitialManager.preload(this)
             }
         }
+        BillingManager.start(this)
         setContent {
             MorphoTheme {
                 Surface(

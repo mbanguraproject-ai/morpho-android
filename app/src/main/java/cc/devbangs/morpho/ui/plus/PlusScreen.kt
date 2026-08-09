@@ -19,6 +19,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cc.devbangs.morpho.core.Shape
 import cc.devbangs.morpho.core.Space
+import cc.devbangs.morpho.billing.BillingManager
+import androidx.compose.ui.platform.LocalContext
 import cc.devbangs.morpho.ui.components.IconButtonMorpho
 import cc.devbangs.morpho.ui.icon.MorphoIcon
 import cc.devbangs.morpho.ui.theme.*
@@ -33,6 +35,14 @@ fun PlusScreen(
     contentPadding: PaddingValues
 ) {
     var yearly by remember { mutableStateOf(true) }
+    val ctx = LocalContext.current
+    val activity = remember(ctx) {
+        var c: android.content.Context? = ctx
+        while (c is android.content.ContextWrapper && c !is android.app.Activity) { c = c.baseContext }
+        c as? android.app.Activity
+    }
+    val livePriceMonthly = BillingManager.monthlyPrice.value ?: "$2.99"
+    val livePriceYearly = BillingManager.yearlyPrice.value ?: "$19.99"
 
     Column(Modifier.fillMaxSize().background(Paper)) {
         // top bar
@@ -109,19 +119,19 @@ fun PlusScreen(
                 Modifier.padding(horizontal = Space.gutter).fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(Space.md)
             ) {
-                PriceCard("MONTHLY", "$2.99", "/month", null, !yearly, Modifier.weight(1f)) { yearly = false }
-                PriceCard("YEARLY", "$19.99", "/year", "SAVE 44%", yearly, Modifier.weight(1f)) { yearly = true }
+                PriceCard("MONTHLY", livePriceMonthly, "/month", null, !yearly, Modifier.weight(1f)) { yearly = false }
+                PriceCard("YEARLY", livePriceYearly, "/year", "SAVE 44%", yearly, Modifier.weight(1f)) { yearly = true }
             }
 
             // CTA
             Box(
                 Modifier.padding(horizontal = Space.gutter, vertical = Space.sm).fillMaxWidth()
                     .clip(Shape.card).background(PlusBlue)
-                    .clickable { /* Play Billing purchase — wired when billing added */ }
+                    .clickable { activity?.let { BillingManager.purchase(it, yearly) } }
                     .padding(vertical = 17.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text(if (yearly) "Start Plus · $19.99/year" else "Start Plus · $2.99/month",
+                Text(if (yearly) "Start Plus · $livePriceYearly/year" else "Start Plus · $livePriceMonthly/month",
                     color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
             }
             Text("Cancel anytime  ·  Restore purchase", color = InkFaint, fontSize = 12.sp,

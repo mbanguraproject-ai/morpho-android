@@ -27,8 +27,8 @@ import cc.devbangs.morpho.ui.theme.*
 
 
 // Morpho links — swap GitHub Pages URLs before launch
-private const val PRIVACY_URL = "https://pro88xz.github.io/morpho/privacy.html"
-private const val TERMS_URL = "https://pro88xz.github.io/morpho/terms.html"
+private const val PRIVACY_URL = "https://mbanguraproject-ai.github.io/morpho/privacy.html"
+private const val TERMS_URL = "https://mbanguraproject-ai.github.io/morpho/terms.html"
 private const val PACKAGE = "cc.devbangs.morpho"
 
 private fun openUrl(ctx: android.content.Context, url: String) {
