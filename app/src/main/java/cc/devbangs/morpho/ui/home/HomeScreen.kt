@@ -1,6 +1,7 @@
 package cc.devbangs.morpho.ui.home
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -16,7 +17,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -32,48 +32,49 @@ import cc.devbangs.morpho.ui.components.morphLift
 import cc.devbangs.morpho.ui.icon.MorphoIcon
 import cc.devbangs.morpho.ui.theme.*
 
-private val HeroTint = Color(0xFFF0F3FF)
-
 @Composable
 fun HomeScreen(
     onOpenTool: (String) -> Unit,
     onOpenCategory: (String) -> Unit,
     onOpenSearch: () -> Unit,
+    onOpenSettings: () -> Unit,
     onSeeAllCategories: () -> Unit,
     contentPadding: PaddingValues
 ) {
     val cats = ToolCategory.entries
     val popular = ToolRegistry.popular
-    val onOpenSeeAll = onSeeAllCategories
 
     LazyColumn(
         Modifier.fillMaxSize().background(Paper),
         contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding() + Space.xxl)
     ) {
-        // HERO ZONE with cobalt-tinted gradient band
+        // Tight top bar — brand left, settings right. No tagline, no marketing.
         item {
-            Column(
-                Modifier.fillMaxWidth().background(
-                    Brush.verticalGradient(0f to HeroTint, 1f to Paper)
-                )
+            Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+            Row(
+                Modifier.fillMaxWidth().padding(start = Space.gutter, end = Space.gutter,
+                    top = Space.md, bottom = Space.md),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
-                Brand()
-                Text(
-                    "Every file tool,\none clean app.",
-                    style = MaterialTheme.typography.displaySmall,
-                    color = Ink,
-                    modifier = Modifier.padding(start = Space.gutter, end = Space.gutter, bottom = Space.lg)
-                )
-                BigSearch(onOpenSearch)
-                Spacer(Modifier.height(Space.md))
+                Box(
+                    Modifier.size(34.dp).clip(Shape.chip).background(Cobalt),
+                    contentAlignment = Alignment.Center
+                ) { MorphoIcon("cat-converter", tint = Paper, size = 19.dp) }
+                Spacer(Modifier.width(10.dp))
+                Text("Morpho", style = MaterialTheme.typography.titleLarge, color = Ink,
+                    fontWeight = FontWeight.Bold)
+                Spacer(Modifier.weight(1f))
+                SettingsButton(onOpenSettings)
             }
         }
 
-        item { RowHeader("CATEGORIES", "See all 9", onOpenSeeAll) }
+        // Real search box: compact, short placeholder, no clutter
+        item { SearchBar(onOpenSearch) }
+
+        item { RowHeader("CATEGORIES", "All 9", onSeeAllCategories) }
         items(cats.take(4).chunked(2)) { row ->
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = Space.gutter, vertical = 6.dp),
+                Modifier.fillMaxWidth().padding(horizontal = Space.gutter, vertical = 5.dp),
                 horizontalArrangement = Arrangement.spacedBy(Space.md)
             ) {
                 row.forEach { c ->
@@ -85,16 +86,13 @@ fun HomeScreen(
         }
 
         if (popular.isNotEmpty()) {
-            item { Spacer(Modifier.height(Space.md)) }
             item { RowHeader("POPULAR", null) }
             items(popular.chunked(2)) { row ->
                 Row(
-                    Modifier.fillMaxWidth().padding(horizontal = Space.gutter, vertical = 6.dp),
+                    Modifier.fillMaxWidth().padding(horizontal = Space.gutter, vertical = 5.dp),
                     horizontalArrangement = Arrangement.spacedBy(Space.md)
                 ) {
-                    row.forEach { t ->
-                        PopularCard(t, { onOpenTool(t.id) }, Modifier.weight(1f))
-                    }
+                    row.forEach { t -> PopularCard(t, { onOpenTool(t.id) }, Modifier.weight(1f)) }
                     if (row.size == 1) Spacer(Modifier.weight(1f))
                 }
             }
@@ -103,57 +101,38 @@ fun HomeScreen(
 }
 
 @Composable
-private fun Brand() {
-    Row(
-        Modifier.padding(start = Space.gutter, end = Space.gutter, top = Space.md, bottom = Space.lg),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            Modifier.size(38.dp).clip(Shape.chip).background(Cobalt),
-            contentAlignment = Alignment.Center
-        ) { MorphoIcon("cat-converter", tint = Paper, size = 21.dp) }
-        Spacer(Modifier.width(11.dp))
-        Column {
-            Text("Morpho", style = MaterialTheme.typography.titleLarge, color = Ink,
-                fontWeight = FontWeight.Bold)
-            Text("82 tools · offline-first", style = MaterialTheme.typography.labelSmall, color = InkSoft)
-        }
-        Spacer(Modifier.weight(1f))
-        Box(
-            Modifier.size(38.dp).morphLift(Shape.chip, elevation = 4.dp),
-            contentAlignment = Alignment.Center
-        ) { MorphoIcon("settings", tint = InkSoft, size = 19.dp) }
-    }
+private fun SettingsButton(onClick: () -> Unit) {
+    val i = remember { MutableInteractionSource() }
+    val pressed by i.collectIsPressedAsState()
+    Box(
+        Modifier.size(38.dp).morphLift(Shape.chip, elevation = 4.dp, pressed = pressed)
+            .clickable(interactionSource = i, indication = null, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) { MorphoIcon("settings", tint = InkSoft, size = 19.dp) }
 }
 
 @Composable
-private fun BigSearch(onClick: () -> Unit) {
+private fun SearchBar(onClick: () -> Unit) {
     val i = remember { MutableInteractionSource() }
     val pressed by i.collectIsPressedAsState()
     Row(
-        Modifier.padding(horizontal = Space.gutter).fillMaxWidth()
-            .morphLift(Shape.card, elevation = 14.dp, pressed = pressed)
+        Modifier.padding(horizontal = Space.gutter, vertical = Space.sm).fillMaxWidth()
+            .morphLift(Shape.card, elevation = 10.dp, pressed = pressed)
             .clickable(interactionSource = i, indication = null, onClick = onClick)
-            .padding(17.dp),
+            .padding(horizontal = 18.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            Modifier.size(40.dp).clip(Shape.chip).background(HeroTint),
-            contentAlignment = Alignment.Center
-        ) { MorphoIcon("tab-search", tint = Cobalt, size = 21.dp) }
-        Spacer(Modifier.width(13.dp))
-        Column(Modifier.weight(1f)) {
-            Text("What do you need to do?", style = MaterialTheme.typography.titleMedium, color = Ink)
-            Text("Convert, compress, generate, extract…", style = MaterialTheme.typography.bodyMedium, color = InkFaint)
-        }
-        MorphoIcon("chevron-right", tint = Color(0xFFC2C9D6), size = 18.dp)
+        Text("Search tools", style = MaterialTheme.typography.titleMedium, color = InkFaint,
+            modifier = Modifier.weight(1f))
+        MorphoIcon("tab-search", tint = Cobalt, size = 20.dp)
     }
 }
 
 @Composable
 private fun RowHeader(eyebrow: String, action: String?, onAction: (() -> Unit)? = null) {
     Row(
-        Modifier.fillMaxWidth().padding(start = Space.gutter, end = Space.gutter, top = Space.lg, bottom = Space.md),
+        Modifier.fillMaxWidth().padding(start = Space.gutter, end = Space.gutter,
+            top = Space.lg, bottom = Space.sm),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(eyebrow, color = InkFaint, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)

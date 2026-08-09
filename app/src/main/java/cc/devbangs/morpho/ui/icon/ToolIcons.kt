@@ -20,6 +20,12 @@ import com.adamglin.phosphoricons.bold.Clock
 import com.adamglin.phosphoricons.bold.Code
 import com.adamglin.phosphoricons.bold.CodeSimple
 import com.adamglin.phosphoricons.bold.Copy
+import com.adamglin.phosphoricons.bold.Crown
+import com.adamglin.phosphoricons.bold.Moon
+import com.adamglin.phosphoricons.bold.Bell
+import com.adamglin.phosphoricons.bold.Shield
+import com.adamglin.phosphoricons.bold.FileText
+import com.adamglin.phosphoricons.bold.Star
 import com.adamglin.phosphoricons.bold.Crop
 import com.adamglin.phosphoricons.bold.Database
 import com.adamglin.phosphoricons.bold.DotsThreeVertical
@@ -115,6 +121,12 @@ object ToolIcons {
         "settings" to PhosphorIcons.Bold.Faders,
         "clock" to PhosphorIcons.Bold.Clock,
         "info" to PhosphorIcons.Bold.Info,
+        "crown" to PhosphorIcons.Bold.Crown,
+        "moon" to PhosphorIcons.Bold.Moon,
+        "bell" to PhosphorIcons.Bold.Bell,
+        "shield" to PhosphorIcons.Bold.Shield,
+        "file-text" to PhosphorIcons.Bold.FileText,
+        "star" to PhosphorIcons.Bold.Star,
         "file-add" to PhosphorIcons.Bold.FilePlus,
         "image-add" to PhosphorIcons.Bold.ImageSquare,
         "dots" to PhosphorIcons.Bold.DotsThreeVertical,

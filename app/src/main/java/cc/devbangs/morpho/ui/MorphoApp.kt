@@ -18,6 +18,7 @@ import cc.devbangs.morpho.ui.category.CategoryScreen
 import cc.devbangs.morpho.ui.components.MorphoBottomBar
 import cc.devbangs.morpho.ui.home.HomeScreen
 import cc.devbangs.morpho.ui.search.SearchScreen
+import cc.devbangs.morpho.ui.settings.SettingsScreen
 import cc.devbangs.morpho.ui.tool.ToolScreen
 import cc.devbangs.morpho.ui.theme.Paper
 
@@ -44,6 +45,7 @@ fun MorphoApp() {
                     onOpenTool = { nav.navigate(Dest.Tool(it).route) },
                     onOpenCategory = { nav.navigate(Dest.Category(it).route) },
                     onOpenSearch = { nav.navigate(Dest.Search.route) },
+                    onOpenSettings = { nav.navigate(Dest.Settings.route) },
                     onSeeAllCategories = {
                         nav.navigate(Dest.Categories.route) {
                             popUpTo(Dest.Home.route) { inclusive = false }
@@ -86,6 +88,13 @@ fun MorphoApp() {
                 SearchScreen(
                     onBack = { nav.popBackStack() },
                     onOpenTool = { nav.navigate(Dest.Tool(it).route) },
+                    contentPadding = PaddingValues()
+                )
+            }
+            composable(Dest.Settings.route) {
+                SettingsScreen(
+                    onBack = { nav.popBackStack() },
+                    onOpenPlus = { /* Morpho Plus page — next */ },
                     contentPadding = PaddingValues()
                 )
             }
