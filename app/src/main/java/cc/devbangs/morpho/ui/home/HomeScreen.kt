@@ -3,6 +3,11 @@ package cc.devbangs.morpho.ui.home
 import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import cc.devbangs.morpho.R
 import androidx.compose.foundation.background
 import androidx.compose.ui.zIndex
 import androidx.compose.foundation.border
@@ -113,6 +118,8 @@ fun HomeScreen(
                 .padding(start = Space.gutter, end = Space.gutter, top = Space.sm, bottom = Space.sm),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            WingsMark()
+            Spacer(Modifier.width(9.dp))
             Text("Morpho", style = MaterialTheme.typography.titleLarge, color = Ink,
                 fontWeight = FontWeight.Bold)
             Spacer(Modifier.weight(1f))
@@ -230,4 +237,30 @@ private fun Modifier.reveal(indexKey: Int): Modifier {
     )
     return this
         .graphicsLayer { translationY = (1f - p) * 34f; this.alpha = p }
+}
+
+/** Cobalt wings mark that flaps once on home entry, then rests. */
+@Composable
+private fun WingsMark() {
+    var spread by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { spread = true }
+    val wingSpread by animateFloatAsState(
+        targetValue = if (spread) 1f else 0.55f,
+        animationSpec = spring(dampingRatio = 0.35f, stiffness = Spring.StiffnessLow),
+        label = "wingSpread"
+    )
+    Box(
+        Modifier.size(32.dp).clip(Shape.chip).background(Cobalt),
+        contentAlignment = Alignment.Center
+    ) {
+        Image(
+            painter = painterResource(R.drawable.ic_launcher_foreground),
+            contentDescription = null,
+            modifier = Modifier.size(30.dp).graphicsLayer {
+                scaleX = wingSpread
+                // slight vertical squash as wings spread, like a real flap settle
+                scaleY = 0.9f + (wingSpread * 0.1f)
+            }
+        )
+    }
 }

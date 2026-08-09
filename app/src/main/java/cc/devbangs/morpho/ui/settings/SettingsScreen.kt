@@ -1,6 +1,8 @@
 package cc.devbangs.morpho.ui.settings
 
 import androidx.compose.foundation.background
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -8,6 +10,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -22,12 +25,31 @@ import cc.devbangs.morpho.ui.components.IconButtonMorpho
 import cc.devbangs.morpho.ui.icon.MorphoIcon
 import cc.devbangs.morpho.ui.theme.*
 
+
+// Morpho links — swap GitHub Pages URLs before launch
+private const val PRIVACY_URL = "https://pro88xz.github.io/morpho/privacy.html"
+private const val TERMS_URL = "https://pro88xz.github.io/morpho/terms.html"
+private const val PACKAGE = "cc.devbangs.morpho"
+
+private fun openUrl(ctx: android.content.Context, url: String) {
+    runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+}
+private fun openPlayRating(ctx: android.content.Context) {
+    // Try the Play Store app first, fall back to browser
+    val market = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$PACKAGE"))
+    val web = Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=$PACKAGE"))
+    if (market.resolveActivity(ctx.packageManager) != null) {
+        runCatching { ctx.startActivity(market) }.onFailure { openUrl(ctx, web.dataString ?: "") }
+    } else runCatching { ctx.startActivity(web) }
+}
+
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
     onOpenPlus: () -> Unit,
     contentPadding: PaddingValues
 ) {
+    val ctx = LocalContext.current
     Column(Modifier.fillMaxSize().background(Paper)) {
         // top bar
         Column(
@@ -58,10 +80,10 @@ fun SettingsScreen(
                 SettingRow("bell", "Notifications", null) {}
             }
             SettingsGroup("ABOUT") {
-                SettingRow("info", "About Morpho", null) {}
-                SettingRow("shield", "Privacy Policy", null) {}
-                SettingRow("file-text", "Terms of Use", null) {}
-                SettingRow("star", "Rate Morpho", null) {}
+                SettingRow("info", "About Morpho", "v1.0.0") { openUrl(ctx, "https://play.google.com/store/apps/details?id=$PACKAGE") }
+                SettingRow("shield", "Privacy Policy", null) { openUrl(ctx, PRIVACY_URL) }
+                SettingRow("file-text", "Terms of Use", null) { openUrl(ctx, TERMS_URL) }
+                SettingRow("star", "Rate Morpho", null) { openPlayRating(ctx) }
             }
             Text("Morpho v1.0.0  ·  81 tools", color = InkFaint, fontSize = 12.sp,
                 modifier = Modifier.padding(top = Space.md).align(Alignment.CenterHorizontally))
