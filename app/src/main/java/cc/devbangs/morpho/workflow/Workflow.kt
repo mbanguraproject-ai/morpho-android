@@ -36,7 +36,7 @@ data class NextStep(val toolId: String, val label: String, val reason: String)
  */
 object WorkflowGraph {
     private val graph: Map<String, List<NextStep>> = mapOf(
-        // PDF chain
+        // --- Document BUILDERS: you just created/assembled a PDF, natural to finish it ---
         "merge-pdf" to listOf(
             NextStep("pdf-compressor", "Compress PDF", "Merged PDFs are often large"),
             NextStep("pdf-watermark", "Add Watermark", "Brand or mark the document"),
@@ -48,21 +48,36 @@ object WorkflowGraph {
         ),
         "image-to-pdf" to listOf(
             NextStep("pdf-compressor", "Compress PDF", "Shrink the new PDF"),
+            NextStep("pdf-watermark", "Add Watermark", "Mark your document"),
         ),
-        "pdf-compressor" to listOf(
-            NextStep("pdf-password-protector", "Password Protect", "Secure the smaller file"),
-            NextStep("pdf-watermark", "Add Watermark", "Mark the document"),
-        ),
+
+        // --- Document PREPARERS: you marked/organized a doc, natural to finalize it ---
         "pdf-watermark" to listOf(
             NextStep("pdf-compressor", "Compress PDF", "Shrink after watermarking"),
             NextStep("pdf-password-protector", "Password Protect", "Lock the final file"),
         ),
         "pdf-page-numbering" to listOf(
-            NextStep("pdf-compressor", "Compress PDF", "Shrink the file"),
+            NextStep("pdf-watermark", "Add Watermark", "Brand the numbered pages"),
+            NextStep("pdf-password-protector", "Password Protect", "Secure the final file"),
         ),
         "pdf-splitter" to listOf(
             NextStep("pdf-compressor", "Compress PDF", "Shrink the split output"),
+            NextStep("pdf-password-protector", "Password Protect", "Secure the extract"),
         ),
+        "pdf-page-extractor" to listOf(
+            NextStep("pdf-compressor", "Compress PDF", "Shrink the extracted pages"),
+            NextStep("pdf-password-protector", "Password Protect", "Secure the extract"),
+        ),
+
+        // --- ENDPOINTS (deliberately no suggestions — chaining would be pointless or harmful) ---
+        // pdf-compressor: final optimization. Watermarking would re-inflate; only a light "protect" makes sense.
+        "pdf-compressor" to listOf(
+            NextStep("pdf-password-protector", "Password Protect", "Secure the smaller file"),
+        ),
+        // pdf-password-protector: ALWAYS the last step. No entry.
+        // pdf-unlocker: one-time utility, unlock to use elsewhere. No entry.
+        // pdf-to-jpg: leaves the PDF family (outputs images). No entry.
+        // pdf-page-rotator: natural endpoint. No entry.
     )
 
     fun nextSteps(toolId: String): List<NextStep> = graph[toolId].orEmpty()
