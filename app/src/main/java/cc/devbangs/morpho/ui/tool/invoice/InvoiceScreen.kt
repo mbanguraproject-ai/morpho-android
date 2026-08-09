@@ -97,8 +97,8 @@ private fun DetailsTab(s: InvoiceState, accent: Color) {
         SectionTitle("INVOICE DETAILS")
         Field("INVOICE NUMBER", s.invoiceNumber, "INV-2026-001")
         Row(horizontalArrangement = Arrangement.spacedBy(Space.md)) {
-            Box(Modifier.weight(1f)) { Field("ISSUE DATE", s.issueDate, "08 Aug 2026") }
-            Box(Modifier.weight(1f)) { Field("DUE DATE", s.dueDate, "22 Aug 2026") }
+            Box(Modifier.weight(1f)) { DateField("ISSUE DATE", s.issueDate, accent) }
+            Box(Modifier.weight(1f)) { DateField("DUE DATE", s.dueDate, accent) }
         }
 
         SectionTitle("LINE ITEMS")
