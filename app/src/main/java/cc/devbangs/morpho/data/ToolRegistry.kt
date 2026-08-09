@@ -78,7 +78,7 @@ object ToolRegistry {
         Tool("pdf-page-numbering", "PDF Page Numbering", "Add page numbers to PDF documents", ToolCategory.PDF, "pdf-page-numbering", offline = true, popular = false),
         Tool("pdf-watermark", "PDF Watermark", "Add text watermarks across PDF pages", ToolCategory.PDF, "pdf-watermark", offline = true, popular = false),
         Tool("pdf-page-extractor", "PDF Page Extractor", "Extract specific pages into a new PDF", ToolCategory.PDF, "pdf-page-extractor", offline = true, popular = false),
-        Tool("pdf-text-extractor", "PDF Text Extractor", "Extract plain text from any PDF", ToolCategory.PDF, "pdf-text-extractor", offline = true, popular = false),
+        Tool("pdf-text-extractor", "PDF Text Extractor", "Extract plain text from any PDF", ToolCategory.PDF, "pdf-text-extractor", offline = false, popular = false),
         Tool("pdf-header-footer", "PDF Header & Footer", "Add headers and footers to PDF pages", ToolCategory.PDF, "pdf-header-footer", offline = false, popular = false),
         Tool("pdf-crop", "PDF Crop", "Trim margins off PDF pages", ToolCategory.PDF, "pdf-crop", offline = true, popular = false),
         Tool("pdf-bates-numbering", "PDF Bates Numbering", "Bates stamp PDFs for legal discovery", ToolCategory.PDF, "pdf-bates-numbering", offline = false, popular = false),
