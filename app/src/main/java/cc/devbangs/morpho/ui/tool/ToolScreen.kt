@@ -31,6 +31,7 @@ import cc.devbangs.morpho.ui.tool.kit.hasPdfTool
 import cc.devbangs.morpho.ui.tool.kit.PdfTool
 import cc.devbangs.morpho.ui.tool.kit.hasConverterTool
 import cc.devbangs.morpho.ui.tool.kit.ConverterTool
+import cc.devbangs.morpho.ui.tool.invoice.InvoiceTool
 import cc.devbangs.morpho.ui.theme.*
 
 @Composable
@@ -113,6 +114,7 @@ private fun ToolHost(tool: Tool) {
         hasImageTool(tool.id) -> ImageTool(tool.id, tool.category.accent)
         hasPdfTool(tool.id) -> PdfTool(tool.id, tool.category.accent)
         hasConverterTool(tool.id) -> ConverterTool(tool.id, tool.category.accent)
+        tool.id == "invoice-generator" -> InvoiceTool(tool.category.accent)
         else -> Placeholder(tool)
     }
 }
