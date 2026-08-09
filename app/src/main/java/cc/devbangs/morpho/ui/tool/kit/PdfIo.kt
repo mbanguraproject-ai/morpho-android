@@ -88,3 +88,11 @@ fun sharePdf(ctx: Context, bytes: ByteArray, name: String) {
 /** Read raw bytes of a Uri. */
 fun readBytes(ctx: Context, uri: Uri): ByteArray? =
     try { ctx.contentResolver.openInputStream(uri)?.use { it.readBytes() } } catch (e: Exception) { null }
+
+/** Write PDF bytes to a cache file and return a FileProvider Uri for hand-off. */
+fun cachePdfForHandoff(ctx: Context, bytes: ByteArray): android.net.Uri? = try {
+    val dir = java.io.File(ctx.cacheDir, "chain").apply { mkdirs() }
+    val f = java.io.File(dir, "chain_${System.currentTimeMillis()}.pdf")
+    java.io.FileOutputStream(f).use { it.write(bytes) }
+    androidx.core.content.FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", f)
+} catch (e: Exception) { null }

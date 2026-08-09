@@ -20,6 +20,8 @@ import cc.devbangs.morpho.core.Shape
 import cc.devbangs.morpho.core.Space
 import cc.devbangs.morpho.ui.icon.MorphoIcon
 import cc.devbangs.morpho.ui.theme.*
+import cc.devbangs.morpho.workflow.WorkflowBus
+import cc.devbangs.morpho.workflow.WorkflowGraph
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.pdmodel.encryption.AccessPermission
 import com.tom_roush.pdfbox.pdmodel.encryption.StandardProtectionPolicy
@@ -31,12 +33,12 @@ fun hasPdfBoxTool(id: String): Boolean = id in setOf(
 )
 
 @Composable
-fun PdfBoxTool(id: String, accent: Color) {
+fun PdfBoxTool(id: String, accent: Color, onOpenTool: (String) -> Unit = {}) {
     when (id) {
         "pdf-text-extractor" -> TextExtractor(accent)
-        "pdf-password-protector" -> PasswordProtect(accent)
+        "pdf-password-protector" -> PasswordProtect(accent, onOpenTool)
         "pdf-unlocker" -> Unlock(accent)
-        "pdf-compressor" -> Compress(accent)
+        "pdf-compressor" -> Compress(accent, onOpenTool)
     }
 }
 
@@ -67,11 +69,13 @@ private fun TextExtractor(accent: Color) {
 }
 
 @Composable
-private fun PasswordProtect(accent: Color) {
+private fun PasswordProtect(accent: Color, onOpenTool: (String) -> Unit = {}) {
     val ctx = LocalContext.current
     var uri by remember { mutableStateOf<Uri?>(null) }
     var pw by remember { mutableStateOf("") }
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u -> uri = u }
+    var output by remember { mutableStateOf<ByteArray?>(null) }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u -> uri = u; output = null }
+    LaunchedEffect(Unit) { WorkflowBus.consume()?.let { pf -> uri = pf.uri } }
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
         PickRow(if (uri == null) "Choose a PDF" else "PDF selected ✓", accent) { picker.launch(arrayOf("application/pdf")) }
         if (uri != null) {
@@ -79,8 +83,15 @@ private fun PasswordProtect(accent: Color) {
             if (pw.isNotBlank()) {
                 val u = uri!!
                 ActionRow(accent,
-                    { protectPdf(ctx, u, pw)?.let { savePdfToDownloads(ctx, it, "protected_${System.currentTimeMillis()}") } },
-                    { protectPdf(ctx, u, pw)?.let { sharePdf(ctx, it, "protected_${System.currentTimeMillis()}") } })
+                    { protectPdf(ctx, u, pw)?.let { output = it; savePdfToDownloads(ctx, it, "protected_${System.currentTimeMillis()}") } },
+                    { protectPdf(ctx, u, pw)?.let { output = it; sharePdf(ctx, it, "protected_${System.currentTimeMillis()}") } })
+                output?.let { bytes ->
+                    NextStepSuggestions(WorkflowGraph.nextSteps("pdf-password-protector")) { step ->
+                        cachePdfForHandoff(ctx, bytes)?.let { h ->
+                            WorkflowBus.handOff(h, "application/pdf"); onOpenTool(step.toolId)
+                        }
+                    }
+                }
             }
         }
     }
@@ -107,12 +118,19 @@ private fun Unlock(accent: Color) {
 }
 
 @Composable
-private fun Compress(accent: Color) {
+private fun Compress(accent: Color, onOpenTool: (String) -> Unit = {}) {
     val ctx = LocalContext.current
     var uri by remember { mutableStateOf<Uri?>(null) }
     var origSize by remember { mutableStateOf(0L) }
+    var output by remember { mutableStateOf<ByteArray?>(null) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u ->
-        uri = u; origSize = u?.let { readBytes(ctx, it)?.size?.toLong() } ?: 0L
+        uri = u; origSize = u?.let { readBytes(ctx, it)?.size?.toLong() } ?: 0L; output = null
+    }
+    // Receive a handed-off file from a previous tool in the chain
+    LaunchedEffect(Unit) {
+        WorkflowBus.consume()?.let { pf ->
+            uri = pf.uri; origSize = readBytes(ctx, pf.uri)?.size?.toLong() ?: 0L
+        }
     }
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
         PickRow(if (uri == null) "Choose a PDF" else "PDF selected ✓", accent) { picker.launch(arrayOf("application/pdf")) }
@@ -121,8 +139,17 @@ private fun Compress(accent: Color) {
             Text("Re-renders pages at reduced resolution to shrink size.", color = InkFaint, fontSize = 12.sp)
             val u = uri!!
             ActionRow(accent,
-                { compressPdf(ctx, u)?.let { savePdfToDownloads(ctx, it, "compressed_${System.currentTimeMillis()}") } },
-                { compressPdf(ctx, u)?.let { sharePdf(ctx, it, "compressed_${System.currentTimeMillis()}") } })
+                { compressPdf(ctx, u)?.let { output = it; savePdfToDownloads(ctx, it, "compressed_${System.currentTimeMillis()}") } },
+                { compressPdf(ctx, u)?.let { output = it; sharePdf(ctx, it, "compressed_${System.currentTimeMillis()}") } })
+
+            output?.let { bytes ->
+                NextStepSuggestions(WorkflowGraph.nextSteps("pdf-compressor")) { step ->
+                    cachePdfForHandoff(ctx, bytes)?.let { handoffUri ->
+                        WorkflowBus.handOff(handoffUri, "application/pdf")
+                        onOpenTool(step.toolId)
+                    }
+                }
+            }
         }
     }
 }

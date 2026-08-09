@@ -31,6 +31,8 @@ import cc.devbangs.morpho.core.Shape
 import cc.devbangs.morpho.core.Space
 import cc.devbangs.morpho.ui.icon.MorphoIcon
 import cc.devbangs.morpho.ui.theme.*
+import cc.devbangs.morpho.workflow.WorkflowBus
+import cc.devbangs.morpho.workflow.WorkflowGraph
 import java.io.ByteArrayOutputStream
 
 fun hasPdfTool(id: String): Boolean = id in setOf(
@@ -39,22 +41,23 @@ fun hasPdfTool(id: String): Boolean = id in setOf(
 )
 
 @Composable
-fun PdfTool(id: String, accent: Color) {
+fun PdfTool(id: String, accent: Color, onOpenTool: (String) -> Unit = {}) {
     when (id) {
-        "jpg-to-pdf","image-to-pdf" -> ImagesToPdf(accent)
-        "merge-pdf" -> MergePdf(accent)
-        else -> PdfFromSingle(id, accent)
+        "jpg-to-pdf","image-to-pdf" -> ImagesToPdf(accent, onOpenTool)
+        "merge-pdf" -> MergePdf(accent, onOpenTool)
+        else -> PdfFromSingle(id, accent, onOpenTool)
     }
 }
 
 // ---- Images -> PDF ----
 @Composable
-private fun ImagesToPdf(accent: Color) {
+private fun ImagesToPdf(accent: Color, onOpenTool: (String) -> Unit = {}) {
     val ctx = LocalContext.current
     var uris by remember { mutableStateOf<List<Uri>>(emptyList()) }
+    var output by remember { mutableStateOf<ByteArray?>(null) }
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia(30)
-    ) { uris = it }
+    ) { uris = it; output = null }
 
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
         PickRow("Choose images", "image-add", accent) {
@@ -66,24 +69,31 @@ private fun ImagesToPdf(accent: Color) {
             ActionRow(accent,
                 onSave = {
                     val bytes = buildImagesPdf(ctx, uris) ?: return@ActionRow
-                    savePdfToDownloads(ctx, bytes, "morpho_${System.currentTimeMillis()}")
+                    output = bytes; savePdfToDownloads(ctx, bytes, "morpho_${System.currentTimeMillis()}")
                 },
                 onShare = {
                     val bytes = buildImagesPdf(ctx, uris) ?: return@ActionRow
-                    sharePdf(ctx, bytes, "morpho_${System.currentTimeMillis()}")
+                    output = bytes; sharePdf(ctx, bytes, "morpho_${System.currentTimeMillis()}")
                 })
+            output?.let { bytes ->
+                NextStepSuggestions(WorkflowGraph.nextSteps("jpg-to-pdf")) { step ->
+                    cachePdfForHandoff(ctx, bytes)?.let { h ->
+                        WorkflowBus.handOff(h, "application/pdf"); onOpenTool(step.toolId) }
+                }
+            }
         }
     }
 }
 
 // ---- Merge PDFs ----
 @Composable
-private fun MergePdf(accent: Color) {
+private fun MergePdf(accent: Color, onOpenTool: (String) -> Unit = {}) {
     val ctx = LocalContext.current
     var uris by remember { mutableStateOf<List<Uri>>(emptyList()) }
+    var output by remember { mutableStateOf<ByteArray?>(null) }
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenMultipleDocuments()
-    ) { uris = it }
+    ) { uris = it; output = null }
 
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
         PickRow("Choose PDF files", "file-add", accent) { picker.launch(arrayOf("application/pdf")) }
@@ -91,16 +101,22 @@ private fun MergePdf(accent: Color) {
             Text("${uris.size} PDF(s) selected", color = InkSoft, fontSize = 13.sp)
             ActionRow(accent,
                 onSave = { val b = mergePdfs(ctx, uris) ?: return@ActionRow
-                    savePdfToDownloads(ctx, b, "merged_${System.currentTimeMillis()}") },
+                    output = b; savePdfToDownloads(ctx, b, "merged_${System.currentTimeMillis()}") },
                 onShare = { val b = mergePdfs(ctx, uris) ?: return@ActionRow
-                    sharePdf(ctx, b, "merged_${System.currentTimeMillis()}") })
+                    output = b; sharePdf(ctx, b, "merged_${System.currentTimeMillis()}") })
+            output?.let { bytes ->
+                NextStepSuggestions(WorkflowGraph.nextSteps("merge-pdf")) { step ->
+                    cachePdfForHandoff(ctx, bytes)?.let { h ->
+                        WorkflowBus.handOff(h, "application/pdf"); onOpenTool(step.toolId) }
+                }
+            }
         }
     }
 }
 
 // ---- Single-PDF tools: to-jpg, rotate, numbering, watermark, split, extract ----
 @Composable
-private fun PdfFromSingle(id: String, accent: Color) {
+private fun PdfFromSingle(id: String, accent: Color, onOpenTool: (String) -> Unit = {}) {
     val ctx = LocalContext.current
     var uri by remember { mutableStateOf<Uri?>(null) }
     var pages by remember { mutableStateOf<List<Bitmap>>(emptyList()) }
@@ -111,6 +127,11 @@ private fun PdfFromSingle(id: String, accent: Color) {
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { u -> if (u != null) { uri = u; pages = renderPdf(ctx, u, 900) } }
+
+    // Receive a handed-off file from a previous tool
+    LaunchedEffect(Unit) {
+        WorkflowBus.consume()?.let { pf -> uri = pf.uri; pages = renderPdf(ctx, pf.uri, 900) }
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
         PickRow("Choose a PDF", "file-add", accent) { picker.launch(arrayOf("application/pdf")) }
@@ -136,6 +157,15 @@ private fun PdfFromSingle(id: String, accent: Color) {
                     sharePdf(ctx, it, "morpho_${System.currentTimeMillis()}") } },
                 saveLabel = if (id == "pdf-to-jpg") "Save pages to gallery" else "Save PDF",
                 pdfToJpg = id == "pdf-to-jpg")
+            val steps = WorkflowGraph.nextSteps(id)
+            if (steps.isNotEmpty() && id != "pdf-to-jpg") {
+                NextStepSuggestions(steps) { step ->
+                    buildSingle(ctx, id, u, pages, rotation, wm, range)?.let { bytes ->
+                        cachePdfForHandoff(ctx, bytes)?.let { h ->
+                            WorkflowBus.handOff(h, "application/pdf"); onOpenTool(step.toolId) }
+                    }
+                }
+            }
         }
     }
 }

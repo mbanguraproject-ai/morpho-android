@@ -52,6 +52,7 @@ import cc.devbangs.morpho.ui.theme.*
 fun ToolScreen(
     toolId: String,
     onBack: () -> Unit,
+    onOpenTool: (String) -> Unit,
     contentPadding: PaddingValues
 ) {
     val tool = ToolRegistry.byId(toolId)
@@ -105,7 +106,7 @@ fun ToolScreen(
             HowItWorks(tool.category.accent)
             Spacer(Modifier.height(Space.lg))
             // Real tool UIs mount here via dispatch.
-            ToolHost(tool = tool)
+            ToolHost(tool = tool, onOpenTool = onOpenTool)
         }
     }
 }
@@ -161,19 +162,18 @@ private fun StatusLabel(tool: Tool) {
 
 /** Dispatch to the real per-tool UI, else a branded placeholder. */
 @Composable
-private fun ToolHost(tool: Tool) {
+private fun ToolHost(tool: Tool, onOpenTool: (String) -> Unit) {
     when {
         hasTextDevTool(tool.id) -> TextDevTool(tool.id, tool.category.accent)
         hasGeneratorTool(tool.id) -> GeneratorTool(tool.id, tool.category.accent)
         hasImageTool(tool.id) -> ImageTool(tool.id, tool.category.accent)
-        hasPdfTool(tool.id) -> PdfTool(tool.id, tool.category.accent)
+        hasPdfTool(tool.id) -> PdfTool(tool.id, tool.category.accent, onOpenTool)
         hasConverterTool(tool.id) -> ConverterTool(tool.id, tool.category.accent)
         hasExtraTool(tool.id) -> ExtraTool(tool.id, tool.category.accent)
         hasMediaTool(tool.id) -> MediaTool(tool.id, tool.category.accent)
         hasOcrTool(tool.id) -> OcrTool(tool.id, tool.category.accent)
         hasLastTool(tool.id) -> LastTool(tool.id, tool.category.accent)
-        hasPdfBoxTool(tool.id) -> PdfBoxTool(tool.id, tool.category.accent)
-        hasEncoderTool(tool.id) -> EncoderTool(tool.id, tool.category.accent)
+        hasPdfBoxTool(tool.id) -> PdfBoxTool(tool.id, tool.category.accent, onOpenTool)
         tool.id == "invoice-generator" -> InvoiceTool(tool.category.accent)
         tool.id == "resume-builder" -> ResumeTool(tool.category.accent)
         else -> Placeholder(tool)

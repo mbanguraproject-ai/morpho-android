@@ -104,6 +104,7 @@ fun MorphoApp() {
                 ToolScreen(
                     toolId = id,
                     onBack = { nav.popBackStack() },
+                    onOpenTool = { nav.navigate(Dest.Tool(it).route) },
                     contentPadding = PaddingValues()
                 )
             }
