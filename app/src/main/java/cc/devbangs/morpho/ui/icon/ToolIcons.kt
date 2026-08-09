@@ -165,7 +165,6 @@ object ToolIcons {
         "mp4-to-mp3" to PhosphorIcons.Bold.FileVideo,
         "video-to-gif" to PhosphorIcons.Bold.Gif,
         "video-compressor" to PhosphorIcons.Bold.ArrowsIn,
-        "screen-recorder" to PhosphorIcons.Bold.Monitor,
         "video-trimmer" to PhosphorIcons.Bold.Scissors,
         "mp3-converter" to PhosphorIcons.Bold.FileAudio,
         "wav-converter" to PhosphorIcons.Bold.Waveform,

@@ -29,7 +29,6 @@ object ToolRegistry {
         Tool("json-to-csv", "JSON to CSV Converter", "Convert JSON data to CSV format", ToolCategory.CONVERTER, "json-to-csv", offline = true, popular = false),
         Tool("video-to-gif", "Video to GIF Converter", "Convert video clips to animated GIFs", ToolCategory.VIDEO, "video-to-gif", offline = true, popular = false),
         Tool("video-compressor", "Video Compressor", "Compress videos to smaller file size", ToolCategory.VIDEO, "video-compressor", offline = false, popular = false),
-        Tool("screen-recorder", "Screen Recorder", "Record your screen", ToolCategory.VIDEO, "screen-recorder", offline = false, popular = false),
         Tool("video-trimmer", "Video Trimmer", "Trim videos to exact length", ToolCategory.VIDEO, "video-trimmer", offline = true, popular = false),
         Tool("mp3-converter", "MP3 Converter", "Convert any audio file to MP3", ToolCategory.AUDIO, "mp3-converter", offline = false, popular = false),
         Tool("wav-converter", "WAV Converter", "Convert audio files to WAV format", ToolCategory.AUDIO, "wav-converter", offline = true, popular = false),
