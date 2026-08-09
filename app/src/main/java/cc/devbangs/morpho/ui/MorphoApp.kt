@@ -7,6 +7,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -39,7 +45,19 @@ fun MorphoApp() {
         NavHost(
             navController = nav,
             startDestination = Dest.Home.route,
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize(),
+            enterTransition = {
+                slideInHorizontally(tween(320)) { it / 5 } + fadeIn(tween(320))
+            },
+            exitTransition = {
+                slideOutHorizontally(tween(320)) { -it / 8 } + fadeOut(tween(220))
+            },
+            popEnterTransition = {
+                slideInHorizontally(tween(320)) { -it / 8 } + fadeIn(tween(320))
+            },
+            popExitTransition = {
+                slideOutHorizontally(tween(320)) { it / 5 } + fadeOut(tween(220))
+            }
         ) {
             composable(Dest.Home.route) {
                 HomeScreen(
