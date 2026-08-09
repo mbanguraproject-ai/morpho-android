@@ -47,6 +47,7 @@ fun pdfPageCount(ctx: Context, uri: Uri): Int = try {
 /** Save raw PDF bytes to Downloads/Morpho. */
 fun savePdfToDownloads(ctx: Context, bytes: ByteArray, name: String): Boolean {
     cc.devbangs.morpho.ads.AdState.markUsed()
+    cc.devbangs.morpho.notify.Notifier.notifyDone(ctx, "PDF ready", "Your PDF was saved to Downloads/Morpho.")
     return try {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val values = ContentValues().apply {

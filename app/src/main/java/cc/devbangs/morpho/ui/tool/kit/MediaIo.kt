@@ -80,6 +80,7 @@ fun trimMedia(ctx: Context, uri: Uri, startMs: Long, endMs: Long, ext: String): 
 /** Save a cache media file to the gallery (Movies or Music). */
 fun saveMediaToGallery(ctx: Context, file: File, displayName: String, isVideo: Boolean): Boolean {
     cc.devbangs.morpho.ads.AdState.markUsed()
+    cc.devbangs.morpho.notify.Notifier.notifyDone(ctx, "File ready", "Your file was saved to your gallery.")
     return try {
         val mime = if (isVideo) "video/mp4" else "audio/mp4"
         val collection = if (isVideo) MediaStore.Video.Media.EXTERNAL_CONTENT_URI

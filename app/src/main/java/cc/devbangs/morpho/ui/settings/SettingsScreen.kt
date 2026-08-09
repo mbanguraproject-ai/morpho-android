@@ -4,6 +4,15 @@ import androidx.compose.foundation.background
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.clickable
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import cc.devbangs.morpho.notify.Prefs
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -76,8 +85,7 @@ fun SettingsScreen(
             PlusBanner(onOpenPlus)
 
             SettingsGroup("GENERAL") {
-                SettingRow("moon", "Appearance", "Light") {}
-                SettingRow("bell", "Notifications", null) {}
+                NotificationsToggle(ctx)
             }
             SettingsGroup("ABOUT") {
                 SettingRow("info", "About Morpho", "v1.0.0") { openUrl(ctx, "https://play.google.com/store/apps/details?id=$PACKAGE") }
@@ -125,6 +133,52 @@ private fun SettingsGroup(title: String, content: @Composable ColumnScope.() -> 
         Column(
             Modifier.fillMaxWidth().clip(Shape.card).background(PaperSunk),
             content = content
+        )
+    }
+}
+
+@Composable
+private fun NotificationsToggle(ctx: android.content.Context) {
+    var enabled by remember { mutableStateOf(Prefs.notificationsEnabled(ctx)) }
+    val permLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        // Only turn on if permission granted
+        enabled = granted
+        Prefs.setNotifications(ctx, granted)
+    }
+    SettingToggle("bell", "Notifications", "Get notified when a file is ready", enabled) { wantOn ->
+        if (wantOn) {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU
+                && !cc.devbangs.morpho.notify.Notifier.hasPermission(ctx)) {
+                permLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+            } else {
+                enabled = true; Prefs.setNotifications(ctx, true)
+            }
+        } else {
+            enabled = false; Prefs.setNotifications(ctx, false)
+        }
+    }
+}
+
+@Composable
+private fun SettingToggle(icon: String, label: String, sub: String, checked: Boolean, onToggle: (Boolean) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clickable { onToggle(!checked) }.padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        MorphoIcon(icon, tint = InkSoft, size = 20.dp)
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(label, color = Ink, fontSize = 15.sp)
+            Text(sub, color = InkFaint, fontSize = 12.sp)
+        }
+        Switch(
+            checked = checked, onCheckedChange = onToggle,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Paper, checkedTrackColor = Cobalt,
+                uncheckedThumbColor = Paper, uncheckedTrackColor = PaperLine
+            )
         )
     }
 }

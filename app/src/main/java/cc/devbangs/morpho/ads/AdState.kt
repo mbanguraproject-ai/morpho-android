@@ -10,8 +10,8 @@ import androidx.compose.runtime.mutableStateOf
  */
 object AdState {
     // Test IDs — swap real ones at launch. These are Google's official test units.
-    const val TEST_INTERSTITIAL = "ca-app-pub-3940256099942544/1033173712"
-    const val TEST_NATIVE = "ca-app-pub-3940256099942544/2247696110"
+    const val TEST_INTERSTITIAL = "ca-app-pub-9121922395304175/6203443667"
+    const val TEST_NATIVE = "ca-app-pub-9121922395304175/8812315198"
 
     // Plus gating — set true when a Plus subscription is active (wired to billing later).
     val isPlus = mutableStateOf(false)
