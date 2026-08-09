@@ -31,3 +31,10 @@
 
 # ---- General Android ----
 -keepattributes *Annotation*, Signature, InnerClasses, EnclosingMethod
+
+# ---- Haze (frosted blur) ----
+-keep class dev.chrisbanes.haze.** { *; }
+-dontwarn dev.chrisbanes.haze.**
+
+# ---- AndroidX SplashScreen ----
+-keep class androidx.core.splashscreen.** { *; }
