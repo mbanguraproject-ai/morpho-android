@@ -26,10 +26,7 @@ class MainActivity : ComponentActivity() {
                 AndroidColor.TRANSPARENT, AndroidColor.TRANSPARENT
             ),
             navigationBarStyle = SystemBarStyle.light(
-                // scrim (light) + darkScrim: gives the gesture bar a subtle backing
-                // so content scrolling under it never collides with the pill/buttons
-                AndroidColor.argb(0x22, 0xFF, 0xFF, 0xFF),
-                AndroidColor.argb(0x22, 0x00, 0x00, 0x00)
+                AndroidColor.TRANSPARENT, AndroidColor.TRANSPARENT
             )
         )
         super.onCreate(savedInstanceState)
