@@ -51,4 +51,6 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("com.adamglin:phosphor-icon:1.0.0")
     implementation("com.google.zxing:core:3.5.3")
+    implementation("com.google.mlkit:text-recognition:16.0.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
 }
