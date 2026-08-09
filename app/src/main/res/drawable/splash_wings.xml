@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt">
+    <aapt:attr name="android:drawable">
+        <vector
+            android:width="288dp"
+            android:height="288dp"
+            android:viewportWidth="108"
+            android:viewportHeight="108">
+            <group android:name="wings" android:pivotX="54" android:pivotY="54">
+                <path android:name="left"
+                    android:pathData="M54,54 C34,20 10,30 20,54 C10,78 34,88 54,54 Z"
+                    android:fillColor="#FFFFFF" android:fillAlpha="0.95"/>
+                <path android:name="right"
+                    android:pathData="M54,54 C74,20 98,30 88,54 C98,78 74,88 54,54 Z"
+                    android:fillColor="#FFFFFF" android:fillAlpha="0.65"/>
+                <path android:name="seam"
+                    android:pathData="M54,34 L54,74"
+                    android:strokeColor="#FFFFFF" android:strokeWidth="3.5"
+                    android:strokeAlpha="0.9" android:strokeLineCap="round"/>
+            </group>
+        </vector>
+    </aapt:attr>
+
+    <target android:name="wings">
+        <aapt:attr name="android:animation">
+            <set>
+                <objectAnimator
+                    android:propertyName="scaleX"
+                    android:valueFrom="0.6" android:valueTo="1.0"
+                    android:duration="600"
+                    android:interpolator="@android:interpolator/overshoot"/>
+                <objectAnimator
+                    android:propertyName="scaleY"
+                    android:valueFrom="0.6" android:valueTo="1.0"
+                    android:duration="600"
+                    android:interpolator="@android:interpolator/overshoot"/>
+            </set>
+        </aapt:attr>
+    </target>
+</animated-vector>

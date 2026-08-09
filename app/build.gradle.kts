@@ -72,5 +72,6 @@ dependencies {
     implementation("com.tom-roush:pdfbox-android:2.0.27.0")
     implementation("dev.chrisbanes.haze:haze:1.6.10")
     implementation("dev.chrisbanes.haze:haze-materials:1.6.10")
+    implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
 }

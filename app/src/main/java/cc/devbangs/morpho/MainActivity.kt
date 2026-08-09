@@ -2,6 +2,7 @@ package cc.devbangs.morpho
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.SystemBarStyle
@@ -17,6 +18,7 @@ import cc.devbangs.morpho.ui.theme.Paper
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         // Transparent system bars, dark icons (light bars). Applies on all API levels.
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.light(
