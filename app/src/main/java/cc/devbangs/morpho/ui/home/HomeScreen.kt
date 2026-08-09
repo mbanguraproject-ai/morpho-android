@@ -113,11 +113,6 @@ fun HomeScreen(
                 .padding(start = Space.gutter, end = Space.gutter, top = Space.sm, bottom = Space.sm),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                Modifier.size(34.dp).clip(Shape.chip).background(Cobalt),
-                contentAlignment = Alignment.Center
-            ) { MorphoIcon("cat-converter", tint = Paper, size = 19.dp) }
-            Spacer(Modifier.width(10.dp))
             Text("Morpho", style = MaterialTheme.typography.titleLarge, color = Ink,
                 fontWeight = FontWeight.Bold)
             Spacer(Modifier.weight(1f))
