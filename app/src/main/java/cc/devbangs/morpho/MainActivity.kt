@@ -1,5 +1,6 @@
 package cc.devbangs.morpho
 
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -25,10 +26,18 @@ class MainActivity : ComponentActivity() {
                 AndroidColor.TRANSPARENT, AndroidColor.TRANSPARENT
             ),
             navigationBarStyle = SystemBarStyle.light(
-                AndroidColor.TRANSPARENT, AndroidColor.TRANSPARENT
+                // scrim (light) + darkScrim: gives the gesture bar a subtle backing
+                // so content scrolling under it never collides with the pill/buttons
+                AndroidColor.argb(0x22, 0xFF, 0xFF, 0xFF),
+                AndroidColor.argb(0x22, 0x00, 0x00, 0x00)
             )
         )
         super.onCreate(savedInstanceState)
+        // Ensure the system gesture bar keeps a contrast scrim so scrolling
+        // content never collides with the pill/buttons (API 29+).
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.isNavigationBarContrastEnforced = true
+        }
         setContent {
             MorphoTheme {
                 Surface(

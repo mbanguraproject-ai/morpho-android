@@ -21,7 +21,9 @@ import cc.devbangs.morpho.ui.icon.MorphoIcon
 import cc.devbangs.morpho.ui.theme.*
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeChild
-import dev.chrisbanes.haze.materials.HazeMaterials
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.HazeTint
+import androidx.compose.ui.graphics.Color
 
 data class BottomTab(val key: String, val label: String, val glyph: String)
 
@@ -52,7 +54,14 @@ fun MorphoBottomBar(
                     spotColor = Cobalt.copy(alpha = 0.18f)
                 )
                 .clip(Shape.card)
-                .hazeChild(hazeState, style = HazeMaterials.thin(Paper))
+                .hazeChild(
+                    hazeState,
+                    style = HazeStyle(
+                        blurRadius = 24.dp,
+                        backgroundColor = Paper,
+                        tints = listOf(HazeTint(Color.White.copy(alpha = 0.82f)))
+                    )
+                )
                 .padding(vertical = 10.dp, horizontal = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
