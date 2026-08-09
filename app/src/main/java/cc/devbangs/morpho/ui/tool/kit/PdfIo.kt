@@ -96,3 +96,11 @@ fun cachePdfForHandoff(ctx: Context, bytes: ByteArray): android.net.Uri? = try {
     java.io.FileOutputStream(f).use { it.write(bytes) }
     androidx.core.content.FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", f)
 } catch (e: Exception) { null }
+
+/** Write handed-off bytes to a private cache file, return a file Uri the app can read. */
+fun bytesToTempUri(ctx: Context, bytes: ByteArray): android.net.Uri {
+    val dir = java.io.File(ctx.cacheDir, "chain").apply { mkdirs() }
+    val f = java.io.File(dir, "in_${System.currentTimeMillis()}.pdf")
+    java.io.FileOutputStream(f).use { it.write(bytes) }
+    return android.net.Uri.fromFile(f)
+}

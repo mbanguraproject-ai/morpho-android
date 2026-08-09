@@ -75,7 +75,7 @@ private fun PasswordProtect(accent: Color, onOpenTool: (String) -> Unit = {}) {
     var pw by remember { mutableStateOf("") }
     var output by remember { mutableStateOf<ByteArray?>(null) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u -> uri = u; output = null }
-    LaunchedEffect(Unit) { WorkflowBus.consume()?.let { pf -> uri = pf.uri } }
+    LaunchedEffect(Unit) { WorkflowBus.consume()?.let { pf -> uri = bytesToTempUri(ctx, pf.bytes) } }
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
         PickRow(if (uri == null) "Choose a PDF" else "PDF selected ✓", accent) { picker.launch(arrayOf("application/pdf")) }
         if (uri != null) {
@@ -87,9 +87,7 @@ private fun PasswordProtect(accent: Color, onOpenTool: (String) -> Unit = {}) {
                     { protectPdf(ctx, u, pw)?.let { output = it; sharePdf(ctx, it, "protected_${System.currentTimeMillis()}") } })
                 output?.let { bytes ->
                     NextStepSuggestions(WorkflowGraph.nextSteps("pdf-password-protector")) { step ->
-                        cachePdfForHandoff(ctx, bytes)?.let { h ->
-                            WorkflowBus.handOff(h, "application/pdf"); onOpenTool(step.toolId)
-                        }
+                        WorkflowBus.handOff(bytes, "application/pdf"); onOpenTool(step.toolId)
                     }
                 }
             }
@@ -129,7 +127,8 @@ private fun Compress(accent: Color, onOpenTool: (String) -> Unit = {}) {
     // Receive a handed-off file from a previous tool in the chain
     LaunchedEffect(Unit) {
         WorkflowBus.consume()?.let { pf ->
-            uri = pf.uri; origSize = readBytes(ctx, pf.uri)?.size?.toLong() ?: 0L
+            val u = bytesToTempUri(ctx, pf.bytes)
+            uri = u; origSize = pf.bytes.size.toLong()
         }
     }
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
@@ -144,10 +143,7 @@ private fun Compress(accent: Color, onOpenTool: (String) -> Unit = {}) {
 
             output?.let { bytes ->
                 NextStepSuggestions(WorkflowGraph.nextSteps("pdf-compressor")) { step ->
-                    cachePdfForHandoff(ctx, bytes)?.let { handoffUri ->
-                        WorkflowBus.handOff(handoffUri, "application/pdf")
-                        onOpenTool(step.toolId)
-                    }
+                    WorkflowBus.handOff(bytes, "application/pdf"); onOpenTool(step.toolId)
                 }
             }
         }

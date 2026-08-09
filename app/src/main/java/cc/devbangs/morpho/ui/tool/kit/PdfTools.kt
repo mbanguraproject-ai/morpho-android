@@ -77,8 +77,7 @@ private fun ImagesToPdf(accent: Color, onOpenTool: (String) -> Unit = {}) {
                 })
             output?.let { bytes ->
                 NextStepSuggestions(WorkflowGraph.nextSteps("jpg-to-pdf")) { step ->
-                    cachePdfForHandoff(ctx, bytes)?.let { h ->
-                        WorkflowBus.handOff(h, "application/pdf"); onOpenTool(step.toolId) }
+                    WorkflowBus.handOff(bytes, "application/pdf"); onOpenTool(step.toolId)
                 }
             }
         }
@@ -106,8 +105,7 @@ private fun MergePdf(accent: Color, onOpenTool: (String) -> Unit = {}) {
                     output = b; sharePdf(ctx, b, "merged_${System.currentTimeMillis()}") })
             output?.let { bytes ->
                 NextStepSuggestions(WorkflowGraph.nextSteps("merge-pdf")) { step ->
-                    cachePdfForHandoff(ctx, bytes)?.let { h ->
-                        WorkflowBus.handOff(h, "application/pdf"); onOpenTool(step.toolId) }
+                    WorkflowBus.handOff(bytes, "application/pdf"); onOpenTool(step.toolId)
                 }
             }
         }
@@ -130,7 +128,10 @@ private fun PdfFromSingle(id: String, accent: Color, onOpenTool: (String) -> Uni
 
     // Receive a handed-off file from a previous tool
     LaunchedEffect(Unit) {
-        WorkflowBus.consume()?.let { pf -> uri = pf.uri; pages = renderPdf(ctx, pf.uri, 900) }
+        WorkflowBus.consume()?.let { pf ->
+            val u = bytesToTempUri(ctx, pf.bytes)
+            uri = u; pages = renderPdf(ctx, u, 900)
+        }
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
@@ -161,8 +162,7 @@ private fun PdfFromSingle(id: String, accent: Color, onOpenTool: (String) -> Uni
             if (steps.isNotEmpty() && id != "pdf-to-jpg") {
                 NextStepSuggestions(steps) { step ->
                     buildSingle(ctx, id, u, pages, rotation, wm, range)?.let { bytes ->
-                        cachePdfForHandoff(ctx, bytes)?.let { h ->
-                            WorkflowBus.handOff(h, "application/pdf"); onOpenTool(step.toolId) }
+                        WorkflowBus.handOff(bytes, "application/pdf"); onOpenTool(step.toolId)
                     }
                 }
             }

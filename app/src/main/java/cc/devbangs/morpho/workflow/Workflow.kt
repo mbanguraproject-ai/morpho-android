@@ -8,10 +8,11 @@ import androidx.compose.runtime.mutableStateOf
  * next tool, the output file is parked here; the receiving tool consumes it on open.
  */
 object WorkflowBus {
-    // The pending file passed from a previous tool (consumed once).
+    // Bytes passed from a previous tool (consumed once). Carrying bytes directly
+    // avoids FileProvider path config entirely — robust for internal hand-off.
     private val pending = mutableStateOf<PendingFile?>(null)
 
-    fun handOff(uri: Uri, mime: String) { pending.value = PendingFile(uri, mime) }
+    fun handOff(bytes: ByteArray, mime: String) { pending.value = PendingFile(bytes, mime) }
 
     /** Consume the pending file if present (returns once, then clears). */
     fun consume(): PendingFile? {
@@ -24,7 +25,7 @@ object WorkflowBus {
     fun clear() { pending.value = null }
 }
 
-data class PendingFile(val uri: Uri, val mime: String)
+data class PendingFile(val bytes: ByteArray, val mime: String)
 
 /** A suggested next step after a tool produces output. */
 data class NextStep(val toolId: String, val label: String, val reason: String)
