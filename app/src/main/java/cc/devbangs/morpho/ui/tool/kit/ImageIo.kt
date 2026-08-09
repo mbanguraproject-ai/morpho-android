@@ -28,6 +28,7 @@ fun decodeBitmap(ctx: Context, uri: Uri, maxDim: Int = 4096): Bitmap? {
 
 /** Save a bitmap to the gallery (Pictures/Morpho). Returns true on success. */
 fun saveToGallery(ctx: Context, bmp: Bitmap, name: String, format: Bitmap.CompressFormat, quality: Int): Boolean {
+    cc.devbangs.morpho.ads.AdState.markUsed()
     return try {
         val ext = if (format == Bitmap.CompressFormat.PNG) "png" else "jpg"
         val mime = if (format == Bitmap.CompressFormat.PNG) "image/png" else "image/jpeg"

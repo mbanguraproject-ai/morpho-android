@@ -14,6 +14,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import cc.devbangs.morpho.ui.MorphoApp
+import cc.devbangs.morpho.ads.ConsentManager
+import cc.devbangs.morpho.ads.InterstitialManager
 import cc.devbangs.morpho.ui.theme.MorphoTheme
 import cc.devbangs.morpho.ui.theme.Paper
 
@@ -34,6 +36,12 @@ class MainActivity : ComponentActivity() {
         // content never collides with the pill/buttons (API 29+).
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             window.isNavigationBarContrastEnforced = true
+        }
+        // Gather GDPR/CCPA consent first, then preload ads only if allowed
+        ConsentManager.gatherConsent(this) {
+            if (ConsentManager.canRequestAds) {
+                InterstitialManager.preload(this)
+            }
         }
         setContent {
             MorphoTheme {

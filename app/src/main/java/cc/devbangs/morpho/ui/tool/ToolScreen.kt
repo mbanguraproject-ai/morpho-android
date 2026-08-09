@@ -10,6 +10,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
+import cc.devbangs.morpho.ads.AdState
+import cc.devbangs.morpho.ads.InterstitialManager
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
@@ -57,6 +61,21 @@ fun ToolScreen(
 ) {
     val tool = ToolRegistry.byId(toolId)
     val tint = tool?.category?.accent ?: Cobalt
+    val ctx = LocalContext.current
+    val activity = remember(ctx) {
+        var c: android.content.Context? = ctx
+        while (c is android.content.ContextWrapper && c !is android.app.Activity) {
+            c = c.baseContext
+        }
+        c as? android.app.Activity
+    }
+    androidx.compose.runtime.LaunchedEffect(toolId) { AdState.resetUsed() }
+    val backWithAd: () -> Unit = {
+        val act = activity
+        if (act != null && AdState.onToolCompleted()) {
+            InterstitialManager.maybeShow(act) { onBack() }
+        } else onBack()
+    }
 
     Column(Modifier.fillMaxSize().background(Paper)) {
         // top zone
@@ -70,7 +89,7 @@ fun ToolScreen(
                 Modifier.fillMaxWidth().height(56.dp).padding(horizontal = Space.sm),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButtonMorpho("chevron-left", onBack)
+                IconButtonMorpho("chevron-left", backWithAd)
                 Spacer(Modifier.weight(1f))
             }
             if (tool != null) Row(

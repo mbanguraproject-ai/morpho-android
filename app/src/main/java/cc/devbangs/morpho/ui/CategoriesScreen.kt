@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cc.devbangs.morpho.core.Shape
 import cc.devbangs.morpho.core.Space
+import cc.devbangs.morpho.ads.NativeAdCard
 import cc.devbangs.morpho.data.ToolCategory
 import cc.devbangs.morpho.data.ToolRegistry
 import cc.devbangs.morpho.ui.components.morphLift
@@ -59,6 +60,12 @@ fun CategoriesScreen(
                 row.forEach { c -> BigCategoryCard(c, { onOpenCategory(c.id) }, Modifier.weight(1f)) }
                 if (row.size == 1) Spacer(Modifier.weight(1f))
             }
+        }
+        // Native "you might like" ad card at the bottom (non-Plus only; renders nothing otherwise)
+        item {
+            NativeAdCard(
+                Modifier.fillMaxWidth().padding(horizontal = Space.gutter, vertical = Space.lg)
+            )
         }
     }
 }
