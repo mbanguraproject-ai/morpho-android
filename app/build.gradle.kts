@@ -52,5 +52,6 @@ dependencies {
     implementation("com.adamglin:phosphor-icon:1.0.0")
     implementation("com.google.zxing:core:3.5.3")
     implementation("com.google.mlkit:text-recognition:16.0.1")
+    implementation("com.tom-roush:pdfbox-android:2.0.27.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
 }

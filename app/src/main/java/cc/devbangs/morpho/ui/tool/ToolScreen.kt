@@ -39,6 +39,8 @@ import cc.devbangs.morpho.ui.tool.kit.hasOcrTool
 import cc.devbangs.morpho.ui.tool.kit.OcrTool
 import cc.devbangs.morpho.ui.tool.kit.hasLastTool
 import cc.devbangs.morpho.ui.tool.kit.LastTool
+import cc.devbangs.morpho.ui.tool.kit.hasPdfBoxTool
+import cc.devbangs.morpho.ui.tool.kit.PdfBoxTool
 import cc.devbangs.morpho.ui.tool.invoice.InvoiceTool
 import cc.devbangs.morpho.ui.tool.resume.ResumeTool
 import cc.devbangs.morpho.ui.theme.*
@@ -127,6 +129,7 @@ private fun ToolHost(tool: Tool) {
         hasMediaTool(tool.id) -> MediaTool(tool.id, tool.category.accent)
         hasOcrTool(tool.id) -> OcrTool(tool.id, tool.category.accent)
         hasLastTool(tool.id) -> LastTool(tool.id, tool.category.accent)
+        hasPdfBoxTool(tool.id) -> PdfBoxTool(tool.id, tool.category.accent)
         tool.id == "invoice-generator" -> InvoiceTool(tool.category.accent)
         tool.id == "resume-builder" -> ResumeTool(tool.category.accent)
         else -> Placeholder(tool)

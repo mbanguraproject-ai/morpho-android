@@ -3,12 +3,12 @@ package cc.devbangs.morpho.data
 // AUTO-GENERATED: all 82 Morpho tools.
 object ToolRegistry {
     val all: List<Tool> = listOf(
-        Tool("pdf-unlocker", "PDF Unlocker", "Remove PDF password and restrictions", ToolCategory.PDF, "pdf-unlocker", offline = false, popular = false),
+        Tool("pdf-unlocker", "PDF Unlocker", "Remove PDF password and restrictions", ToolCategory.PDF, "pdf-unlocker", offline = true, popular = false),
         Tool("pdf-signer", "PDF Signer", "Add signatures to PDF documents", ToolCategory.PDF, "pdf-signer", offline = false, popular = false),
         Tool("pdf-editor", "PDF Editor", "Add text and annotations to PDFs", ToolCategory.PDF, "pdf-editor", offline = false, popular = false),
         Tool("pdf-to-word", "PDF to Word Converter", "Convert PDF files to editable Word documents", ToolCategory.PDF, "pdf-to-word", offline = false, popular = true),
         Tool("word-to-pdf", "Word to PDF Converter", "Convert Word documents to PDF format", ToolCategory.PDF, "word-to-pdf", offline = false, popular = true),
-        Tool("pdf-compressor", "PDF Compressor", "Reduce PDF file size instantly", ToolCategory.PDF, "pdf-compressor", offline = false, popular = true),
+        Tool("pdf-compressor", "PDF Compressor", "Reduce PDF file size instantly", ToolCategory.PDF, "pdf-compressor", offline = true, popular = true),
         Tool("merge-pdf", "Merge PDF", "Combine multiple PDFs into one", ToolCategory.PDF, "merge-pdf", offline = true, popular = true),
         Tool("pdf-splitter", "PDF Splitter", "Split PDFs into separate pages", ToolCategory.PDF, "pdf-splitter", offline = true, popular = false),
         Tool("pdf-to-jpg", "PDF to JPG Converter", "Convert PDF pages to JPG images", ToolCategory.PDF, "pdf-to-jpg", offline = true, popular = false),
@@ -78,12 +78,12 @@ object ToolRegistry {
         Tool("pdf-page-numbering", "PDF Page Numbering", "Add page numbers to PDF documents", ToolCategory.PDF, "pdf-page-numbering", offline = true, popular = false),
         Tool("pdf-watermark", "PDF Watermark", "Add text watermarks across PDF pages", ToolCategory.PDF, "pdf-watermark", offline = true, popular = false),
         Tool("pdf-page-extractor", "PDF Page Extractor", "Extract specific pages into a new PDF", ToolCategory.PDF, "pdf-page-extractor", offline = true, popular = false),
-        Tool("pdf-text-extractor", "PDF Text Extractor", "Extract plain text from any PDF", ToolCategory.PDF, "pdf-text-extractor", offline = false, popular = false),
+        Tool("pdf-text-extractor", "PDF Text Extractor", "Extract plain text from any PDF", ToolCategory.PDF, "pdf-text-extractor", offline = true, popular = false),
         Tool("pdf-header-footer", "PDF Header & Footer", "Add headers and footers to PDF pages", ToolCategory.PDF, "pdf-header-footer", offline = true, popular = false),
         Tool("pdf-crop", "PDF Crop", "Trim margins off PDF pages", ToolCategory.PDF, "pdf-crop", offline = true, popular = false),
         Tool("pdf-bates-numbering", "PDF Bates Numbering", "Bates stamp PDFs for legal discovery", ToolCategory.PDF, "pdf-bates-numbering", offline = true, popular = false),
         Tool("pdf-annotator", "PDF Annotator", "Highlight, note, and draw on PDFs", ToolCategory.PDF, "pdf-annotator", offline = false, popular = false),
-        Tool("pdf-password-protector", "PDF Password Protector", "Add password protection to PDFs", ToolCategory.PDF, "pdf-password-protector", offline = false, popular = false),
+        Tool("pdf-password-protector", "PDF Password Protector", "Add password protection to PDFs", ToolCategory.PDF, "pdf-password-protector", offline = true, popular = false),
         Tool("pdf-reorder-pages", "PDF Reorder Pages", "Drag-and-drop to reorder PDF pages", ToolCategory.PDF, "pdf-reorder-pages", offline = true, popular = false),
     )
 
