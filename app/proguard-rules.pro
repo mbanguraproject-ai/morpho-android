@@ -38,3 +38,17 @@
 
 # ---- AndroidX SplashScreen ----
 -keep class androidx.core.splashscreen.** { *; }
+
+# ---- Google Play Billing ----
+-keep class com.android.billingclient.** { *; }
+-dontwarn com.android.billingclient.**
+-keep class com.android.vending.billing.** { *; }
+
+# ---- Google Mobile Ads (AdMob) ----
+-keep class com.google.android.gms.ads.** { *; }
+-dontwarn com.google.android.gms.ads.**
+-keep class com.google.android.gms.internal.ads.** { *; }
+
+# ---- UMP consent SDK ----
+-keep class com.google.android.ump.** { *; }
+-dontwarn com.google.android.ump.**
