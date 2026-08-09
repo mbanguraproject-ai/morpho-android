@@ -7,6 +7,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
@@ -18,6 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cc.devbangs.morpho.core.Shape
@@ -52,14 +54,19 @@ fun OcrTool(id: String, accent: Color) {
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
-        Row(Modifier.fillMaxWidth().clip(Shape.card).background(accent.copy(alpha = 0.08f))
+        Column(Modifier.fillMaxWidth().clip(Shape.card).background(accent.copy(alpha = 0.07f))
+            .border(1.5.dp, accent.copy(alpha = 0.22f), Shape.card)
             .clickable {
                 picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-            }.padding(Space.lg), verticalAlignment = Alignment.CenterVertically) {
-            MorphoIcon("image-add", tint = accent, size = 26.dp)
-            Spacer(Modifier.width(Space.md))
+            }.padding(vertical = 30.dp, horizontal = Space.lg),
+            horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(Modifier.size(52.dp).clip(Shape.chip).background(accent.copy(alpha = 0.14f)),
+                contentAlignment = Alignment.Center) { MorphoIcon("image-add", tint = accent, size = 26.dp) }
+            Spacer(Modifier.height(12.dp))
             Text(if (src == null) "Choose an image" else "Choose a different image",
-                color = accent, fontSize = 15.sp)
+                color = accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(3.dp))
+            Text("Tap to select", color = InkFaint, fontSize = 12.sp)
         }
         src?.let { bmp ->
             Box(Modifier.fillMaxWidth().heightIn(max = 240.dp).clip(Shape.card).background(PaperSunk),

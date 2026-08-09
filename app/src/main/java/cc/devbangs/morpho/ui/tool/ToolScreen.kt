@@ -9,6 +9,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
@@ -100,11 +101,51 @@ fun ToolScreen(
                     bottom = contentPadding.calculateBottomPadding() + Space.xxl)
         ) {
             Text(tool.short, style = MaterialTheme.typography.bodyLarge, color = InkSoft)
-            Spacer(Modifier.height(Space.xl))
-            // Real tool UIs mount here via dispatch (added next).
+            Spacer(Modifier.height(Space.lg))
+            HowItWorks(tool.category.accent)
+            Spacer(Modifier.height(Space.lg))
+            // Real tool UIs mount here via dispatch.
             ToolHost(tool = tool)
         }
     }
+}
+
+@Composable
+private fun HowItWorks(accent: Color) {
+    Row(
+        Modifier.fillMaxWidth().clip(Shape.card).background(accent.copy(alpha = 0.06f))
+            .padding(horizontal = Space.lg, vertical = Space.md),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        StepDot("1", "Choose", accent)
+        StepConnector(accent)
+        StepDot("2", "Adjust", accent)
+        StepConnector(accent)
+        StepDot("3", "Save", accent)
+    }
+}
+
+@Composable
+private fun RowScope.StepDot(n: String, label: String, accent: Color) {
+    Column(
+        Modifier.weight(1f),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            Modifier.size(30.dp).clip(androidx.compose.foundation.shape.CircleShape).background(accent),
+            contentAlignment = Alignment.Center
+        ) { Text(n, color = Paper, fontSize = 14.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) }
+        Spacer(Modifier.height(6.dp))
+        Text(label, color = InkSoft, fontSize = 12.sp)
+    }
+}
+
+@Composable
+private fun RowScope.StepConnector(accent: Color) {
+    Box(
+        Modifier.weight(0.5f).height(2.dp)
+            .background(accent.copy(alpha = 0.25f))
+    )
 }
 
 @Composable

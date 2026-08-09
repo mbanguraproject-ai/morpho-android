@@ -7,6 +7,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -20,6 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cc.devbangs.morpho.core.Shape
@@ -141,10 +143,21 @@ private fun PdfReorderTool(accent: Color) {
 // ---- shared ----
 @Composable
 private fun PickRow(label: String, icon: String, accent: Color, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clip(Shape.card).background(accent.copy(alpha = 0.08f))
-        .clickable(onClick = onClick).padding(Space.lg), verticalAlignment = Alignment.CenterVertically) {
-        MorphoIcon(icon, tint = accent, size = 26.dp)
-        Spacer(Modifier.width(Space.md)); Text(label, color = accent, fontSize = 15.sp)
+    Column(
+        Modifier.fillMaxWidth().clip(Shape.card).background(accent.copy(alpha = 0.07f))
+            .border(1.5.dp, accent.copy(alpha = 0.22f), Shape.card)
+            .clickable(onClick = onClick)
+            .padding(vertical = 30.dp, horizontal = Space.lg),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            Modifier.size(52.dp).clip(Shape.chip).background(accent.copy(alpha = 0.14f)),
+            contentAlignment = Alignment.Center
+        ) { MorphoIcon(icon, tint = accent, size = 26.dp) }
+        Spacer(Modifier.height(12.dp))
+        Text(label, color = accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(3.dp))
+        Text("Tap to select", color = InkFaint, fontSize = 12.sp)
     }
 }
 
