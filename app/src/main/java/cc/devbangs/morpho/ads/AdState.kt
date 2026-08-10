@@ -1,6 +1,7 @@
 package cc.devbangs.morpho.ads
 
 import androidx.compose.runtime.mutableStateOf
+import android.util.Log
 
 /**
  * Central ad policy for Morpho.
@@ -10,8 +11,8 @@ import androidx.compose.runtime.mutableStateOf
  */
 object AdState {
     // Test IDs — swap real ones at launch. These are Google's official test units.
-    const val TEST_INTERSTITIAL = "ca-app-pub-9121922395304175/6203443667"
-    const val TEST_NATIVE = "ca-app-pub-9121922395304175/8812315198"
+    const val INTERSTITIAL_UNIT = "ca-app-pub-9121922395304175/6203443667"
+    const val NATIVE_UNIT = "ca-app-pub-9121922395304175/8812315198"
 
     // Plus gating — set true when a Plus subscription is active (wired to billing later).
     val isPlus = mutableStateOf(false)
@@ -37,14 +38,16 @@ object AdState {
      * Returns true if an interstitial should be shown now.
      */
     fun onToolCompleted(): Boolean {
-        if (!adsEnabled()) return false
-        if (!toolWasUsed) return false   // only count real usage, not a glance
+        if (!adsEnabled()) { Log.d("MorphoAds", "onToolCompleted: ads disabled (Plus)"); return false }
+        if (!toolWasUsed) { Log.d("MorphoAds", "onToolCompleted: tool NOT used, skipping"); return false }
         toolWasUsed = false
         completionCount++
-        if (completionCount % INTERSTITIAL_EVERY != 0) return false
+        Log.d("MorphoAds", "onToolCompleted: count=$completionCount (fires every $INTERSTITIAL_EVERY)")
+        if (completionCount % INTERSTITIAL_EVERY != 0) { Log.d("MorphoAds", "not 3rd completion yet"); return false }
         val now = System.currentTimeMillis()
-        if (now - lastInterstitialAt < MIN_GAP_MS) return false
+        if (now - lastInterstitialAt < MIN_GAP_MS) { Log.d("MorphoAds", "within 90s cap, skipping"); return false }
         lastInterstitialAt = now
+        Log.d("MorphoAds", "INTERSTITIAL should show now")
         return true
     }
 

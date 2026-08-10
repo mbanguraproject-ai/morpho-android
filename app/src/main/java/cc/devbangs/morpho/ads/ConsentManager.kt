@@ -4,6 +4,8 @@ import android.app.Activity
 import com.google.android.ump.ConsentInformation
 import com.google.android.ump.ConsentRequestParameters
 import com.google.android.ump.UserMessagingPlatform
+import androidx.compose.runtime.mutableStateOf
+import android.util.Log
 
 /**
  * Handles GDPR/CCPA consent via Google's User Messaging Platform (UMP).
@@ -11,8 +13,9 @@ import com.google.android.ump.UserMessagingPlatform
  */
 object ConsentManager {
     private var consentInformation: ConsentInformation? = null
-    var canRequestAds = false
-        private set
+    // Observable so Compose recomposes (native card) when consent resolves.
+    val canRequestAdsState = mutableStateOf(false)
+    val canRequestAds: Boolean get() = canRequestAdsState.value
 
     /**
      * Request consent info and show the form if required.
@@ -28,20 +31,22 @@ object ConsentManager {
             {
                 // Consent info updated — load & show form if needed.
                 UserMessagingPlatform.loadAndShowConsentFormIfRequired(activity) {
-                    canRequestAds = info.canRequestAds()
+                    canRequestAdsState.value = info.canRequestAds()
+                    Log.d("MorphoAds", "Consent resolved (form path). canRequestAds=" + canRequestAdsState.value)
                     onReady()
                 }
             },
             {
                 // Failed to update — proceed without personalized ads.
-                canRequestAds = info.canRequestAds()
+                canRequestAdsState.value = info.canRequestAds()
+                Log.d("MorphoAds", "Consent update FAILED. canRequestAds=" + canRequestAdsState.value)
                 onReady()
             }
         )
 
         // If consent was already gathered in a prior session, we can request ads now.
         if (info.canRequestAds()) {
-            canRequestAds = true
+            canRequestAdsState.value = true
         }
     }
 

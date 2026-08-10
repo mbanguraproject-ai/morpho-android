@@ -11,6 +11,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.remember
+import androidx.activity.compose.BackHandler
 import androidx.compose.ui.platform.LocalContext
 import cc.devbangs.morpho.ads.AdState
 import cc.devbangs.morpho.ads.InterstitialManager
@@ -69,13 +70,18 @@ fun ToolScreen(
         }
         c as? android.app.Activity
     }
-    androidx.compose.runtime.LaunchedEffect(toolId) { AdState.resetUsed() }
+    androidx.compose.runtime.LaunchedEffect(toolId) {
+        AdState.resetUsed()
+        activity?.let { InterstitialManager.preload(it) }  // keep one ready
+    }
     val backWithAd: () -> Unit = {
         val act = activity
         if (act != null && AdState.onToolCompleted()) {
             InterstitialManager.maybeShow(act) { onBack() }
         } else onBack()
     }
+    // Catch the system back gesture/button too, not just the chevron
+    BackHandler { backWithAd() }
 
     Column(Modifier.fillMaxSize().background(Paper)) {
         // top zone

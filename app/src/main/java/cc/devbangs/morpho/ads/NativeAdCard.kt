@@ -1,6 +1,7 @@
 package cc.devbangs.morpho.ads
 
 import android.content.Context
+import android.util.Log
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.TextView
@@ -21,18 +22,24 @@ import com.google.android.gms.ads.nativead.NativeAdView
  */
 @Composable
 fun NativeAdCard(modifier: Modifier = Modifier) {
-    if (!AdState.showNativeCard() || !ConsentManager.canRequestAds) return
+    val showIt = AdState.showNativeCard()
+    val consentOk = ConsentManager.canRequestAdsState.value
+    Log.d("MorphoAds", "NativeCard gate: showNativeCard=$showIt consentOk=$consentOk isPlus=${AdState.isPlus.value}")
+    if (!showIt || !consentOk) return
     val ctx = LocalContext.current
     var nativeAd by remember { mutableStateOf<NativeAd?>(null) }
 
     DisposableEffect(Unit) {
-        val loader = AdLoader.Builder(ctx, AdState.TEST_NATIVE)
+        val loader = AdLoader.Builder(ctx, AdState.NATIVE_UNIT)
             .forNativeAd { ad ->
+                Log.d("MorphoAds", "Native ad LOADED")
                 nativeAd?.destroy()
                 nativeAd = ad
             }
             .withAdListener(object : AdListener() {
-                override fun onAdFailedToLoad(error: LoadAdError) { /* silent — show nothing */ }
+                override fun onAdFailedToLoad(error: LoadAdError) {
+                    Log.e("MorphoAds", "Native ad FAILED: code=${error.code} msg=${error.message}")
+                }
             })
             .build()
         loader.loadAd(AdRequest.Builder().build())
