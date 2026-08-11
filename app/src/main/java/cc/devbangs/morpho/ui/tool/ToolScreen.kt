@@ -93,24 +93,23 @@ fun ToolScreen(
         ) {
             Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
             Row(
-                Modifier.fillMaxWidth().height(56.dp).padding(horizontal = Space.sm),
+                Modifier.fillMaxWidth().padding(start = Space.sm, end = Space.gutter,
+                    top = Space.sm, bottom = Space.lg),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButtonMorpho("chevron-left", backWithAd)
-                Spacer(Modifier.weight(1f))
-            }
-            if (tool != null) Row(
-                Modifier.padding(start = Space.gutter, end = Space.gutter, top = 4.dp, bottom = Space.xl),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    Modifier.size(56.dp).clip(Shape.card).background(tint),
-                    contentAlignment = Alignment.Center
-                ) { MorphoIcon(tool.iconKey, tint = Paper, size = 29.dp) }
-                Spacer(Modifier.width(Space.md))
-                Column(Modifier.weight(1f)) {
-                    Text(tool.name, style = MaterialTheme.typography.headlineSmall, color = Ink)
-                    StatusLabel(tool)
+                Spacer(Modifier.width(4.dp))
+                if (tool != null) {
+                    Box(
+                        Modifier.size(40.dp).clip(Shape.card).background(tint),
+                        contentAlignment = Alignment.Center
+                    ) { MorphoIcon(tool.iconKey, tint = Paper, size = 21.dp) }
+                    Spacer(Modifier.width(Space.md))
+                    Column(Modifier.weight(1f)) {
+                        Text(tool.name, style = MaterialTheme.typography.titleLarge, color = Ink,
+                            maxLines = 1)
+                        StatusLabel(tool)
+                    }
                 }
             }
         }
