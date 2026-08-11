@@ -81,7 +81,7 @@ fun HomeScreen(
             // Real search box: compact, short placeholder, no clutter
             item { SearchBar(onOpenSearch) }
 
-        item { RowHeader("CATEGORIES", "All 9", onSeeAllCategories) }
+        item { RowHeader("QUICK ACCESS", "See all", onSeeAllCategories) }
         itemsIndexed(cats.take(4).chunked(2)) { idx, row ->
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = Space.gutter, vertical = 5.dp)
@@ -97,7 +97,7 @@ fun HomeScreen(
         }
 
         if (popular.isNotEmpty()) {
-            item { RowHeader("POPULAR", null) }
+            item { RowHeader("POPULAR TOOLS", null) }
             itemsIndexed(popular.chunked(2)) { idx, row ->
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = Space.gutter, vertical = 5.dp)
@@ -121,8 +121,12 @@ fun HomeScreen(
         ) {
             WingsMark()
             Spacer(Modifier.width(9.dp))
-            Text("Morpho", style = MaterialTheme.typography.titleLarge, color = Ink,
-                fontWeight = FontWeight.Bold)
+            Column {
+                Text("Morpho", style = MaterialTheme.typography.titleLarge, color = Ink,
+                    fontWeight = FontWeight.Bold)
+                Text("Files, transformed", style = MaterialTheme.typography.bodySmall,
+                    color = InkFaint, fontSize = 11.sp)
+            }
             Spacer(Modifier.weight(1f))
             PlanPill()
             Spacer(Modifier.width(8.dp))
