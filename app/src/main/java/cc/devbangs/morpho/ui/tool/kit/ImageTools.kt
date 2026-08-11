@@ -53,10 +53,13 @@ fun ImageTool(id: String, accent: Color) {
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
-        // picker
-        PickButton(accent, src != null) {
-            launcher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-        }
+        // picker / input preview
+        ImagePickPreview(
+            bitmap = src,
+            accent = accent,
+            onPick = { launcher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+            onClear = { src = null; picked = null }
+        )
         val bmp = src
         if (bmp != null) {
             when (id) {
@@ -68,22 +71,66 @@ fun ImageTool(id: String, accent: Color) {
 }
 
 @Composable
-private fun PickButton(accent: Color, hasImage: Boolean, onClick: () -> Unit) {
-    Column(
-        Modifier.fillMaxWidth().clip(Shape.card).background(accent.copy(alpha = 0.07f))
-            .border(1.5.dp, accent.copy(alpha = 0.22f), Shape.card)
-            .clickable(onClick = onClick).padding(vertical = 30.dp, horizontal = Space.lg),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
+private fun ImagePickPreview(
+    bitmap: Bitmap?,
+    accent: Color,
+    onPick: () -> Unit,
+    onClear: () -> Unit
+) {
+    if (bitmap == null) {
+        // EMPTY — the drop-zone
+        Column(
+            Modifier.fillMaxWidth().clip(Shape.card).background(accent.copy(alpha = 0.07f))
+                .border(1.5.dp, accent.copy(alpha = 0.22f), Shape.card)
+                .clickable(onClick = onPick).padding(vertical = 30.dp, horizontal = Space.lg),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(
+                Modifier.size(52.dp).clip(Shape.chip).background(accent.copy(alpha = 0.14f)),
+                contentAlignment = Alignment.Center
+            ) { MorphoIcon("image-add", tint = accent, size = 26.dp) }
+            Spacer(Modifier.height(12.dp))
+            Text("Choose an image", color = accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(3.dp))
+            Text("Tap to select", color = InkFaint, fontSize = 12.sp)
+        }
+    } else {
+        // LOADED — the image becomes the preview with Change + Clear controls
         Box(
-            Modifier.size(52.dp).clip(Shape.chip).background(accent.copy(alpha = 0.14f)),
-            contentAlignment = Alignment.Center
-        ) { MorphoIcon("image-add", tint = accent, size = 26.dp) }
-        Spacer(Modifier.height(12.dp))
-        Text(if (hasImage) "Choose a different image" else "Choose an image",
-            color = accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(3.dp))
-        Text("Tap to select", color = InkFaint, fontSize = 12.sp)
+            Modifier.fillMaxWidth().heightIn(min = 200.dp, max = 340.dp)
+                .clip(Shape.card).background(PaperSunk)
+                .border(1.5.dp, accent.copy(alpha = 0.22f), Shape.card)
+        ) {
+            Image(
+                bitmap.asImageBitmap(), null,
+                Modifier.fillMaxWidth().heightIn(min = 200.dp, max = 340.dp),
+                contentScale = ContentScale.Fit
+            )
+            // control pills, top-right
+            Row(
+                Modifier.align(Alignment.TopEnd).padding(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Change
+                Row(
+                    Modifier.clip(Shape.pill).background(accent)
+                        .clickable(onClick = onPick).padding(horizontal = 12.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    MorphoIcon("image-add", tint = Paper, size = 14.dp)
+                    Spacer(Modifier.width(5.dp))
+                    Text("Change", color = Paper, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                }
+                // Clear
+                Box(
+                    Modifier.clip(Shape.pill).background(Ink.copy(alpha = 0.55f))
+                        .clickable(onClick = onClear).padding(horizontal = 11.dp, vertical = 7.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    MorphoIcon("close", tint = Paper, size = 14.dp)
+                }
+            }
+        }
     }
 }
 
