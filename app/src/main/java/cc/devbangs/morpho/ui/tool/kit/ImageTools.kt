@@ -71,7 +71,7 @@ fun ImageTool(id: String, accent: Color) {
 }
 
 @Composable
-private fun ImagePickPreview(
+internal fun ImagePickPreview(
     bitmap: Bitmap?,
     accent: Color,
     onPick: () -> Unit,
