@@ -3,6 +3,7 @@ package cc.devbangs.morpho.ui.tool
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -122,7 +123,7 @@ fun ToolScreen(
         }
 
         Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+            Modifier.fillMaxSize().navigationBarsPadding().verticalScroll(rememberScrollState())
                 .padding(start = Space.gutter, end = Space.gutter, top = Space.md,
                     bottom = contentPadding.calculateBottomPadding() + Space.xxl)
         ) {
