@@ -1,0 +1,25 @@
+{
+  "name": "Morpho Android Build",
+  "image": "mcr.microsoft.com/devcontainers/java:17",
+  "features": {
+    "ghcr.io/devcontainers/features/java:1": {
+      "version": "17",
+      "jdkDistro": "tem",
+      "installGradle": true
+    },
+    "ghcr.io/devcontainers/features/android-sdk:1": {}
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "vscjava.vscode-java-pack",
+        "mathiasfrohlich.kotlin"
+      ]
+    }
+  },
+  "remoteEnv": {
+    "JAVA_HOME": "/usr/local/sdkman/candidates/java/17.0.13-tem",
+    "ANDROID_HOME": "${containerEnv:HOME}/android-sdk"
+  },
+  "postCreateCommand": "echo 'Morpho dev environment ready. Java 17 + Android SDK pinned.'"
+}
