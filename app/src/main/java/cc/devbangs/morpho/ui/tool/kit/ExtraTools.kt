@@ -52,14 +52,13 @@ private fun FaviconTool(accent: Color) {
         if (u != null) src = decodeBitmap(ctx, u, 1024)
     }
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
-        PickRow("Choose a square image", "image-add", accent) {
-            picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-        }
+        ImagePickPreview(
+            bitmap = src,
+            accent = accent,
+            onPick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+            onClear = { src = null }
+        )
         src?.let { bmp ->
-            Box(Modifier.fillMaxWidth().heightIn(max = 200.dp).clip(Shape.card).background(PaperSunk),
-                contentAlignment = Alignment.Center) {
-                Image(bmp.asImageBitmap(), null, Modifier.size(140.dp), contentScale = ContentScale.Fit)
-            }
             Text("Exports: ${sizes.joinToString("×, ") { "$it" }}× px", color = InkSoft, fontSize = 13.sp)
             ToolButton("Save all sizes to gallery", accent) {
                 var ok = 0

@@ -1,5 +1,9 @@
 package cc.devbangs.morpho.ui.tool.kit
 
+import androidx.compose.animation.core.*
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.alpha
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -144,4 +148,36 @@ fun copyToClipboard(ctx: Context, text: String) {
     val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
     cm.setPrimaryClip(ClipData.newPlainText("Morpho", text))
     Toast.makeText(ctx, "Copied", Toast.LENGTH_SHORT).show()
+}
+
+/** On-brand animated processing state — shows while a tool is working. */
+@androidx.compose.runtime.Composable
+fun ProcessingCard(label: String, accent: Color) {
+    val transition = rememberInfiniteTransition(label = "processing")
+    val angle by transition.animateFloat(
+        initialValue = 0f, targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(1100, easing = LinearEasing)),
+        label = "spin"
+    )
+    val pulse by transition.animateFloat(
+        initialValue = 0.35f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(700, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "pulse"
+    )
+    Column(
+        Modifier.fillMaxWidth().clip(Shape.card).background(accent.copy(alpha = 0.07f))
+            .padding(vertical = 34.dp, horizontal = Space.lg),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            Modifier.size(56.dp).rotate(angle).clip(Shape.chip)
+                .background(accent.copy(alpha = 0.14f)),
+            contentAlignment = Alignment.Center
+        ) { MorphoIcon("spinner", tint = accent, size = 28.dp) }
+        Spacer(Modifier.height(14.dp))
+        Text(label, color = accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.alpha(pulse))
+        Spacer(Modifier.height(4.dp))
+        Text("Working on your file…", color = InkFaint, fontSize = 12.sp)
+    }
 }

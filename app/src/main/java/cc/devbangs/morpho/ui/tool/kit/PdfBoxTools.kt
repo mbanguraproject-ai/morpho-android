@@ -9,6 +9,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -74,6 +78,8 @@ private fun PasswordProtect(accent: Color, onOpenTool: (String) -> Unit = {}) {
     var uri by remember { mutableStateOf<Uri?>(null) }
     var pw by remember { mutableStateOf("") }
     var output by remember { mutableStateOf<ByteArray?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u -> uri = u; output = null }
     LaunchedEffect(Unit) { WorkflowBus.consume()?.let { pf -> uri = bytesToTempUri(ctx, pf.bytes) } }
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
@@ -121,6 +127,8 @@ private fun Compress(accent: Color, onOpenTool: (String) -> Unit = {}) {
     var uri by remember { mutableStateOf<Uri?>(null) }
     var origSize by remember { mutableStateOf(0L) }
     var output by remember { mutableStateOf<ByteArray?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u ->
         uri = u; origSize = u?.let { readBytes(ctx, it)?.size?.toLong() } ?: 0L; output = null
     }
@@ -137,9 +145,27 @@ private fun Compress(accent: Color, onOpenTool: (String) -> Unit = {}) {
             Text("Original: ${bytesHuman(origSize)}", color = InkSoft, fontSize = 13.sp)
             Text("Re-renders pages at reduced resolution to shrink size.", color = InkFaint, fontSize = 12.sp)
             val u = uri!!
-            ActionRow(accent,
-                { compressPdf(ctx, u)?.let { output = it; savePdfToDownloads(ctx, it, "compressed_${System.currentTimeMillis()}") } },
-                { compressPdf(ctx, u)?.let { output = it; sharePdf(ctx, it, "compressed_${System.currentTimeMillis()}") } })
+            if (busy) {
+                ProcessingCard("Compressing your PDF...", accent)
+            } else {
+                ActionRow(accent,
+                    {
+                        busy = true
+                        scope.launch {
+                            val r = withContext(Dispatchers.Default) { compressPdf(ctx, u) }
+                            r?.let { output = it; savePdfToDownloads(ctx, it, "compressed_${System.currentTimeMillis()}") }
+                            busy = false
+                        }
+                    },
+                    {
+                        busy = true
+                        scope.launch {
+                            val r = withContext(Dispatchers.Default) { compressPdf(ctx, u) }
+                            r?.let { output = it; sharePdf(ctx, it, "compressed_${System.currentTimeMillis()}") }
+                            busy = false
+                        }
+                    })
+            }
 
             output?.let { bytes ->
                 NextStepSuggestions(WorkflowGraph.nextSteps("pdf-compressor")) { step ->

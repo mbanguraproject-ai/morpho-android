@@ -6,6 +6,7 @@ import com.adamglin.phosphoricons.Bold
 import com.adamglin.phosphoricons.bold.ArrowClockwise
 import com.adamglin.phosphoricons.bold.ArrowRight
 import com.adamglin.phosphoricons.bold.ArrowsClockwise
+import com.adamglin.phosphoricons.bold.CircleNotch
 import com.adamglin.phosphoricons.bold.ArrowsDownUp
 import com.adamglin.phosphoricons.bold.ArrowsIn
 import com.adamglin.phosphoricons.bold.Article
@@ -118,6 +119,7 @@ object ToolIcons {
         "plus" to PhosphorIcons.Bold.Plus,
         "minus" to PhosphorIcons.Bold.Minus,
         "refresh" to PhosphorIcons.Bold.ArrowsClockwise,
+        "spinner" to PhosphorIcons.Bold.CircleNotch,
         "settings" to PhosphorIcons.Bold.Faders,
         "clock" to PhosphorIcons.Bold.Clock,
         "info" to PhosphorIcons.Bold.Info,
