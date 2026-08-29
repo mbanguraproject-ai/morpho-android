@@ -40,13 +40,14 @@ import cc.devbangs.morpho.ui.icon.MorphoIcon
 import cc.devbangs.morpho.ui.theme.*
 
 fun hasMediaTool(id: String): Boolean = id in setOf(
-    "video-trimmer","audio-trimmer","mp4-to-mp3","meme-generator"
+    "video-trimmer","audio-trimmer","mp4-to-mp3","meme-generator","silence-video"
 )
 
 @Composable
 fun MediaTool(id: String, accent: Color) {
     when (id) {
         "meme-generator" -> MemeTool(accent)
+        "silence-video" -> SilenceVideo(accent)
         else -> TrimTool(id, accent)
     }
 }
@@ -257,6 +258,37 @@ private fun ClipPreview(uri: Uri, startMs: Long, endMs: Long, accent: Color) {
                 if (!prepared) "Loading preview\u2026" else if (playing) "Stop preview" else "Preview clip",
                 color = accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold
             )
+        }
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun SilenceVideo(accent: Color) {
+    val ctx = LocalContext.current
+    var uri by remember { mutableStateOf<Uri?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    var msg by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { u ->
+        if (u != null) { uri = u; msg = "" }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+        PickRow(if (uri == null) "Choose a video" else "Video selected \u2713", "cat-video", accent) {
+            picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly))
+        }
+        if (uri != null) {
+            Text("Removes the audio track \u2014 keeps video quality (no re-encode).", color = InkFaint, fontSize = 12.sp)
+            if (busy) ProcessingCard("Muting your video...", accent)
+            else ToolButton("Mute video", accent) {
+                busy = true; val u = uri!!
+                scope.launch {
+                    val file = withContext(Dispatchers.Default) { muteVideo(ctx, u) }
+                    if (file != null) saveMediaToGallery(ctx, file, "morpho_${System.currentTimeMillis()}.mp4", true)
+                    else msg = "\u26a0 Could not process this video."
+                    busy = false
+                }
+            }
+            if (msg.isNotEmpty()) Text(msg, color = InkSoft, fontSize = 13.sp)
         }
     }
 }
