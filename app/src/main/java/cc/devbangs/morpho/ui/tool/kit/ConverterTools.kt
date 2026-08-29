@@ -31,6 +31,7 @@ import org.json.JSONObject
 
 fun hasConverterTool(id: String): Boolean = id in setOf(
     "csv-to-json","json-to-csv","text-diff-checker","color-picker",
+    "xml-to-json","yaml-to-json","docx-to-txt","subtitle-converter","png-to-webp","jpg-to-webp",
     "jpg-to-png","png-to-jpg","webp-to-png","heic-to-jpg","youtube-thumbnail-downloader"
 )
 
@@ -42,6 +43,10 @@ fun ConverterTool(id: String, accent: Color) {
         "text-diff-checker" -> DiffTool(accent)
         "color-picker" -> PaletteTool(accent)
         "youtube-thumbnail-downloader" -> YtThumb(accent)
+        "xml-to-json" -> XmlToJsonTool(accent)
+        "yaml-to-json" -> YamlToJsonTool(accent)
+        "docx-to-txt" -> DocxToTxtTool(accent)
+        "subtitle-converter" -> SubtitleTool(accent)
         else -> ImageConvert(id, accent)
     }
 }
@@ -168,8 +173,13 @@ private fun YtThumb(accent: Color) {
 private fun ImageConvert(id: String, accent: Color) {
     val ctx = LocalContext.current
     var src by remember { mutableStateOf<Bitmap?>(null) }
+    val toWebp = id == "png-to-webp" || id == "jpg-to-webp"
     val toPng = id == "jpg-to-png" || id == "webp-to-png" || id == "svg-to-png"
-    val fmt = if (toPng) Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG
+    val fmt = when {
+        toWebp -> Bitmap.CompressFormat.WEBP
+        toPng -> Bitmap.CompressFormat.PNG
+        else -> Bitmap.CompressFormat.JPEG
+    }
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia()
     ) { u -> if (u != null) src = decodeBitmap(ctx, u) }
@@ -192,5 +202,132 @@ private fun ImageConvert(id: String, accent: Color) {
                 }
             }
         }
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun XmlToJsonTool(accent: Color) {
+    var t by remember { mutableStateOf("") }
+    val out = remember(t) {
+        if (t.isBlank()) "" else try {
+            // minimal XML -> JSON for simple element trees
+            fun parse(xml: String): String {
+                val tagRe = Regex("<([\\w:-]+)>(.*?)</\\1>", RegexOption.DOT_MATCHES_ALL)
+                val matches = tagRe.findAll(xml).toList()
+                if (matches.isEmpty()) return "\"" + xml.trim().replace("\"","\\\"") + "\""
+                return "{" + matches.joinToString(",") { m ->
+                    "\"${m.groupValues[1]}\": ${parse(m.groupValues[2].trim())}"
+                } + "}"
+            }
+            val body = t.trim().replace(Regex("<\\?xml.*?\\?>"), "").trim()
+            org.json.JSONObject(parse(body)).toString(2)
+        } catch (e: Exception) { "\u26a0 Could not convert (simple XML only)." }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+        Column { FieldLabel("XML"); ToolInput(t, { t = it }, "<user><name>Jane</name></user>", minLines = 5, mono = true) }
+        if (out.isNotEmpty()) ToolResult(out, accent, mono = true, label = "JSON")
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun YamlToJsonTool(accent: Color) {
+    var t by remember { mutableStateOf("") }
+    val out = remember(t) {
+        if (t.isBlank()) "" else try {
+            // simple flat YAML: key: value, and "- item" lists
+            val obj = org.json.JSONObject()
+            var listKey: String? = null
+            val list = org.json.JSONArray()
+            fun flush() { if (listKey != null) { obj.put(listKey, list); listKey = null } }
+            t.lines().forEach { raw ->
+                val line = raw.trimEnd()
+                if (line.isBlank()) return@forEach
+                val trimmed = line.trim()
+                if (trimmed.startsWith("- ")) { list.put(trimmed.drop(2).trim().trim('"')) }
+                else if (line.contains(":")) {
+                    val k = line.substringBefore(":").trim()
+                    val v = line.substringAfter(":").trim().trim('"')
+                    if (v.isEmpty()) { listKey = k } else { obj.put(k, v) }
+                }
+            }
+            flush()
+            obj.toString(2)
+        } catch (e: Exception) { "\u26a0 Could not convert (simple YAML only)." }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+        Column { FieldLabel("YAML (simple)"); ToolInput(t, { t = it }, "name: Jane\nrole: dev", minLines = 5, mono = true) }
+        if (out.isNotEmpty()) ToolResult(out, accent, mono = true, label = "JSON")
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun DocxToTxtTool(accent: Color) {
+    val ctx = LocalContext.current
+    var text by remember { mutableStateOf("") }
+    var picked by remember { mutableStateOf(false) }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u ->
+        if (u != null) {
+            picked = true
+            text = try {
+                val bytes = ctx.contentResolver.openInputStream(u)?.readBytes() ?: ByteArray(0)
+                val zis = java.util.zip.ZipInputStream(java.io.ByteArrayInputStream(bytes))
+                var doc = ""
+                var entry = zis.nextEntry
+                while (entry != null) {
+                    if (entry.name == "word/document.xml") { doc = zis.readBytes().toString(Charsets.UTF_8); break }
+                    entry = zis.nextEntry
+                }
+                zis.close()
+                doc.replace(Regex("</w:p>"), "\n").replace(Regex("<[^>]+>"), "").replace("&amp;","&").replace("&lt;","<").replace("&gt;",">").trim()
+                    .ifBlank { "No text found." }
+            } catch (e: Exception) { "\u26a0 Could not read this .docx file." }
+        }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+        PickRow(if (!picked) "Choose a .docx file" else "File loaded \u2713", accent) {
+            picker.launch(arrayOf("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
+        }
+        if (text.isNotEmpty()) ToolResult(text, accent, mono = false, label = "EXTRACTED TEXT")
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun SubtitleTool(accent: Color) {
+    var t by remember { mutableStateOf("") }
+    var toVtt by remember { mutableStateOf(true) }
+    val out = remember(t, toVtt) {
+        if (t.isBlank()) "" else if (toVtt) {
+            // SRT -> VTT: add header, commas to dots in timestamps
+            "WEBVTT\n\n" + t.replace(Regex("(\\d{2}:\\d{2}:\\d{2}),(\\d{3})"), "$1.$2")
+                .replace(Regex("(?m)^\\d+\\s*$"), "").replace(Regex("\\n{3,}"), "\n\n").trim()
+        } else {
+            // VTT -> SRT: strip header, dots to commas, number cues
+            var i = 0
+            t.replace("WEBVTT", "").replace(Regex("(\\d{2}:\\d{2}:\\d{2})\\.(\\d{3})"), "$1,$2")
+                .trim().split(Regex("\\n{2,}")).filter { it.isNotBlank() }
+                .joinToString("\n\n") { "${++i}\n$it" }
+        }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+            Box(Modifier.weight(1f)) { ToolButton("SRT \u2192 VTT", if (toVtt) accent else accent.copy(alpha=0.35f)) { toVtt = true } }
+            Box(Modifier.weight(1f)) { ToolButton("VTT \u2192 SRT", if (!toVtt) accent else accent.copy(alpha=0.35f)) { toVtt = false } }
+        }
+        Column { FieldLabel("SUBTITLE TEXT"); ToolInput(t, { t = it }, "Paste .srt or .vtt content…", minLines = 5, mono = true) }
+        if (out.isNotEmpty()) ToolResult(out, accent, mono = true, label = if (toVtt) "VTT" else "SRT")
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun PickRow(label: String, accent: Color, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clip(Shape.card).background(accent.copy(alpha = 0.07f))
+            .border(1.5.dp, accent.copy(alpha = 0.22f), Shape.card)
+            .clickable(onClick = onClick).padding(Space.lg),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        MorphoIcon("file-add", tint = accent, size = 22.dp)
+        Spacer(Modifier.width(Space.md))
+        Text(label, color = accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
     }
 }
