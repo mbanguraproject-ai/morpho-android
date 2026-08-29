@@ -30,6 +30,10 @@ import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.pdmodel.encryption.AccessPermission
 import com.tom_roush.pdfbox.pdmodel.encryption.StandardProtectionPolicy
 import com.tom_roush.pdfbox.text.PDFTextStripper
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import com.google.android.gms.tasks.Tasks
 import com.tom_roush.pdfbox.pdmodel.graphics.image.PDImageXObject
 import com.tom_roush.pdfbox.cos.COSName
 import android.graphics.Bitmap
@@ -37,7 +41,7 @@ import java.io.ByteArrayOutputStream
 
 fun hasPdfBoxTool(id: String): Boolean = id in setOf(
     "pdf-text-extractor","pdf-password-protector","pdf-unlocker","pdf-compressor",
-    "pdf-page-deleter","pdf-metadata-editor","html-to-pdf","pdf-image-extractor"
+    "pdf-page-deleter","pdf-metadata-editor","html-to-pdf","pdf-image-extractor","pdf-ocr-scanner"
 )
 
 @Composable
@@ -51,6 +55,7 @@ fun PdfBoxTool(id: String, accent: Color, onOpenTool: (String) -> Unit = {}) {
         "pdf-metadata-editor" -> MetadataEditor(accent)
         "html-to-pdf" -> HtmlToPdf(accent)
         "pdf-image-extractor" -> ImageExtractor(accent)
+        "pdf-ocr-scanner" -> PdfOcrScanner(accent)
     }
 }
 
@@ -452,6 +457,53 @@ private fun ImageExtractor(accent: Color) {
                     busy = false
                 }
             }
+            if (msg.isNotEmpty()) Text(msg, color = InkSoft, fontSize = 13.sp)
+        }
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun PdfOcrScanner(accent: Color) {
+    val ctx = LocalContext.current
+    var uri by remember { mutableStateOf<Uri?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    var result by remember { mutableStateOf("") }
+    var msg by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u -> uri = u; result = ""; msg = "" }
+    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+        PickRow(if (uri == null) "Choose a scanned PDF" else "PDF selected \u2713", accent) { picker.launch(arrayOf("application/pdf")) }
+        if (uri != null) {
+            Text("Reads text from each page image using on-device OCR. Great for scanned PDFs.", color = InkFaint, fontSize = 12.sp)
+            if (busy) ProcessingCard("Reading text from pages...", accent)
+            else ToolButton("Extract text (OCR)", accent) {
+                busy = true; val u = uri!!
+                scope.launch {
+                    val text = withContext(Dispatchers.Default) {
+                        try {
+                            val pages = renderPdf(ctx, u, 1600)
+                            if (pages.isEmpty()) return@withContext null
+                            val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+                            val sb = StringBuilder()
+                            pages.forEachIndexed { i, bmp ->
+                                try {
+                                    val visionText = Tasks.await(recognizer.process(InputImage.fromBitmap(bmp, 0)))
+                                    val t = visionText.text.trim()
+                                    if (t.isNotEmpty()) { sb.append("--- Page ${i+1} ---\n").append(t).append("\n\n") }
+                                } catch (e: Exception) {}
+                            }
+                            sb.toString().trim()
+                        } catch (e: Exception) { null }
+                    }
+                    when {
+                        text == null -> msg = "\u26a0 Could not read this PDF."
+                        text.isBlank() -> msg = "No text found (the pages may be blank or very low quality)."
+                        else -> { result = text; msg = "" }
+                    }
+                    busy = false
+                }
+            }
+            if (result.isNotEmpty()) ToolResult(result, accent, mono = false, label = "EXTRACTED TEXT")
             if (msg.isNotEmpty()) Text(msg, color = InkSoft, fontSize = 13.sp)
         }
     }
