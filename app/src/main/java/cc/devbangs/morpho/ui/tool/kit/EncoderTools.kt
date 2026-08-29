@@ -19,6 +19,9 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import android.speech.tts.TextToSpeech
+import androidx.compose.runtime.DisposableEffect
+import java.util.Locale
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -44,7 +47,7 @@ import java.io.FileOutputStream
 import java.nio.ByteBuffer
 
 fun hasEncoderTool(id: String): Boolean = id in setOf(
-    "wav-converter","gif-maker","video-to-gif","audio-compressor","volume-booster"
+    "wav-converter","gif-maker","video-to-gif","audio-compressor","volume-booster","text-to-speech"
 )
 
 @Composable
@@ -53,6 +56,7 @@ fun EncoderTool(id: String, accent: Color) {
         "wav-converter" -> WavConverter(accent)
         "audio-compressor" -> AudioCompressor(accent)
         "volume-booster" -> VolumeBooster(accent)
+        "text-to-speech" -> TextToSpeechTool(accent)
         "gif-maker" -> GifMaker(accent)
         "video-to-gif" -> VideoToGif(accent)
     }
@@ -463,5 +467,66 @@ private fun VolumeBooster(accent: Color) {
             }
             if (msg.isNotEmpty()) Text(msg, color = InkSoft, fontSize = 13.sp)
         }
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun TextToSpeechTool(accent: Color) {
+    val ctx = LocalContext.current
+    var text by remember { mutableStateOf("") }
+    var ready by remember { mutableStateOf(false) }
+    var speaking by remember { mutableStateOf(false) }
+    var msg by remember { mutableStateOf("") }
+    var tts by remember { mutableStateOf<TextToSpeech?>(null) }
+
+    DisposableEffect(Unit) {
+        val engine = TextToSpeech(ctx) { status ->
+            ready = status == TextToSpeech.SUCCESS
+            if (!ready) msg = "\u26a0 No text-to-speech engine available on this device."
+        }
+        engine.setLanguage(Locale.getDefault())
+        tts = engine
+        onDispose { engine.stop(); engine.shutdown() }
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+        Column { FieldLabel("TEXT"); ToolInput(text, { text = it }, "Type text to read aloud\u2026", minLines = 5) }
+        if (text.isNotBlank() && ready) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+                Box(Modifier.weight(1f)) {
+                    ToolButton(if (speaking) "Stop" else "Speak", accent) {
+                        val engine = tts ?: return@ToolButton
+                        if (speaking) { engine.stop(); speaking = false }
+                        else {
+                            engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, "morpho_tts")
+                            speaking = true
+                        }
+                    }
+                }
+                Box(Modifier.weight(1f)) {
+                    Box(Modifier.fillMaxWidth().clip(Shape.field).background(accent.copy(alpha = 0.10f))
+                        .clickable {
+                            val engine = tts ?: return@clickable
+                            val out = File(ctx.cacheDir, "tts_${System.currentTimeMillis()}.wav")
+                            val res = engine.synthesizeToFile(text, null, out, "morpho_save")
+                            if (res == TextToSpeech.SUCCESS) {
+                                // give the engine a moment, then save
+                                msg = "Saving audio\u2026"
+                                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                                    if (out.exists() && out.length() > 0) {
+                                        saveMediaToGallery(ctx, out, "morpho_${System.currentTimeMillis()}.wav", false)
+                                        msg = "Saved to your files \u2713"
+                                    } else msg = "\u26a0 Could not save audio on this device."
+                                }, 1500)
+                            } else msg = "\u26a0 Saving not supported on this device."
+                        }
+                        .padding(vertical = 15.dp), contentAlignment = Alignment.Center) {
+                        Text("Save as audio", color = accent, fontSize = 15.sp)
+                    }
+                }
+            }
+            Text("Uses your device's built-in voice. Quality varies by device.", color = InkFaint, fontSize = 12.sp)
+        }
+        if (msg.isNotEmpty()) Text(msg, color = InkSoft, fontSize = 13.sp)
     }
 }

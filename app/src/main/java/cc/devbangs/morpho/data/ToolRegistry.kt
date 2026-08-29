@@ -40,6 +40,7 @@ object ToolRegistry {
         Tool("wav-converter", "WAV Converter", "Convert audio files to WAV format", ToolCategory.AUDIO, "wav-converter", offline = true, popular = false),
         Tool("audio-compressor", "Audio Compressor", "Shrink audio files by re-encoding to AAC", ToolCategory.AUDIO, "audio-compressor", offline = true, popular = false),
         Tool("volume-booster", "Volume Booster", "Amplify quiet audio with clipping protection", ToolCategory.AUDIO, "volume-booster", offline = true, popular = false),
+        Tool("text-to-speech", "Text to Speech", "Read text aloud with your device voice", ToolCategory.AUDIO, "text-to-speech", offline = true, popular = false),
         Tool("audio-trimmer", "Audio Trimmer", "Trim and cut audio files", ToolCategory.AUDIO, "audio-trimmer", offline = true, popular = false),
         Tool("voice-recorder", "Voice Recorder", "Record audio from your microphone", ToolCategory.AUDIO, "voice-recorder", offline = true, popular = false),
         Tool("audio-joiner", "Audio Joiner", "Combine multiple audio files into one", ToolCategory.AUDIO, "audio-joiner", offline = true, popular = false),
