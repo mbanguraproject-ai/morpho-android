@@ -88,9 +88,27 @@ private fun PasswordProtect(accent: Color, onOpenTool: (String) -> Unit = {}) {
             Column { FieldLabel("PASSWORD"); ToolInput(pw, { pw = it }, "Set a password", minLines = 1) }
             if (pw.isNotBlank()) {
                 val u = uri!!
-                ActionRow(accent,
-                    { protectPdf(ctx, u, pw)?.let { output = it; savePdfToDownloads(ctx, it, "protected_${System.currentTimeMillis()}") } },
-                    { protectPdf(ctx, u, pw)?.let { output = it; sharePdf(ctx, it, "protected_${System.currentTimeMillis()}") } })
+                if (busy) {
+                    ProcessingCard("Protecting your PDF...", accent)
+                } else {
+                    ActionRow(accent,
+                        {
+                            busy = true
+                            scope.launch {
+                                val r = withContext(Dispatchers.Default) { protectPdf(ctx, u, pw) }
+                                r?.let { output = it; savePdfToDownloads(ctx, it, "protected_${System.currentTimeMillis()}") }
+                                busy = false
+                            }
+                        },
+                        {
+                            busy = true
+                            scope.launch {
+                                val r = withContext(Dispatchers.Default) { protectPdf(ctx, u, pw) }
+                                r?.let { output = it; sharePdf(ctx, it, "protected_${System.currentTimeMillis()}") }
+                                busy = false
+                            }
+                        })
+                }
                 output?.let { bytes ->
                     NextStepSuggestions(WorkflowGraph.nextSteps("pdf-password-protector")) { step ->
                         WorkflowBus.handOff(bytes, "application/pdf"); onOpenTool(step.toolId)
@@ -107,15 +125,35 @@ private fun Unlock(accent: Color) {
     var uri by remember { mutableStateOf<Uri?>(null) }
     var pw by remember { mutableStateOf("") }
     var msg by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u -> uri = u; msg = "" }
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
         PickRow(if (uri == null) "Choose a locked PDF" else "PDF selected ✓", accent) { picker.launch(arrayOf("application/pdf")) }
         if (uri != null) {
             Column { FieldLabel("CURRENT PASSWORD"); ToolInput(pw, { pw = it }, "Enter the PDF's password", minLines = 1) }
             val u = uri!!
-            ActionRow(accent,
-                { val r = unlockPdf(ctx, u, pw); if (r != null) { savePdfToDownloads(ctx, r, "unlocked_${System.currentTimeMillis()}"); msg = "" } else msg = "⚠ Wrong password or not encrypted." },
-                { val r = unlockPdf(ctx, u, pw); if (r != null) sharePdf(ctx, r, "unlocked_${System.currentTimeMillis()}") else msg = "⚠ Wrong password." })
+            if (busy) {
+                ProcessingCard("Unlocking your PDF...", accent)
+            } else {
+                ActionRow(accent,
+                    {
+                        busy = true
+                        scope.launch {
+                            val r = withContext(Dispatchers.Default) { unlockPdf(ctx, u, pw) }
+                            if (r != null) { savePdfToDownloads(ctx, r, "unlocked_${System.currentTimeMillis()}"); msg = "" } else msg = "\u26a0 Wrong password or not encrypted."
+                            busy = false
+                        }
+                    },
+                    {
+                        busy = true
+                        scope.launch {
+                            val r = withContext(Dispatchers.Default) { unlockPdf(ctx, u, pw) }
+                            if (r != null) sharePdf(ctx, r, "unlocked_${System.currentTimeMillis()}") else msg = "\u26a0 Wrong password."
+                            busy = false
+                        }
+                    })
+            }
             if (msg.isNotEmpty()) Text(msg, color = InkSoft, fontSize = 13.sp)
         }
     }

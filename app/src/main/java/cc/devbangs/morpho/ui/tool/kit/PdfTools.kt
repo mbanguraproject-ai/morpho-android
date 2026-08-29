@@ -17,6 +17,10 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,6 +59,8 @@ private fun ImagesToPdf(accent: Color, onOpenTool: (String) -> Unit = {}) {
     val ctx = LocalContext.current
     var uris by remember { mutableStateOf<List<Uri>>(emptyList()) }
     var output by remember { mutableStateOf<ByteArray?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia(30)
     ) { uris = it; output = null }
@@ -90,6 +96,8 @@ private fun MergePdf(accent: Color, onOpenTool: (String) -> Unit = {}) {
     val ctx = LocalContext.current
     var uris by remember { mutableStateOf<List<Uri>>(emptyList()) }
     var output by remember { mutableStateOf<ByteArray?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenMultipleDocuments()
     ) { uris = it; output = null }
@@ -98,11 +106,27 @@ private fun MergePdf(accent: Color, onOpenTool: (String) -> Unit = {}) {
         PickRow("Choose PDF files", "file-add", accent) { picker.launch(arrayOf("application/pdf")) }
         if (uris.isNotEmpty()) {
             Text("${uris.size} PDF(s) selected", color = InkSoft, fontSize = 13.sp)
-            ActionRow(accent,
-                onSave = { val b = mergePdfs(ctx, uris) ?: return@ActionRow
-                    output = b; savePdfToDownloads(ctx, b, "merged_${System.currentTimeMillis()}") },
-                onShare = { val b = mergePdfs(ctx, uris) ?: return@ActionRow
-                    output = b; sharePdf(ctx, b, "merged_${System.currentTimeMillis()}") })
+            if (busy) {
+                ProcessingCard("Merging your PDFs...", accent)
+            } else {
+                ActionRow(accent,
+                    onSave = {
+                        busy = true
+                        scope.launch {
+                            val b = withContext(Dispatchers.Default) { mergePdfs(ctx, uris) }
+                            if (b != null) { output = b; savePdfToDownloads(ctx, b, "merged_${System.currentTimeMillis()}") }
+                            busy = false
+                        }
+                    },
+                    onShare = {
+                        busy = true
+                        scope.launch {
+                            val b = withContext(Dispatchers.Default) { mergePdfs(ctx, uris) }
+                            if (b != null) { output = b; sharePdf(ctx, b, "merged_${System.currentTimeMillis()}") }
+                            busy = false
+                        }
+                    })
+            }
             output?.let { bytes ->
                 NextStepSuggestions(WorkflowGraph.nextSteps("merge-pdf")) { step ->
                     WorkflowBus.handOff(bytes, "application/pdf"); onOpenTool(step.toolId)

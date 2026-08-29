@@ -14,6 +14,10 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -76,6 +80,8 @@ private fun FaviconTool(accent: Color) {
 private fun PdfCropTool(accent: Color) {
     val ctx = LocalContext.current
     var pages by remember { mutableStateOf<List<Bitmap>>(emptyList()) }
+    var busy by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     var margin by remember { mutableStateOf(8) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u ->
         if (u != null) pages = renderPdf(ctx, u, 900)
@@ -97,9 +103,27 @@ private fun PdfCropTool(accent: Color) {
                         contentScale = ContentScale.Fit)
                 }
             }
-            ActionRow(accent,
-                { pagesToPdf(cropped)?.let { savePdfToDownloads(ctx, it, "cropped_${System.currentTimeMillis()}") } },
-                { pagesToPdf(cropped)?.let { sharePdf(ctx, it, "cropped_${System.currentTimeMillis()}") } })
+            if (busy) {
+                ProcessingCard("Cropping your PDF...", accent)
+            } else {
+                ActionRow(accent,
+                    {
+                        busy = true
+                        scope.launch {
+                            val r = withContext(Dispatchers.Default) { pagesToPdf(cropped) }
+                            r?.let { savePdfToDownloads(ctx, it, "cropped_${System.currentTimeMillis()}") }
+                            busy = false
+                        }
+                    },
+                    {
+                        busy = true
+                        scope.launch {
+                            val r = withContext(Dispatchers.Default) { pagesToPdf(cropped) }
+                            r?.let { sharePdf(ctx, it, "cropped_${System.currentTimeMillis()}") }
+                            busy = false
+                        }
+                    })
+            }
         }
     }
 }
@@ -109,6 +133,8 @@ private fun PdfCropTool(accent: Color) {
 private fun PdfReorderTool(accent: Color) {
     val ctx = LocalContext.current
     var pages by remember { mutableStateOf<List<Bitmap>>(emptyList()) }
+    var busy by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     var order by remember { mutableStateOf("") }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u ->
         if (u != null) { pages = renderPdf(ctx, u, 900); order = (1..pages.size).joinToString(",") }
@@ -132,9 +158,27 @@ private fun PdfReorderTool(accent: Color) {
             Column { FieldLabel("NEW ORDER (e.g. 3,1,2)"); ToolInput(order, { order = it }, "1,2,3", minLines = 1, mono = true) }
             val reordered = order.split(",").mapNotNull { it.trim().toIntOrNull() }
                 .filter { it in 1..pages.size }.map { pages[it-1] }
-            ActionRow(accent,
-                { pagesToPdf(reordered)?.let { savePdfToDownloads(ctx, it, "reordered_${System.currentTimeMillis()}") } },
-                { pagesToPdf(reordered)?.let { sharePdf(ctx, it, "reordered_${System.currentTimeMillis()}") } })
+            if (busy) {
+                ProcessingCard("Reordering your PDF...", accent)
+            } else {
+                ActionRow(accent,
+                    {
+                        busy = true
+                        scope.launch {
+                            val r = withContext(Dispatchers.Default) { pagesToPdf(reordered) }
+                            r?.let { savePdfToDownloads(ctx, it, "reordered_${System.currentTimeMillis()}") }
+                            busy = false
+                        }
+                    },
+                    {
+                        busy = true
+                        scope.launch {
+                            val r = withContext(Dispatchers.Default) { pagesToPdf(reordered) }
+                            r?.let { sharePdf(ctx, it, "reordered_${System.currentTimeMillis()}") }
+                            busy = false
+                        }
+                    })
+            }
         }
     }
 }

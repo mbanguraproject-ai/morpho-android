@@ -16,6 +16,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,6 +58,7 @@ private fun TrimTool(id: String, accent: Color) {
     var startMs by remember { mutableStateOf(0L) }
     var endMs by remember { mutableStateOf(0L) }
     var busy by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { u ->
         if (u != null) {
@@ -79,16 +84,22 @@ private fun TrimTool(id: String, accent: Color) {
                 Text("Extracts the audio track (AAC/.m4a) — lossless, no re-encode.",
                     color = InkSoft, fontSize = 13.sp)
             }
-            ToolButton(if (busy) "Working…" else if (extractAudio) "Extract audio" else "Save clip",
-                accent, enabled = !busy) {
-                busy = true
-                val s = if (extractAudio) 0L else startMs
-                val e = if (extractAudio) durMs else endMs
-                val file = trimMedia(ctx, uri!!, s, e, "m4a".let { if (isVideo && !extractAudio) "mp4" else "m4a" })
-                if (file != null)
-                    saveMediaToGallery(ctx, file, "morpho_${System.currentTimeMillis()}.${if (isVideo && !extractAudio) "mp4" else "m4a"}",
-                        isVideo && !extractAudio)
-                busy = false
+            if (busy) {
+                ProcessingCard(if (extractAudio) "Extracting audio..." else "Processing your clip...", accent)
+            } else {
+                ToolButton(if (extractAudio) "Extract audio" else "Save clip", accent) {
+                    busy = true
+                    val ms0 = if (extractAudio) 0L else startMs
+                    val ms1 = if (extractAudio) durMs else endMs
+                    val u = uri!!
+                    val ext = if (isVideo && !extractAudio) "mp4" else "m4a"
+                    scope.launch {
+                        val file = withContext(Dispatchers.Default) { trimMedia(ctx, u, ms0, ms1, ext) }
+                        if (file != null)
+                            saveMediaToGallery(ctx, file, "morpho_${System.currentTimeMillis()}.$ext", isVideo && !extractAudio)
+                        busy = false
+                    }
+                }
             }
         }
     }
