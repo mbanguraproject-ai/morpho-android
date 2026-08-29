@@ -30,11 +30,14 @@ import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.pdmodel.encryption.AccessPermission
 import com.tom_roush.pdfbox.pdmodel.encryption.StandardProtectionPolicy
 import com.tom_roush.pdfbox.text.PDFTextStripper
+import com.tom_roush.pdfbox.pdmodel.graphics.image.PDImageXObject
+import com.tom_roush.pdfbox.cos.COSName
+import android.graphics.Bitmap
 import java.io.ByteArrayOutputStream
 
 fun hasPdfBoxTool(id: String): Boolean = id in setOf(
     "pdf-text-extractor","pdf-password-protector","pdf-unlocker","pdf-compressor",
-    "pdf-page-deleter","pdf-metadata-editor","html-to-pdf"
+    "pdf-page-deleter","pdf-metadata-editor","html-to-pdf","pdf-image-extractor"
 )
 
 @Composable
@@ -47,6 +50,7 @@ fun PdfBoxTool(id: String, accent: Color, onOpenTool: (String) -> Unit = {}) {
         "pdf-page-deleter" -> PageDeleter(accent)
         "pdf-metadata-editor" -> MetadataEditor(accent)
         "html-to-pdf" -> HtmlToPdf(accent)
+        "pdf-image-extractor" -> ImageExtractor(accent)
     }
 }
 
@@ -390,6 +394,63 @@ private fun HtmlToPdf(accent: Color) {
                     }
                 }
                 webView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
+            }
+            if (msg.isNotEmpty()) Text(msg, color = InkSoft, fontSize = 13.sp)
+        }
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun ImageExtractor(accent: Color) {
+    val ctx = LocalContext.current
+    var uri by remember { mutableStateOf<Uri?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    var msg by remember { mutableStateOf("") }
+    var found by remember { mutableStateOf(0) }
+    val scope = rememberCoroutineScope()
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u -> uri = u; msg = ""; found = 0 }
+    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+        PickRow(if (uri == null) "Choose a PDF" else "PDF selected \u2713", accent) { picker.launch(arrayOf("application/pdf")) }
+        if (uri != null) {
+            Text("Pulls embedded images out of the PDF and saves them to your gallery.", color = InkFaint, fontSize = 12.sp)
+            if (busy) ProcessingCard("Extracting images...", accent)
+            else ToolButton("Extract images", accent) {
+                busy = true; val u = uri!!
+                scope.launch {
+                    val count = withContext(Dispatchers.Default) {
+                        try {
+                            readBytes(ctx, u)?.let { bytes ->
+                                PDDocument.load(bytes).use { doc ->
+                                    if (doc.isEncrypted) return@let -1
+                                    var n = 0
+                                    for (page in doc.pages) {
+                                        val res = page.resources ?: continue
+                                        for (name in res.xObjectNames) {
+                                            try {
+                                                val xobj = res.getXObject(name)
+                                                if (xobj is PDImageXObject) {
+                                                    val bmp: Bitmap? = xobj.image
+                                                    if (bmp != null) {
+                                                        if (saveToGallery(ctx, bmp, "pdfimg_${System.currentTimeMillis()}_$n", Bitmap.CompressFormat.PNG, 100)) n++
+                                                    }
+                                                }
+                                            } catch (e: Exception) {}
+                                        }
+                                    }
+                                    n
+                                }
+                            } ?: -2
+                        } catch (e: Exception) { -2 }
+                    }
+                    found = count
+                    msg = when {
+                        count > 0 -> "\u2713 Saved $count image(s) to your gallery."
+                        count == 0 -> "No embedded images found in this PDF."
+                        count == -1 -> "\u26a0 This PDF is password-protected. Unlock it first."
+                        else -> "\u26a0 Could not read this PDF."
+                    }
+                    busy = false
+                }
             }
             if (msg.isNotEmpty()) Text(msg, color = InkSoft, fontSize = 13.sp)
         }

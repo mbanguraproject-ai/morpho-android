@@ -117,6 +117,7 @@ object ToolRegistry {
         Tool("pdf-text-extractor", "PDF Text Extractor", "Extract plain text from any PDF", ToolCategory.PDF, "pdf-text-extractor", offline = true, popular = false),
         Tool("pdf-page-deleter", "PDF Page Deleter", "Remove specific pages from a PDF", ToolCategory.PDF, "pdf-page-deleter", offline = true, popular = false),
         Tool("pdf-metadata-editor", "PDF Metadata Editor", "Edit PDF title, author, and subject", ToolCategory.PDF, "pdf-metadata-editor", offline = true, popular = false),
+        Tool("pdf-image-extractor", "PDF Image Extractor", "Pull embedded images out of a PDF", ToolCategory.PDF, "pdf-image-extractor", offline = true, popular = false),
         Tool("html-to-pdf", "HTML to PDF", "Render HTML and export it as a PDF", ToolCategory.PDF, "html-to-pdf", offline = true, popular = false),
         Tool("pdf-header-footer", "PDF Header & Footer", "Add headers and footers to PDF pages", ToolCategory.PDF, "pdf-header-footer", offline = true, popular = false),
         Tool("pdf-crop", "PDF Crop", "Trim margins off PDF pages", ToolCategory.PDF, "pdf-crop", offline = true, popular = false),
