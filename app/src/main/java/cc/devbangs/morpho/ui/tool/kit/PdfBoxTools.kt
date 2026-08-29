@@ -33,7 +33,8 @@ import com.tom_roush.pdfbox.text.PDFTextStripper
 import java.io.ByteArrayOutputStream
 
 fun hasPdfBoxTool(id: String): Boolean = id in setOf(
-    "pdf-text-extractor","pdf-password-protector","pdf-unlocker","pdf-compressor"
+    "pdf-text-extractor","pdf-password-protector","pdf-unlocker","pdf-compressor",
+    "pdf-page-deleter","pdf-metadata-editor","html-to-pdf"
 )
 
 @Composable
@@ -43,6 +44,9 @@ fun PdfBoxTool(id: String, accent: Color, onOpenTool: (String) -> Unit = {}) {
         "pdf-password-protector" -> PasswordProtect(accent, onOpenTool)
         "pdf-unlocker" -> Unlock(accent)
         "pdf-compressor" -> Compress(accent, onOpenTool)
+        "pdf-page-deleter" -> PageDeleter(accent)
+        "pdf-metadata-editor" -> MetadataEditor(accent)
+        "html-to-pdf" -> HtmlToPdf(accent)
     }
 }
 
@@ -264,6 +268,130 @@ private fun ActionRow(accent: Color, onSave: () -> Unit, onShare: () -> Unit) {
                 .clickable { onShare() }.padding(vertical = 15.dp), contentAlignment = Alignment.Center) {
                 Text("Share", color = accent, fontSize = 15.sp)
             }
+        }
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun PageDeleter(accent: Color) {
+    val ctx = LocalContext.current
+    var uri by remember { mutableStateOf<Uri?>(null) }
+    var pageCount by remember { mutableStateOf(0) }
+    var toDelete by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var msg by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u ->
+        uri = u; msg = ""
+        if (u != null) {
+            pageCount = try { readBytes(ctx, u)?.let { PDDocument.load(it).use { d -> d.numberOfPages } } ?: 0 } catch (e: Exception) { 0 }
+        }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+        PickRow(if (uri == null) "Choose a PDF" else "PDF selected \u2713 ($pageCount pages)", accent) { picker.launch(arrayOf("application/pdf")) }
+        if (uri != null && pageCount > 0) {
+            Column { FieldLabel("PAGES TO DELETE (e.g. 1,3,5)"); ToolInput(toDelete, { toDelete = it }, "1,2", minLines = 1, mono = true) }
+            if (busy) ProcessingCard("Deleting pages...", accent)
+            else ToolButton("Delete pages & save", accent) {
+                busy = true; val u = uri!!; val del = toDelete
+                scope.launch {
+                    val result = withContext(Dispatchers.Default) {
+                        try {
+                            val nums = del.split(",").mapNotNull { it.trim().toIntOrNull() }.filter { it in 1..pageCount }.toSet()
+                            if (nums.isEmpty()) return@withContext null
+                            readBytes(ctx, u)?.let { bytes ->
+                                PDDocument.load(bytes).use { doc ->
+                                    nums.sortedDescending().forEach { doc.removePage(it - 1) }
+                                    val out = ByteArrayOutputStream(); doc.save(out); out.toByteArray()
+                                }
+                            }
+                        } catch (e: Exception) { null }
+                    }
+                    if (result != null) savePdfToDownloads(ctx, result, "edited_${System.currentTimeMillis()}")
+                    else msg = "\u26a0 Check your page numbers and try again."
+                    busy = false
+                }
+            }
+            if (msg.isNotEmpty()) Text(msg, color = InkSoft, fontSize = 13.sp)
+        }
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun MetadataEditor(accent: Color) {
+    val ctx = LocalContext.current
+    var uri by remember { mutableStateOf<Uri?>(null) }
+    var title by remember { mutableStateOf("") }
+    var author by remember { mutableStateOf("") }
+    var subject by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var msg by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u ->
+        uri = u; msg = ""
+        if (u != null) try { readBytes(ctx, u)?.let { PDDocument.load(it).use { d ->
+            title = d.documentInformation.title ?: ""; author = d.documentInformation.author ?: ""; subject = d.documentInformation.subject ?: "" } } } catch (e: Exception) {}
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+        PickRow(if (uri == null) "Choose a PDF" else "PDF selected \u2713", accent) { picker.launch(arrayOf("application/pdf")) }
+        if (uri != null) {
+            Column { FieldLabel("TITLE"); ToolInput(title, { title = it }, "Document title", minLines = 1) }
+            Column { FieldLabel("AUTHOR"); ToolInput(author, { author = it }, "Author name", minLines = 1) }
+            Column { FieldLabel("SUBJECT"); ToolInput(subject, { subject = it }, "Subject", minLines = 1) }
+            if (busy) ProcessingCard("Saving metadata...", accent)
+            else ToolButton("Save metadata", accent) {
+                busy = true; val u = uri!!
+                scope.launch {
+                    val result = withContext(Dispatchers.Default) {
+                        try { readBytes(ctx, u)?.let { bytes ->
+                            PDDocument.load(bytes).use { doc ->
+                                doc.documentInformation.title = title
+                                doc.documentInformation.author = author
+                                doc.documentInformation.subject = subject
+                                val out = ByteArrayOutputStream(); doc.save(out); out.toByteArray()
+                            } } } catch (e: Exception) { null }
+                    }
+                    if (result != null) savePdfToDownloads(ctx, result, "metadata_${System.currentTimeMillis()}")
+                    else msg = "\u26a0 Could not update this PDF."
+                    busy = false
+                }
+            }
+            if (msg.isNotEmpty()) Text(msg, color = InkSoft, fontSize = 13.sp)
+        }
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun HtmlToPdf(accent: Color) {
+    val ctx = LocalContext.current
+    var html by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var msg by remember { mutableStateOf("") }
+    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+        Column { FieldLabel("HTML"); ToolInput(html, { html = it }, "<h1>Hello</h1><p>My document</p>", minLines = 6, mono = true) }
+        if (html.isNotBlank()) {
+            Text("Renders your HTML and exports it as a PDF.", color = InkFaint, fontSize = 12.sp)
+            if (busy) ProcessingCard("Creating PDF...", accent)
+            else ToolButton("Create PDF", accent) {
+                busy = true
+                val webView = android.webkit.WebView(ctx)
+                webView.webViewClient = object : android.webkit.WebViewClient() {
+                    override fun onPageFinished(view: android.webkit.WebView, url: String) {
+                        val adapter = view.createPrintDocumentAdapter("morpho_${System.currentTimeMillis()}")
+                        val attrs = android.print.PrintAttributes.Builder()
+                            .setMediaSize(android.print.PrintAttributes.MediaSize.ISO_A4)
+                            .setResolution(android.print.PrintAttributes.Resolution("id", "id", 300, 300))
+                            .setMinMargins(android.print.PrintAttributes.Margins.NO_MARGINS).build()
+                        try {
+                            val pm = ctx.getSystemService(Context.PRINT_SERVICE) as android.print.PrintManager
+                            pm.print("Morpho HTML", adapter, attrs)
+                        } catch (e: Exception) { msg = "\u26a0 Could not create PDF." }
+                        busy = false
+                    }
+                }
+                webView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
+            }
+            if (msg.isNotEmpty()) Text(msg, color = InkSoft, fontSize = 13.sp)
         }
     }
 }
