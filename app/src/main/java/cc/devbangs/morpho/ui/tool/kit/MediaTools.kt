@@ -16,6 +16,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import android.media.MediaPlayer
+import androidx.compose.runtime.DisposableEffect
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -80,6 +84,7 @@ private fun TrimTool(id: String, accent: Color) {
                 TimeSlider("END", endMs, durMs, accent) { endMs = it.coerceAtLeast(startMs + 1000) }
                 Text("Clip: ${fmtTime(startMs)} → ${fmtTime(endMs)}  (${fmtTime(endMs - startMs)})",
                     color = Ink, fontSize = 14.sp)
+                ClipPreview(uri!!, startMs, endMs, accent)
             } else {
                 Text("Extracts the audio track (AAC/.m4a) — lossless, no re-encode.",
                     color = InkSoft, fontSize = 13.sp)
@@ -201,5 +206,57 @@ private fun PickRow(label: String, icon: String, accent: Color, onClick: () -> U
         Text(label, color = accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(3.dp))
         Text("Tap to select", color = InkFaint, fontSize = 12.sp)
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun ClipPreview(uri: Uri, startMs: Long, endMs: Long, accent: Color) {
+    val ctx = LocalContext.current
+    var playing by remember { mutableStateOf(false) }
+    val player = remember { MediaPlayer() }
+    var prepared by remember { mutableStateOf(false) }
+
+    // (re)prepare when the uri changes
+    LaunchedEffect(uri) {
+        prepared = false
+        try {
+            player.reset()
+            player.setDataSource(ctx, uri)
+            player.setOnPreparedListener { prepared = true }
+            player.prepareAsync()
+        } catch (e: Exception) { prepared = false }
+    }
+
+    // stop playback at endMs
+    LaunchedEffect(playing) {
+        if (playing && prepared) {
+            try {
+                player.seekTo(startMs.toInt())
+                player.start()
+                while (isActive && player.isPlaying) {
+                    if (player.currentPosition >= endMs) { player.pause(); playing = false; break }
+                    delay(50)
+                }
+            } catch (e: Exception) { playing = false }
+        } else if (!playing) {
+            try { if (player.isPlaying) player.pause() } catch (e: Exception) {}
+        }
+    }
+
+    // release on leave
+    DisposableEffect(Unit) {
+        onDispose { try { player.release() } catch (e: Exception) {} }
+    }
+
+    Box(Modifier.fillMaxWidth().clip(Shape.field).background(accent.copy(alpha = 0.10f))
+        .clickable(enabled = prepared) { playing = !playing }
+        .padding(vertical = 14.dp), contentAlignment = Alignment.Center) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MorphoIcon(if (playing) "pause" else "play", tint = accent, size = 20.dp)
+            Text(
+                if (!prepared) "Loading preview\u2026" else if (playing) "Stop preview" else "Preview clip",
+                color = accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold
+            )
+        }
     }
 }
