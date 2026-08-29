@@ -43,7 +43,7 @@ import java.io.ByteArrayOutputStream
 
 fun hasPdfTool(id: String): Boolean = id in setOf(
     "jpg-to-pdf","image-to-pdf","pdf-to-jpg","merge-pdf","pdf-page-rotator",
-    "pdf-page-numbering","pdf-watermark","pdf-splitter","pdf-page-extractor", "scan-to-pdf", "word-to-pdf"
+    "pdf-page-numbering","pdf-watermark","pdf-splitter","pdf-page-extractor", "scan-to-pdf", "word-to-pdf", "pdf-to-word"
 )
 
 @Composable
@@ -52,6 +52,7 @@ fun PdfTool(id: String, accent: Color, onOpenTool: (String) -> Unit = {}) {
         "jpg-to-pdf","image-to-pdf" -> ImagesToPdf(accent, onOpenTool)
         "scan-to-pdf" -> ScanToPdf(accent, onOpenTool)
         "word-to-pdf" -> WordToPdf(accent)
+        "pdf-to-word" -> PdfToWord(accent)
         "merge-pdf" -> MergePdf(accent, onOpenTool)
         else -> PdfFromSingle(id, accent, onOpenTool)
     }
@@ -470,6 +471,41 @@ private fun WordToPdf(accent: Color) {
                     }
                     if (bytes != null) savePdfToDownloads(ctx, bytes, "converted_${System.currentTimeMillis()}")
                     else msg = "\u26a0 Could not read this .docx file."
+                    busy = false
+                }
+            }
+            if (msg.isNotEmpty()) Text(msg, color = InkSoft, fontSize = 13.sp)
+        }
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun PdfToWord(accent: Color) {
+    val ctx = LocalContext.current
+    var uri by remember { mutableStateOf<Uri?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    var msg by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u -> uri = u; msg = "" }
+    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+        PickRow(if (uri == null) "Choose a PDF" else "PDF selected \u2713", "file-add", accent) {
+            picker.launch(arrayOf("application/pdf"))
+        }
+        if (uri != null) {
+            Text("Converts your PDF into an editable Word document. Needs internet.", color = InkFaint, fontSize = 12.sp)
+            if (busy) ProcessingCard("Converting to Word...", accent)
+            else ToolButton("Convert to Word", accent) {
+                busy = true; val u = uri!!
+                scope.launch {
+                    val out = withContext(Dispatchers.IO) {
+                        cloudConvert(ctx, u, "pdf", "docx", "converted_${System.currentTimeMillis()}.docx")
+                    }
+                    if (out != null) {
+                        saveMediaToGallery(ctx, out, out.name, false)
+                        msg = "Saved to your files \u2713"
+                    } else {
+                        msg = "\u26a0 Conversion failed. Check your connection and try again."
+                    }
                     busy = false
                 }
             }

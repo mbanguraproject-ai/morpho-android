@@ -45,6 +45,33 @@ fun pdfPageCount(ctx: Context, uri: Uri): Int = try {
 } catch (e: Exception) { 0 }
 
 /** Save raw PDF bytes to Downloads/Morpho. */
+
+/** Save arbitrary bytes to Download/Morpho with a full filename + mime type. */
+fun saveBytesToDownloads(ctx: Context, bytes: ByteArray, fileName: String, mime: String): Boolean {
+    cc.devbangs.morpho.ads.AdState.markUsed()
+    cc.devbangs.morpho.notify.Notifier.notifyDone(ctx, "File ready", "Saved to Downloads/Morpho.")
+    return try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val values = ContentValues().apply {
+                put(MediaStore.Downloads.DISPLAY_NAME, fileName)
+                put(MediaStore.Downloads.MIME_TYPE, mime)
+                put(MediaStore.Downloads.RELATIVE_PATH, "Download/Morpho")
+            }
+            val uri = ctx.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                ?: return false
+            ctx.contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
+        } else {
+            val dir = File(android.os.Environment.getExternalStoragePublicDirectory(
+                android.os.Environment.DIRECTORY_DOWNLOADS), "Morpho").apply { mkdirs() }
+            FileOutputStream(File(dir, fileName)).use { it.write(bytes) }
+        }
+        Toast.makeText(ctx, "Saved to Download/Morpho", Toast.LENGTH_SHORT).show()
+        true
+    } catch (e: Exception) {
+        Toast.makeText(ctx, "Save failed", Toast.LENGTH_SHORT).show(); false
+    }
+}
+
 fun savePdfToDownloads(ctx: Context, bytes: ByteArray, name: String): Boolean {
     cc.devbangs.morpho.ads.AdState.markUsed()
     cc.devbangs.morpho.notify.Notifier.notifyDone(ctx, "PDF ready", "Your PDF was saved to Downloads/Morpho.")
