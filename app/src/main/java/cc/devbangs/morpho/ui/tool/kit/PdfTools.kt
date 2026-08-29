@@ -1,5 +1,6 @@
 package cc.devbangs.morpho.ui.tool.kit
 
+import java.io.File
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color as AColor
@@ -41,13 +42,14 @@ import java.io.ByteArrayOutputStream
 
 fun hasPdfTool(id: String): Boolean = id in setOf(
     "jpg-to-pdf","image-to-pdf","pdf-to-jpg","merge-pdf","pdf-page-rotator",
-    "pdf-page-numbering","pdf-watermark","pdf-splitter","pdf-page-extractor"
+    "pdf-page-numbering","pdf-watermark","pdf-splitter","pdf-page-extractor", "scan-to-pdf"
 )
 
 @Composable
 fun PdfTool(id: String, accent: Color, onOpenTool: (String) -> Unit = {}) {
     when (id) {
         "jpg-to-pdf","image-to-pdf" -> ImagesToPdf(accent, onOpenTool)
+        "scan-to-pdf" -> ScanToPdf(accent, onOpenTool)
         "merge-pdf" -> MergePdf(accent, onOpenTool)
         else -> PdfFromSingle(id, accent, onOpenTool)
     }
@@ -320,4 +322,74 @@ private fun buildSingle(
         else -> pages.forEach { bitmapToPdfPage(doc, it) }
     }
     return docBytes(doc)
+}
+
+@androidx.compose.runtime.Composable
+private fun ScanToPdf(accent: Color, onOpenTool: (String) -> Unit = {}) {
+    val ctx = LocalContext.current
+    var pages by remember { mutableStateOf<List<Uri>>(emptyList()) }
+    var output by remember { mutableStateOf<ByteArray?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    var pendingUri by remember { mutableStateOf<Uri?>(null) }
+    val scope = rememberCoroutineScope()
+
+    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        if (ok && pendingUri != null) { pages = pages + pendingUri!!; output = null }
+        pendingUri = null
+    }
+
+    fun capture() {
+        val dir = File(ctx.cacheDir, "shared").apply { mkdirs() }
+        val f = File(dir, "scan_${System.currentTimeMillis()}.jpg")
+        val u = androidx.core.content.FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", f)
+        pendingUri = u
+        camera.launch(u)
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+        PickRow(if (pages.isEmpty()) "Scan a page" else "Scan another page", "image-add", accent) { capture() }
+        if (pages.isNotEmpty()) {
+            Text("${pages.size} page(s) scanned", color = InkSoft, fontSize = 13.sp)
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+                items(pages) { u ->
+                    decodeBitmap(ctx, u, 400)?.let { bmp ->
+                        Image(bmp.asImageBitmap(), null,
+                            Modifier.height(120.dp).clip(Shape.tile).background(PaperSunk),
+                            contentScale = ContentScale.Fit)
+                    }
+                }
+            }
+            Box(Modifier.fillMaxWidth().clip(Shape.field).background(accent.copy(alpha = 0.10f))
+                .clickable { pages = emptyList(); output = null }.padding(vertical = 12.dp),
+                contentAlignment = Alignment.Center) {
+                Text("Clear all", color = accent, fontSize = 14.sp)
+            }
+            if (busy) {
+                ProcessingCard("Building your PDF...", accent)
+            } else {
+                ActionRow(accent,
+                    onSave = {
+                        busy = true
+                        scope.launch {
+                            val bytes = withContext(Dispatchers.Default) { buildImagesPdf(ctx, pages) }
+                            if (bytes != null) { output = bytes; savePdfToDownloads(ctx, bytes, "scan_${System.currentTimeMillis()}") }
+                            busy = false
+                        }
+                    },
+                    onShare = {
+                        busy = true
+                        scope.launch {
+                            val bytes = withContext(Dispatchers.Default) { buildImagesPdf(ctx, pages) }
+                            if (bytes != null) { output = bytes; sharePdf(ctx, bytes, "scan_${System.currentTimeMillis()}") }
+                            busy = false
+                        }
+                    })
+            }
+            output?.let { bytes ->
+                NextStepSuggestions(WorkflowGraph.nextSteps("scan-to-pdf")) { step ->
+                    WorkflowBus.handOff(bytes, "application/pdf"); onOpenTool(step.toolId)
+                }
+            }
+        }
+    }
 }

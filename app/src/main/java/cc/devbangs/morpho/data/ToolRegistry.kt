@@ -24,6 +24,7 @@ object ToolRegistry {
         Tool("svg-to-png", "SVG to PNG Converter", "Convert SVG vectors to PNG images", ToolCategory.CONVERTER, "svg-to-png", offline = false, popular = false),
         Tool("heic-to-jpg", "HEIC to JPG Converter", "Convert iPhone HEIC photos to JPG", ToolCategory.CONVERTER, "heic-to-jpg", offline = true, popular = false),
         Tool("image-to-pdf", "Image to PDF Converter", "Convert images to PDF documents", ToolCategory.CONVERTER, "image-to-pdf", offline = true, popular = false),
+        Tool("scan-to-pdf", "Scan to PDF", "Capture pages with your camera and save as PDF", ToolCategory.PDF, "scan-to-pdf", offline = true, popular = true),
         Tool("mp4-to-mp3", "MP4 to MP3 Converter", "Extract audio from video as MP3", ToolCategory.VIDEO, "mp4-to-mp3", offline = true, popular = false),
         Tool("csv-to-json", "CSV to JSON Converter", "Convert CSV data to JSON format", ToolCategory.CONVERTER, "csv-to-json", offline = true, popular = false),
         Tool("xml-to-json", "XML to JSON", "Convert simple XML into JSON", ToolCategory.CONVERTER, "xml-to-json", offline = true, popular = false),
