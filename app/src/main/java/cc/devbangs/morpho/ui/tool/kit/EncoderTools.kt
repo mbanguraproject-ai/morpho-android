@@ -19,6 +19,11 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import android.media.MediaMuxer
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,13 +44,15 @@ import java.io.FileOutputStream
 import java.nio.ByteBuffer
 
 fun hasEncoderTool(id: String): Boolean = id in setOf(
-    "wav-converter","gif-maker","video-to-gif"
+    "wav-converter","gif-maker","video-to-gif","audio-compressor","volume-booster"
 )
 
 @Composable
 fun EncoderTool(id: String, accent: Color) {
     when (id) {
         "wav-converter" -> WavConverter(accent)
+        "audio-compressor" -> AudioCompressor(accent)
+        "volume-booster" -> VolumeBooster(accent)
         "gif-maker" -> GifMaker(accent)
         "video-to-gif" -> VideoToGif(accent)
     }
@@ -275,6 +282,186 @@ private fun StepControl(label: String, value: Int, opts: List<Int>, accent: Colo
         Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
             opts.forEach { n -> Box(Modifier.weight(1f)) {
                 ToolButton("$n", if (value==n) accent else accent.copy(alpha=0.35f)) { onChange(n) } } }
+        }
+    }
+}
+
+// ---- PCM decode helper: returns (pcmBytes, sampleRate, channels) ----
+private data class PcmAudio(val pcm: ByteArray, val sampleRate: Int, val channels: Int)
+
+private fun decodePcm(ctx: Context, uri: Uri): PcmAudio? {
+    val extractor = MediaExtractor()
+    return try {
+        extractor.setDataSource(ctx, uri, null)
+        var track = -1; var format: MediaFormat? = null
+        for (i in 0 until extractor.trackCount) {
+            val f = extractor.getTrackFormat(i)
+            if (f.getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true) { track = i; format = f; break }
+        }
+        if (track < 0 || format == null) return null
+        extractor.selectTrack(track)
+        val mime = format.getString(MediaFormat.KEY_MIME) ?: return null
+        val codec = MediaCodec.createDecoderByType(mime)
+        codec.configure(format, null, null, 0); codec.start()
+        val pcm = ByteArrayOutputStream()
+        val info = MediaCodec.BufferInfo()
+        var inEos = false; var outEos = false
+        val sampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+        val channels = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+        while (!outEos) {
+            if (!inEos) {
+                val ii = codec.dequeueInputBuffer(10000)
+                if (ii >= 0) {
+                    val buf = codec.getInputBuffer(ii) ?: continue
+                    val sz = extractor.readSampleData(buf, 0)
+                    if (sz < 0) { codec.queueInputBuffer(ii,0,0,0,MediaCodec.BUFFER_FLAG_END_OF_STREAM); inEos = true }
+                    else { codec.queueInputBuffer(ii,0,sz,extractor.sampleTime,0); extractor.advance() }
+                }
+            }
+            val oi = codec.dequeueOutputBuffer(info, 10000)
+            if (oi >= 0) {
+                val buf = codec.getOutputBuffer(oi)
+                if (buf != null) { val c = ByteArray(info.size); buf.get(c); buf.clear(); pcm.write(c) }
+                codec.releaseOutputBuffer(oi, false)
+                if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) outEos = true
+            }
+        }
+        codec.stop(); codec.release()
+        PcmAudio(pcm.toByteArray(), sampleRate, channels)
+    } catch (e: Exception) { null } finally { extractor.release() }
+}
+
+// ---- Encode PCM -> AAC (.m4a) at a target bitrate ----
+private fun encodeAac(ctx: Context, pcm: ByteArray, sampleRate: Int, channels: Int, bitrate: Int): File? {
+    return try {
+        val out = File(ctx.cacheDir, "audio_${System.currentTimeMillis()}.m4a")
+        val fmt = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, sampleRate, channels).apply {
+            setInteger(MediaFormat.KEY_AAC_PROFILE, android.media.MediaCodecInfo.CodecProfileLevel.AACObjectLC)
+            setInteger(MediaFormat.KEY_BIT_RATE, bitrate)
+            setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 65536)
+        }
+        val enc = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC)
+        enc.configure(fmt, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE); enc.start()
+        val muxer = MediaMuxer(out.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+        var muxTrack = -1; var muxStarted = false
+        val info = MediaCodec.BufferInfo()
+        var pos = 0; var inEos = false; var outEos = false
+        val presUsPerByte = 1_000_000.0 / (sampleRate * channels * 2)
+        while (!outEos) {
+            if (!inEos) {
+                val ii = enc.dequeueInputBuffer(10000)
+                if (ii >= 0) {
+                    val buf = enc.getInputBuffer(ii)!!
+                    buf.clear()
+                    val remaining = pcm.size - pos
+                    if (remaining <= 0) { enc.queueInputBuffer(ii,0,0,0,MediaCodec.BUFFER_FLAG_END_OF_STREAM); inEos = true }
+                    else {
+                        val chunk = minOf(buf.capacity(), remaining)
+                        buf.put(pcm, pos, chunk)
+                        val presUs = (pos * presUsPerByte).toLong()
+                        enc.queueInputBuffer(ii, 0, chunk, presUs, 0); pos += chunk
+                    }
+                }
+            }
+            val oi = enc.dequeueOutputBuffer(info, 10000)
+            when {
+                oi == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> { muxTrack = muxer.addTrack(enc.outputFormat); muxer.start(); muxStarted = true }
+                oi >= 0 -> {
+                    val buf = enc.getOutputBuffer(oi)!!
+                    if (info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0) info.size = 0
+                    if (info.size > 0 && muxStarted) { buf.position(info.offset); buf.limit(info.offset+info.size); muxer.writeSampleData(muxTrack, buf, info) }
+                    enc.releaseOutputBuffer(oi, false)
+                    if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) outEos = true
+                }
+            }
+        }
+        enc.stop(); enc.release(); muxer.stop(); muxer.release()
+        out
+    } catch (e: Exception) { null }
+}
+
+@androidx.compose.runtime.Composable
+private fun AudioCompressor(accent: Color) {
+    val ctx = LocalContext.current
+    var uri by remember { mutableStateOf<Uri?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    var msg by remember { mutableStateOf("") }
+    var bitrate by remember { mutableStateOf(96000) }
+    val scope = rememberCoroutineScope()
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u -> uri = u; msg = "" }
+    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+        PickRow(if (uri == null) "Choose audio" else "Audio selected \u2713", "cat-audio", accent) { picker.launch(arrayOf("audio/*")) }
+        if (uri != null) {
+            FieldLabel("QUALITY")
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+                listOf(64000 to "64k", 96000 to "96k", 128000 to "128k", 192000 to "192k").forEach { (br, lbl) ->
+                    Box(Modifier.weight(1f)) { ToolButton(lbl, if (bitrate==br) accent else accent.copy(alpha=0.35f)) { bitrate = br } }
+                }
+            }
+            Text("Re-encodes to AAC (.m4a) at the chosen bitrate to shrink size.", color = InkFaint, fontSize = 12.sp)
+            if (busy) ProcessingCard("Compressing audio...", accent)
+            else {
+                ToolButton("Compress audio", accent) {
+                    busy = true; val u = uri!!; val br = bitrate
+                    scope.launch {
+                        val result = withContext(Dispatchers.Default) {
+                            val pcm = decodePcm(ctx, u) ?: return@withContext null
+                            encodeAac(ctx, pcm.pcm, pcm.sampleRate, pcm.channels, br)
+                        }
+                        if (result != null) saveMediaToGallery(ctx, result, "morpho_${System.currentTimeMillis()}.m4a", false)
+                        else msg = "\u26a0 Could not compress this file."
+                        busy = false
+                    }
+                }
+            }
+            if (msg.isNotEmpty()) Text(msg, color = InkSoft, fontSize = 13.sp)
+        }
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun VolumeBooster(accent: Color) {
+    val ctx = LocalContext.current
+    var uri by remember { mutableStateOf<Uri?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    var msg by remember { mutableStateOf("") }
+    var gain by remember { mutableStateOf(150) }
+    val scope = rememberCoroutineScope()
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u -> uri = u; msg = "" }
+    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+        PickRow(if (uri == null) "Choose audio" else "Audio selected \u2713", "cat-audio", accent) { picker.launch(arrayOf("audio/*")) }
+        if (uri != null) {
+            FieldLabel("VOLUME: ${gain}%")
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+                listOf(125,150,200,300).forEach { g ->
+                    Box(Modifier.weight(1f)) { ToolButton("${g}%", if (gain==g) accent else accent.copy(alpha=0.35f)) { gain = g } }
+                }
+            }
+            Text("Amplifies volume with clipping protection. Outputs AAC (.m4a).", color = InkFaint, fontSize = 12.sp)
+            if (busy) ProcessingCard("Boosting volume...", accent)
+            else {
+                ToolButton("Boost volume", accent) {
+                    busy = true; val u = uri!!; val g = gain / 100f
+                    scope.launch {
+                        val result = withContext(Dispatchers.Default) {
+                            val a = decodePcm(ctx, u) ?: return@withContext null
+                            val pcm = a.pcm
+                            val bb = java.nio.ByteBuffer.wrap(pcm).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+                            val sb = bb.asShortBuffer()
+                            var i = 0
+                            while (i < sb.limit()) {
+                                val boosted = (sb.get(i) * g).toInt().coerceIn(-32768, 32767)
+                                sb.put(i, boosted.toShort()); i++
+                            }
+                            encodeAac(ctx, pcm, a.sampleRate, a.channels, 160000)
+                        }
+                        if (result != null) saveMediaToGallery(ctx, result, "morpho_${System.currentTimeMillis()}.m4a", false)
+                        else msg = "\u26a0 Could not process this file."
+                        busy = false
+                    }
+                }
+            }
+            if (msg.isNotEmpty()) Text(msg, color = InkSoft, fontSize = 13.sp)
         }
     }
 }
