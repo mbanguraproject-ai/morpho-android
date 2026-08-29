@@ -55,7 +55,7 @@ private fun drawModern(c: Canvas, s: InvoiceState, accent: Int) {
     // header band
     c.drawRect(0f, 0f, PW.toFloat(), 230f, Paint().apply { color = accent })
     c.drawText(s.bizName.value.ifEmpty { "Your Business" }, M, 120f, p(Color.WHITE, 52f, true))
-    c.drawText("INVOICE", PW - M, 100f, p(Color.WHITE, 46f, true, Paint.Align.RIGHT))
+    c.drawText(s.docType.value.title, PW - M, 100f, p(Color.WHITE, 46f, true, Paint.Align.RIGHT))
     c.drawText(s.invoiceNumber.value, PW - M, 150f, p(0xCCFFFFFF.toInt(), 28f, false, Paint.Align.RIGHT))
 
     var y = 320f
@@ -102,7 +102,7 @@ private fun metaCell(c: Canvas, label: String, value: String, x: Float, y: Float
 // ---------- CLASSIC ----------
 private fun drawClassic(c: Canvas, s: InvoiceState, accent: Int) {
     c.drawText(s.bizName.value.ifEmpty { "Your Business" }, M, 110f, p(INK, 48f, true))
-    c.drawText("INVOICE", PW - M, 100f, p(accent, 50f, true, Paint.Align.RIGHT))
+    c.drawText(s.docType.value.title, PW - M, 100f, p(accent, 50f, true, Paint.Align.RIGHT))
     c.drawText(s.invoiceNumber.value, PW - M, 145f, p(SOFT, 26f, false, Paint.Align.RIGHT))
     c.drawRect(M, 165f, PW - M, 171f, Paint().apply { color = accent })
 
@@ -179,7 +179,11 @@ private fun drawTotals(c: Canvas, s: InvoiceState, startY: Float, accent: Int, b
     y += 6f
     if (boxed) {
         c.drawRoundRect(RectF(labelX - 24f, y - 6f, PW - M, y + 66f), 12f, 12f, Paint().apply { color = accent })
-        c.drawText("TOTAL DUE", labelX, y + 44f, p(0xE6FFFFFF.toInt(), 24f, true))
+        c.drawText(when (s.docType.value) {
+            DocType.RECEIPT -> "TOTAL PAID"
+            DocType.QUOTE -> "QUOTED TOTAL"
+            else -> "TOTAL DUE"
+        }, labelX, y + 44f, p(0xE6FFFFFF.toInt(), 24f, true))
         c.drawText(s.money(s.total), PW - M - 24f, y + 46f, p(Color.WHITE, 34f, true, Paint.Align.RIGHT))
         y += 90f
     } else {

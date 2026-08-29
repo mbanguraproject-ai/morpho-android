@@ -31,8 +31,13 @@ import cc.devbangs.morpho.ui.tool.kit.savePdfToDownloads
 import cc.devbangs.morpho.ui.tool.kit.sharePdf
 
 @Composable
-fun InvoiceTool(accent: Color) {
-    val s = remember { InvoiceState() }
+fun InvoiceTool(accent: Color, docType: DocType = DocType.INVOICE) {
+    val s = remember {
+        InvoiceState().apply {
+            this.docType.value = docType
+            invoiceNumber.value = "${docType.numberPrefix}-2026-001"
+        }
+    }
     var tab by remember { mutableStateOf(0) }
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
         Tabs(tab, accent) { tab = it }

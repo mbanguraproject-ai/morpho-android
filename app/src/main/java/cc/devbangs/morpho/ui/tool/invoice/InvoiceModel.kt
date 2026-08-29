@@ -18,6 +18,11 @@ class LineItem(
 }
 
 enum class Template(val label: String) { MODERN("Modern"), CLASSIC("Classic"), MINIMAL("Minimal") }
+enum class DocType(val title: String, val numberLabel: String, val numberPrefix: String) {
+    INVOICE("INVOICE", "INVOICE #", "INV"),
+    RECEIPT("RECEIPT", "RECEIPT #", "RCT"),
+    QUOTE("QUOTATION", "QUOTE #", "QUO")
+}
 
 data class AccentOption(val label: String, val argb: Long)
 
@@ -43,7 +48,9 @@ class InvoiceState {
     val clientDetails = mutableStateOf("")
     val poNumber = mutableStateOf("")
     // Meta
+    val docType = mutableStateOf(DocType.INVOICE)
     val invoiceNumber = mutableStateOf("INV-2026-001")
+    val validUntil = mutableStateOf("")      // quotes only
     val issueDate = mutableStateOf("")
     val dueDate = mutableStateOf("")
     val currency = mutableStateOf("Le")

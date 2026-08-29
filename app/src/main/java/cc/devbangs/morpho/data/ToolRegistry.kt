@@ -69,6 +69,8 @@ object ToolRegistry {
         Tool("html-to-markdown", "HTML to Markdown", "Convert HTML into Markdown", ToolCategory.DEVELOPER, "html-to-markdown", offline = true, popular = false),
         Tool("qr-code-generator", "QR Code Generator", "Create custom QR codes instantly", ToolCategory.GENERATOR, "qr-code-generator", offline = true, popular = true),
         Tool("invoice-generator", "Invoice Generator", "Create professional invoices for free", ToolCategory.GENERATOR, "invoice-generator", offline = true, popular = false),
+        Tool("receipt-generator", "Receipt Generator", "Create professional payment receipts", ToolCategory.GENERATOR, "receipt-generator", offline = true, popular = true),
+        Tool("quotation-generator", "Quotation Generator", "Create price quotes and proformas", ToolCategory.GENERATOR, "quotation-generator", offline = true, popular = false),
         Tool("resume-builder", "Resume Builder", "Build professional resumes in minutes", ToolCategory.GENERATOR, "resume-builder", offline = true, popular = false),
         Tool("password-generator", "Password Generator", "Generate strong, secure passwords", ToolCategory.GENERATOR, "password-generator", offline = true, popular = true),
         Tool("username-generator", "Username Generator", "Generate unique usernames", ToolCategory.GENERATOR, "username-generator", offline = true, popular = false),

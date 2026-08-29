@@ -51,6 +51,7 @@ import cc.devbangs.morpho.ui.tool.kit.PdfBoxTool
 import cc.devbangs.morpho.ui.tool.kit.hasEncoderTool
 import cc.devbangs.morpho.ui.tool.kit.EncoderTool
 import cc.devbangs.morpho.ui.tool.invoice.InvoiceTool
+import cc.devbangs.morpho.ui.tool.invoice.DocType
 import cc.devbangs.morpho.ui.tool.resume.ResumeTool
 import cc.devbangs.morpho.ui.theme.*
 
@@ -199,7 +200,9 @@ private fun ToolHost(tool: Tool, onOpenTool: (String) -> Unit) {
         hasOcrTool(tool.id) -> OcrTool(tool.id, tool.category.accent)
         hasLastTool(tool.id) -> LastTool(tool.id, tool.category.accent)
         hasPdfBoxTool(tool.id) -> PdfBoxTool(tool.id, tool.category.accent, onOpenTool)
-        tool.id == "invoice-generator" -> InvoiceTool(tool.category.accent)
+        tool.id == "invoice-generator" -> InvoiceTool(tool.category.accent, DocType.INVOICE)
+        tool.id == "receipt-generator" -> InvoiceTool(tool.category.accent, DocType.RECEIPT)
+        tool.id == "quotation-generator" -> InvoiceTool(tool.category.accent, DocType.QUOTE)
         tool.id == "resume-builder" -> ResumeTool(tool.category.accent)
         else -> Placeholder(tool)
     }
