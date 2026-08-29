@@ -15,7 +15,9 @@ import org.json.JSONObject
 fun hasTextDevTool(id: String): Boolean = id in setOf(
     "word-counter","character-counter","case-converter","slug-generator",
     "lorem-ipsum-generator","json-formatter","base64-encoder","url-encoder",
-    "hash-generator","uuid-generator","jwt-decoder","color-converter"
+    "hash-generator","uuid-generator","jwt-decoder","color-converter",
+    "text-formatter","remove-duplicate-lines","text-sorter","text-reverser",
+    "markdown-editor","keyword-density-checker","regex-tester","url-decoder"
 )
 
 @Composable
@@ -32,6 +34,14 @@ fun TextDevTool(id: String, accent: Color) {
         "uuid-generator" -> UuidTool(accent)
         "jwt-decoder" -> JwtTool(accent)
         "color-converter" -> ColorTool(accent)
+        "text-formatter" -> TextFormatterTool(accent)
+        "remove-duplicate-lines" -> DedupeTool(accent)
+        "text-sorter" -> SortTool(accent)
+        "text-reverser" -> ReverseTool(accent)
+        "markdown-editor" -> MarkdownTool(accent)
+        "keyword-density-checker" -> KeywordDensityTool(accent)
+        "regex-tester" -> RegexTool(accent)
+        "url-decoder" -> UrlDecodeTool(accent)
     }
 }
 
@@ -249,4 +259,142 @@ private fun rgbToHsl(r: Int, g: Int, b: Int): Triple<Int,Int,Int> {
     val l=(max+min)/2
     val s=if(d==0.0)0.0 else d/(1-Math.abs(2*l-1))
     return Triple(Math.round(h).toInt(), Math.round(s*100).toInt(), Math.round(l*100).toInt())
+}
+
+@androidx.compose.runtime.Composable
+private fun TextFormatterTool(accent: Color) {
+    var t by remember { mutableStateOf("") }
+    val out = t.lines().joinToString("\n") { it.trim().replace(Regex("\\s+"), " ") }
+        .replace(Regex("\n{3,}"), "\n\n").trim()
+    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+        Column { FieldLabel("TEXT"); ToolInput(t, { t = it }, "Paste messy text…", minLines = 4) }
+        if (out.isNotEmpty()) ToolResult(out, accent, mono = false, label = "CLEANED")
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun DedupeTool(accent: Color) {
+    var t by remember { mutableStateOf("") }
+    val lines = t.lines()
+    val unique = lines.filter { it.isNotBlank() }.distinct()
+    val out = unique.joinToString("\n")
+    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+        Column { FieldLabel("LINES"); ToolInput(t, { t = it }, "One item per line…", minLines = 4) }
+        if (t.isNotBlank()) {
+            StatGrid(listOf(
+                "Original" to "${lines.count { it.isNotBlank() }}",
+                "Unique" to "${unique.size}",
+                "Removed" to "${lines.count { it.isNotBlank() } - unique.size}"
+            ), accent)
+            ToolResult(out, accent, mono = false, label = "DEDUPED")
+        }
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun SortTool(accent: Color) {
+    var t by remember { mutableStateOf("") }
+    var mode by remember { mutableStateOf(0) }
+    val lines = t.lines().filter { it.isNotBlank() }
+    val out = when (mode) {
+        0 -> lines.sorted()
+        1 -> lines.sortedDescending()
+        2 -> lines.sortedBy { it.length }
+        else -> lines.sortedByDescending { it.length }
+    }.joinToString("\n")
+    val labels = listOf("A→Z", "Z→A", "Short→Long", "Long→Short")
+    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+        Column { FieldLabel("LINES"); ToolInput(t, { t = it }, "One item per line…", minLines = 4) }
+        FieldLabel("SORT BY")
+        Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+            labels.forEachIndexed { i, l -> Box(Modifier.weight(1f)) {
+                ToolButton(l, if (mode == i) accent else accent.copy(alpha = 0.35f)) { mode = i } } }
+        }
+        if (out.isNotEmpty()) ToolResult(out, accent, mono = false, label = "SORTED")
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun ReverseTool(accent: Color) {
+    var t by remember { mutableStateOf("") }
+    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+        Column { FieldLabel("TEXT"); ToolInput(t, { t = it }, "Type text…", minLines = 3) }
+        if (t.isNotEmpty()) {
+            ToolResult(t.reversed(), accent, mono = false, label = "REVERSED CHARACTERS")
+            ToolResult(t.split(" ").reversed().joinToString(" "), accent, mono = false, label = "REVERSED WORDS")
+            ToolResult(t.lines().reversed().joinToString("\n"), accent, mono = false, label = "REVERSED LINES")
+        }
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun MarkdownTool(accent: Color) {
+    var t by remember { mutableStateOf("") }
+    // lightweight md -> plain preview (headings, bold, lists, links)
+    val preview = t.lines().joinToString("\n") { line ->
+        var l = line
+        l = l.replace(Regex("^#{1,6}\\s*"), "")
+        l = l.replace(Regex("\\*\\*(.+?)\\*\\*"), "$1")
+        l = l.replace(Regex("\\*(.+?)\\*"), "$1")
+        l = l.replace(Regex("\\[(.+?)\\]\\((.+?)\\)"), "$1")
+        l = l.replace(Regex("^[-*]\\s+"), "\u2022 ")
+        l
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+        Column { FieldLabel("MARKDOWN"); ToolInput(t, { t = it }, "# Heading\n**bold** text\n- list item", minLines = 5, mono = true) }
+        if (t.isNotEmpty()) ToolResult(preview, accent, mono = false, label = "PREVIEW (plain text)")
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun KeywordDensityTool(accent: Color) {
+    var t by remember { mutableStateOf("") }
+    val words = Regex("[\\p{L}']+").findAll(t.lowercase()).map { it.value }.toList()
+    val total = words.size
+    val freq = words.groupingBy { it }.eachCount().entries
+        .sortedByDescending { it.value }.take(15)
+    val out = if (total == 0) "" else freq.joinToString("\n") { (w, c) ->
+        val pct = "%.1f".format(c * 100.0 / total)
+        "$w — $c ($pct%)"
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+        Column { FieldLabel("TEXT"); ToolInput(t, { t = it }, "Paste content to analyze…", minLines = 4) }
+        if (total > 0) {
+            StatGrid(listOf("Total words" to "$total", "Unique" to "${words.distinct().size}"), accent)
+            ToolResult(out, accent, mono = true, label = "TOP KEYWORDS")
+        }
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun RegexTool(accent: Color) {
+    var pattern by remember { mutableStateOf("") }
+    var input by remember { mutableStateOf("") }
+    val result = remember(pattern, input) {
+        if (pattern.isEmpty() || input.isEmpty()) ""
+        else try {
+            val re = Regex(pattern)
+            val matches = re.findAll(input).map { it.value }.toList()
+            if (matches.isEmpty()) "No matches." else "${matches.size} match(es):\n" + matches.joinToString("\n")
+        } catch (e: Exception) { "\u26a0 Invalid pattern: ${e.message}" }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+        Column { FieldLabel("PATTERN"); ToolInput(pattern, { pattern = it }, "\\d+", minLines = 1, mono = true) }
+        Column { FieldLabel("TEST STRING"); ToolInput(input, { input = it }, "Text to search…", minLines = 3) }
+        if (result.isNotEmpty()) ToolResult(result, accent, mono = true, label = "MATCHES")
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun UrlDecodeTool(accent: Color) {
+    var t by remember { mutableStateOf("") }
+    val out = remember(t) {
+        if (t.isEmpty()) "" else try {
+            java.net.URLDecoder.decode(t, "UTF-8")
+        } catch (e: Exception) { "\u26a0 Could not decode." }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+        Column { FieldLabel("ENCODED URL"); ToolInput(t, { t = it }, "https%3A%2F%2Fexample.com", minLines = 2, mono = true) }
+        if (out.isNotEmpty()) ToolResult(out, accent, mono = true, label = "DECODED")
+    }
 }
