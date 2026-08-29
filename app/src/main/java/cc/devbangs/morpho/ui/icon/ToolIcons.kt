@@ -95,9 +95,82 @@ import com.adamglin.phosphoricons.bold.VideoCamera
 import com.adamglin.phosphoricons.bold.Waveform
 import com.adamglin.phosphoricons.bold.X
 import com.adamglin.phosphoricons.bold.YoutubeLogo
+import com.adamglin.phosphoricons.bold.ArrowsLeftRight
+import com.adamglin.phosphoricons.bold.Camera
+import com.adamglin.phosphoricons.bold.ChartBar
+import com.adamglin.phosphoricons.bold.ClipboardText
+import com.adamglin.phosphoricons.bold.ClockCountdown
+import com.adamglin.phosphoricons.bold.ClosedCaptioning
+import com.adamglin.phosphoricons.bold.CodeBlock
+import com.adamglin.phosphoricons.bold.EnvelopeSimple
+import com.adamglin.phosphoricons.bold.FileArrowUp
+import com.adamglin.phosphoricons.bold.FileCode
+import com.adamglin.phosphoricons.bold.FileCss
+import com.adamglin.phosphoricons.bold.FileHtml
+import com.adamglin.phosphoricons.bold.FileJs
+import com.adamglin.phosphoricons.bold.FileX
+import com.adamglin.phosphoricons.bold.LinkSimple
+import com.adamglin.phosphoricons.bold.MarkdownLogo
+import com.adamglin.phosphoricons.bold.Megaphone
+import com.adamglin.phosphoricons.bold.PaintBrush
+import com.adamglin.phosphoricons.bold.SortAscending
+import com.adamglin.phosphoricons.bold.SpeakerHigh
+import com.adamglin.phosphoricons.bold.SpeakerSlash
+import com.adamglin.phosphoricons.bold.Swatches
+import com.adamglin.phosphoricons.bold.TextAlignLeft
+import com.adamglin.phosphoricons.bold.UserCircle
+import com.adamglin.phosphoricons.bold.Function
+import com.adamglin.phosphoricons.bold.LinkBreak
+import com.adamglin.phosphoricons.bold.LinkSimpleHorizontal
+import com.adamglin.phosphoricons.bold.Textbox
 
 object ToolIcons {
     private val map: Map<String, ImageVector> = mapOf(
+        "text-formatter" to PhosphorIcons.Bold.TextAlignLeft,
+        "remove-duplicate-lines" to PhosphorIcons.Bold.Rows,
+        "text-sorter" to PhosphorIcons.Bold.SortAscending,
+        "text-reverser" to PhosphorIcons.Bold.ArrowsLeftRight,
+        "markdown-editor" to PhosphorIcons.Bold.MarkdownLogo,
+        "keyword-density-checker" to PhosphorIcons.Bold.ChartBar,
+        "regex-tester" to PhosphorIcons.Bold.Function,
+        "xml-formatter" to PhosphorIcons.Bold.Code,
+        "html-minifier" to PhosphorIcons.Bold.FileHtml,
+        "css-minifier" to PhosphorIcons.Bold.FileCss,
+        "js-minifier" to PhosphorIcons.Bold.FileJs,
+        "sql-formatter" to PhosphorIcons.Bold.Database,
+        "code-beautifier" to PhosphorIcons.Bold.CodeBlock,
+        "url-parser" to PhosphorIcons.Bold.LinkSimple,
+        "cron-explainer" to PhosphorIcons.Bold.ClockCountdown,
+        "markdown-to-html" to PhosphorIcons.Bold.FileArrowUp,
+        "html-to-markdown" to PhosphorIcons.Bold.FileArrowDown,
+        "xml-to-json" to PhosphorIcons.Bold.FileCode,
+        "yaml-to-json" to PhosphorIcons.Bold.FileCode,
+        "docx-to-txt" to PhosphorIcons.Bold.FileDoc,
+        "subtitle-converter" to PhosphorIcons.Bold.ClosedCaptioning,
+        "png-to-webp" to PhosphorIcons.Bold.Image,
+        "jpg-to-webp" to PhosphorIcons.Bold.ImageSquare,
+        "silence-video" to PhosphorIcons.Bold.SpeakerSlash,
+        "audio-compressor" to PhosphorIcons.Bold.FileAudio,
+        "volume-booster" to PhosphorIcons.Bold.SpeakerHigh,
+        "text-to-speech" to PhosphorIcons.Bold.Megaphone,
+        "speech-to-text" to PhosphorIcons.Bold.Microphone,
+        "username-generator" to PhosphorIcons.Bold.UserCircle,
+        "email-signature-generator" to PhosphorIcons.Bold.EnvelopeSimple,
+        "gradient-generator" to PhosphorIcons.Bold.Palette,
+        "css-generator" to PhosphorIcons.Bold.PaintBrush,
+        "cover-letter-generator" to PhosphorIcons.Bold.FileText,
+        "api-key-generator" to PhosphorIcons.Bold.Key,
+        "hashtag-generator" to PhosphorIcons.Bold.Hash,
+        "palette-generator" to PhosphorIcons.Bold.Swatches,
+        "receipt-generator" to PhosphorIcons.Bold.Receipt,
+        "quotation-generator" to PhosphorIcons.Bold.ClipboardText,
+        "scan-to-pdf" to PhosphorIcons.Bold.Camera,
+        "pdf-page-deleter" to PhosphorIcons.Bold.FileX,
+        "pdf-metadata-editor" to PhosphorIcons.Bold.Info,
+        "pdf-image-extractor" to PhosphorIcons.Bold.Images,
+        "pdf-ocr-scanner" to PhosphorIcons.Bold.TextT,
+        "html-to-pdf" to PhosphorIcons.Bold.FilePdf,
+
         "cat-pdf" to PhosphorIcons.Bold.FilePdf,
         "cat-image" to PhosphorIcons.Bold.Image,
         "cat-converter" to PhosphorIcons.Bold.ArrowsClockwise,
@@ -154,7 +227,7 @@ object ToolIcons {
         "pdf-text-extractor" to PhosphorIcons.Bold.TextAa,
         "pdf-header-footer" to PhosphorIcons.Bold.Rows,
         "pdf-crop" to PhosphorIcons.Bold.Crop,
-        "pdf-bates-numbering" to PhosphorIcons.Bold.Hash,
+        "pdf-bates-numbering" to PhosphorIcons.Bold.ListNumbers,
         "pdf-annotator" to PhosphorIcons.Bold.Highlighter,
         "pdf-password-protector" to PhosphorIcons.Bold.Lock,
         "pdf-reorder-pages" to PhosphorIcons.Bold.ArrowsDownUp,
@@ -172,11 +245,11 @@ object ToolIcons {
         "thumbnail-creator" to PhosphorIcons.Bold.FrameCorners,
         "gif-maker" to PhosphorIcons.Bold.Gif,
         "meme-generator" to PhosphorIcons.Bold.Smiley,
-        "jpg-to-png" to PhosphorIcons.Bold.FileImage,
-        "png-to-jpg" to PhosphorIcons.Bold.FileImage,
+        "jpg-to-png" to PhosphorIcons.Bold.Image,
+        "png-to-jpg" to PhosphorIcons.Bold.ImageSquare,
         "webp-to-png" to PhosphorIcons.Bold.FileImage,
         "svg-to-png" to PhosphorIcons.Bold.FileSvg,
-        "heic-to-jpg" to PhosphorIcons.Bold.FileImage,
+        "heic-to-jpg" to PhosphorIcons.Bold.Camera,
         "image-to-pdf" to PhosphorIcons.Bold.FilePdf,
         "csv-to-json" to PhosphorIcons.Bold.FileCsv,
         "json-to-csv" to PhosphorIcons.Bold.BracketsCurly,
@@ -188,12 +261,12 @@ object ToolIcons {
         "wav-converter" to PhosphorIcons.Bold.Waveform,
         "audio-trimmer" to PhosphorIcons.Bold.Scissors,
         "voice-recorder" to PhosphorIcons.Bold.Microphone,
-        "audio-joiner" to PhosphorIcons.Bold.Link,
+        "audio-joiner" to PhosphorIcons.Bold.LinkBreak,
         "screenshot-to-text" to PhosphorIcons.Bold.Scan,
-        "image-to-text" to PhosphorIcons.Bold.TextT,
-        "word-counter" to PhosphorIcons.Bold.TextAa,
+        "image-to-text" to PhosphorIcons.Bold.Scan,
+        "word-counter" to PhosphorIcons.Bold.Textbox,
         "case-converter" to PhosphorIcons.Bold.TextAa,
-        "slug-generator" to PhosphorIcons.Bold.Link,
+        "slug-generator" to PhosphorIcons.Bold.LinkSimpleHorizontal,
         "lorem-ipsum-generator" to PhosphorIcons.Bold.Paragraph,
         "character-counter" to PhosphorIcons.Bold.TextT,
         "qr-code-generator" to PhosphorIcons.Bold.QrCode,
@@ -211,7 +284,7 @@ object ToolIcons {
         "uuid-generator" to PhosphorIcons.Bold.Fingerprint,
         "jwt-decoder" to PhosphorIcons.Bold.Key,
         "url-encoder" to PhosphorIcons.Bold.Link,
-        "hash-generator" to PhosphorIcons.Bold.Hash,
+        "hash-generator" to PhosphorIcons.Bold.Fingerprint,
         "color-converter" to PhosphorIcons.Bold.Eyedropper,
         "ai-text-rewriter" to PhosphorIcons.Bold.Sparkle,
         "ai-image-upscaler" to PhosphorIcons.Bold.Sparkle,

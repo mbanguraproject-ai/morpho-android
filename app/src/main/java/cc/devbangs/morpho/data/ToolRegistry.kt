@@ -7,7 +7,7 @@ object ToolRegistry {
         Tool("pdf-signer", "PDF Signer", "Add signatures to PDF documents", ToolCategory.PDF, "pdf-signer", offline = false, popular = false),
         Tool("pdf-editor", "PDF Editor", "Add text and annotations to PDFs", ToolCategory.PDF, "pdf-editor", offline = false, popular = false),
         Tool("pdf-to-word", "PDF to Word Converter", "Convert PDF files to editable Word documents", ToolCategory.PDF, "pdf-to-word", offline = false, popular = true),
-        Tool("word-to-pdf", "Word to PDF Converter", "Convert Word documents to PDF format", ToolCategory.PDF, "word-to-pdf", offline = false, popular = true),
+        Tool("word-to-pdf", "Word to PDF Converter", "Convert a Word document's text to PDF", ToolCategory.PDF, "word-to-pdf", offline = true, popular = true),
         Tool("pdf-compressor", "PDF Compressor", "Reduce PDF file size instantly", ToolCategory.PDF, "pdf-compressor", offline = true, popular = true),
         Tool("merge-pdf", "Merge PDF", "Combine multiple PDFs into one", ToolCategory.PDF, "merge-pdf", offline = true, popular = true),
         Tool("pdf-splitter", "PDF Splitter", "Split PDFs into separate pages", ToolCategory.PDF, "pdf-splitter", offline = true, popular = false),

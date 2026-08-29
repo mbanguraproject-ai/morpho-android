@@ -1,5 +1,6 @@
 package cc.devbangs.morpho.ui.tool.kit
 
+import android.content.Context
 import java.io.File
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -42,7 +43,7 @@ import java.io.ByteArrayOutputStream
 
 fun hasPdfTool(id: String): Boolean = id in setOf(
     "jpg-to-pdf","image-to-pdf","pdf-to-jpg","merge-pdf","pdf-page-rotator",
-    "pdf-page-numbering","pdf-watermark","pdf-splitter","pdf-page-extractor", "scan-to-pdf"
+    "pdf-page-numbering","pdf-watermark","pdf-splitter","pdf-page-extractor", "scan-to-pdf", "word-to-pdf"
 )
 
 @Composable
@@ -50,6 +51,7 @@ fun PdfTool(id: String, accent: Color, onOpenTool: (String) -> Unit = {}) {
     when (id) {
         "jpg-to-pdf","image-to-pdf" -> ImagesToPdf(accent, onOpenTool)
         "scan-to-pdf" -> ScanToPdf(accent, onOpenTool)
+        "word-to-pdf" -> WordToPdf(accent)
         "merge-pdf" -> MergePdf(accent, onOpenTool)
         else -> PdfFromSingle(id, accent, onOpenTool)
     }
@@ -390,6 +392,88 @@ private fun ScanToPdf(accent: Color, onOpenTool: (String) -> Unit = {}) {
                     WorkflowBus.handOff(bytes, "application/pdf"); onOpenTool(step.toolId)
                 }
             }
+        }
+    }
+}
+
+private fun extractDocxText(ctx: Context, uri: Uri): String? {
+    return try {
+        val bytes = ctx.contentResolver.openInputStream(uri)?.readBytes() ?: return null
+        val zis = java.util.zip.ZipInputStream(java.io.ByteArrayInputStream(bytes))
+        var doc = ""
+        var entry = zis.nextEntry
+        while (entry != null) {
+            if (entry.name == "word/document.xml") { doc = zis.readBytes().toString(Charsets.UTF_8); break }
+            entry = zis.nextEntry
+        }
+        zis.close()
+        doc.replace(Regex("</w:p>"), "\n").replace(Regex("<[^>]+>"), "")
+            .replace("&amp;","&").replace("&lt;","<").replace("&gt;",">").replace("&quot;","\"").trim()
+    } catch (e: Exception) { null }
+}
+
+private fun textToPdfBytes(text: String): ByteArray {
+    val doc = PdfDocument()
+    val pageW = 595; val pageH = 842
+    val margin = 48f
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = AColor.BLACK; textSize = 12f }
+    val lineH = paint.fontSpacing
+    val maxW = pageW - 2 * margin
+    val lines = mutableListOf<String>()
+    text.split("\n").forEach { para ->
+        if (para.isBlank()) { lines.add(""); return@forEach }
+        var line = ""
+        para.split(" ").forEach { word ->
+            val test = if (line.isEmpty()) word else "$line $word"
+            if (paint.measureText(test) > maxW) { lines.add(line); line = word }
+            else line = test
+        }
+        if (line.isNotEmpty()) lines.add(line)
+    }
+    var i = 0
+    while (true) {
+        val info = PdfDocument.PageInfo.Builder(pageW, pageH, doc.pages.size + 1).create()
+        val page = doc.startPage(info)
+        val c = page.canvas
+        var y = margin + lineH
+        while (i < lines.size && y < pageH - margin) {
+            c.drawText(lines[i], margin, y, paint); y += lineH; i++
+        }
+        doc.finishPage(page)
+        if (i >= lines.size) break
+    }
+    val out = ByteArrayOutputStream(); doc.writeTo(out); doc.close()
+    return out.toByteArray()
+}
+
+@androidx.compose.runtime.Composable
+private fun WordToPdf(accent: Color) {
+    val ctx = LocalContext.current
+    var uri by remember { mutableStateOf<Uri?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    var msg by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u -> uri = u; msg = "" }
+    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+        PickRow(if (uri == null) "Choose a .docx file" else "File selected \u2713", "file-add", accent) {
+            picker.launch(arrayOf("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
+        }
+        if (uri != null) {
+            Text("Converts the document's text into a clean PDF. Complex layouts and images aren't preserved.", color = InkFaint, fontSize = 12.sp)
+            if (busy) ProcessingCard("Creating PDF...", accent)
+            else ToolButton("Convert to PDF", accent) {
+                busy = true; val u = uri!!
+                scope.launch {
+                    val bytes = withContext(Dispatchers.Default) {
+                        val text = extractDocxText(ctx, u)
+                        if (text.isNullOrBlank()) null else textToPdfBytes(text)
+                    }
+                    if (bytes != null) savePdfToDownloads(ctx, bytes, "converted_${System.currentTimeMillis()}")
+                    else msg = "\u26a0 Could not read this .docx file."
+                    busy = false
+                }
+            }
+            if (msg.isNotEmpty()) Text(msg, color = InkSoft, fontSize = 13.sp)
         }
     }
 }
