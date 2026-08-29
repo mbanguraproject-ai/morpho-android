@@ -45,6 +45,7 @@ object ToolRegistry {
         Tool("text-to-speech", "Text to Speech", "Read text aloud with your device voice", ToolCategory.AUDIO, "text-to-speech", offline = true, popular = false),
         Tool("audio-trimmer", "Audio Trimmer", "Trim and cut audio files", ToolCategory.AUDIO, "audio-trimmer", offline = true, popular = false),
         Tool("voice-recorder", "Voice Recorder", "Record audio from your microphone", ToolCategory.AUDIO, "voice-recorder", offline = true, popular = false),
+        Tool("speech-to-text", "Speech to Text", "Transcribe your speech into text", ToolCategory.TEXT, "speech-to-text", offline = true, popular = false),
         Tool("audio-joiner", "Audio Joiner", "Combine multiple audio files into one", ToolCategory.AUDIO, "audio-joiner", offline = true, popular = false),
         Tool("screenshot-to-text", "Screenshot to Text (OCR)", "Extract text from screenshots using OCR", ToolCategory.TEXT, "screenshot-to-text", offline = true, popular = false),
         Tool("image-to-text", "Image to Text Extractor", "Extract text from any image", ToolCategory.TEXT, "image-to-text", offline = true, popular = false),

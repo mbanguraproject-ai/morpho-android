@@ -20,6 +20,12 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import android.speech.SpeechRecognizer
+import android.speech.RecognizerIntent
+import android.speech.RecognitionListener
+import android.content.Intent
+import android.os.Bundle
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,13 +44,13 @@ import cc.devbangs.morpho.ui.theme.*
 import java.io.File
 
 fun hasLastTool(id: String): Boolean = id in setOf(
-    "voice-recorder","audio-joiner","pdf-header-footer","pdf-bates-numbering"
-)
+    "voice-recorder","audio-joiner","pdf-header-footer","pdf-bates-numbering", "speech-to-text")
 
 @Composable
 fun LastTool(id: String, accent: Color) {
     when (id) {
         "voice-recorder" -> VoiceRecorder(accent)
+        "speech-to-text" -> SpeechToText(accent)
         "audio-joiner" -> AudioJoiner(accent)
         "pdf-header-footer" -> PdfStamp(id, accent)
         "pdf-bates-numbering" -> PdfStamp(id, accent)
@@ -256,5 +262,64 @@ private fun ActionRow(accent: Color, onSave: () -> Unit, onShare: () -> Unit) {
                 Text("Share", color = accent, fontSize = 15.sp)
             }
         }
+    }
+}
+
+@Composable
+private fun SpeechToText(accent: Color) {
+    val ctx = LocalContext.current
+    var listening by remember { mutableStateOf(false) }
+    var text by remember { mutableStateOf("") }
+    var msg by remember { mutableStateOf("") }
+    var hasPerm by remember { mutableStateOf(
+        ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+    ) }
+    val permLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()) { hasPerm = it }
+
+    val recognizer = remember {
+        if (SpeechRecognizer.isRecognitionAvailable(ctx)) SpeechRecognizer.createSpeechRecognizer(ctx) else null
+    }
+    DisposableEffect(Unit) { onDispose { recognizer?.destroy() } }
+
+    fun start() {
+        val r = recognizer ?: run { msg = "\u26a0 Speech recognition isn't available on this device."; return }
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+        }
+        r.setRecognitionListener(object : RecognitionListener {
+            override fun onReadyForSpeech(params: Bundle?) { msg = "Listening\u2026" }
+            override fun onBeginningOfSpeech() {}
+            override fun onRmsChanged(rms: Float) {}
+            override fun onBufferReceived(buffer: ByteArray?) {}
+            override fun onEndOfSpeech() {}
+            override fun onError(err: Int) { listening = false; msg = "Tap to try again." }
+            override fun onResults(b: Bundle?) {
+                val res = b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                if (!res.isNullOrEmpty()) text = (text + " " + res[0]).trim()
+                listening = false; msg = ""
+            }
+            override fun onPartialResults(b: Bundle?) {}
+            override fun onEvent(type: Int, params: Bundle?) {}
+        })
+        r.startListening(intent); listening = true
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+        if (!hasPerm) {
+            ToolButton("Grant microphone access", accent) { permLauncher.launch(Manifest.permission.RECORD_AUDIO) }
+        } else {
+            ToolButton(if (listening) "Listening\u2026" else "Start speaking", accent, enabled = !listening) { start() }
+            Text("Converts your speech to text. May use internet on some devices.", color = InkFaint, fontSize = 12.sp)
+        }
+        if (text.isNotEmpty()) {
+            ToolResult(text, accent, mono = false, label = "TRANSCRIPT")
+            Box(Modifier.fillMaxWidth().clip(Shape.field).background(accent.copy(alpha = 0.10f))
+                .clickable { text = "" }.padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
+                Text("Clear", color = accent, fontSize = 14.sp)
+            }
+        }
+        if (msg.isNotEmpty()) Text(msg, color = InkSoft, fontSize = 13.sp)
     }
 }
