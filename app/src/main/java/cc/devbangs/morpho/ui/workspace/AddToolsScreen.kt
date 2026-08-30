@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cc.devbangs.morpho.core.Shape
 import cc.devbangs.morpho.core.Space
+import cc.devbangs.morpho.data.Recommender
 import cc.devbangs.morpho.data.Tool
 import cc.devbangs.morpho.data.ToolCategory
 import cc.devbangs.morpho.data.ToolRegistry
@@ -61,6 +62,9 @@ fun AddToolsScreen(
         }
     }
     val added = Workspace.toolIds.size
+    val showRecommended = query.isBlank() && category == null
+    val recommended = if (showRecommended) Recommender.forWorkspace() else emptyList()
+    val recLabel = if (Recommender.isPersonal(recommended)) "RECOMMENDED" else "POPULAR"
 
     Column(Modifier.fillMaxSize().background(Paper)) {
         Column(
@@ -143,6 +147,13 @@ fun AddToolsScreen(
                     top = Space.xs, bottom = contentPadding.calculateBottomPadding() + Space.xxl
                 )
             ) {
+                if (recommended.isNotEmpty()) {
+                    item { AddSectionLabel(recLabel) }
+                    items(recommended, key = { "rec-" + it.tool.id }) { s ->
+                        AddToolRow(s.tool, s.reason)
+                    }
+                    item { AddSectionLabel("ALL TOOLS") }
+                }
                 items(results, key = { it.id }) { t -> AddToolRow(t) }
             }
         }
@@ -171,7 +182,14 @@ private fun FilterChip(
 }
 
 @Composable
-private fun AddToolRow(t: Tool) {
+private fun AddSectionLabel(text: String) {
+    Text(text, color = InkFaint, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+        letterSpacing = 1.2.sp,
+        modifier = Modifier.padding(top = Space.md, bottom = Space.xs))
+}
+
+@Composable
+private fun AddToolRow(t: Tool, reason: String? = null) {
     val accent = t.category.accent
     val inWorkspace = Workspace.contains(t.id)
     Row(
@@ -186,7 +204,8 @@ private fun AddToolRow(t: Tool) {
         Column(Modifier.weight(1f)) {
             Text(t.name, style = MaterialTheme.typography.titleMedium, color = Ink,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(t.short, style = MaterialTheme.typography.bodyMedium, color = InkSoft,
+            Text(reason ?: t.short, style = MaterialTheme.typography.bodyMedium,
+                color = if (reason != null) Cobalt else InkSoft,
                 maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
         Spacer(Modifier.width(Space.md))

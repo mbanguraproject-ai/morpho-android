@@ -53,6 +53,7 @@ fun OnboardingScreen(onDone: () -> Unit) {
     }
 
     fun finish() {
+        Workspace.setNeeds(needs.map { it.id })
         Workspace.setAll(chosen.toList())
         onDone()
     }

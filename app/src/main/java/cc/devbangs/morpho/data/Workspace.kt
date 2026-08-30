@@ -22,6 +22,7 @@ object Workspace {
     private const val KEY_TOOLS = "workspace_tools"
     private const val KEY_RECENT = "recent_tools"
     private const val KEY_ONBOARDED = "onboarded"
+    private const val KEY_NEEDS = "onboarding_needs"
     private const val SEP = ","
 
     /** How many recently-opened tools to keep. */
@@ -30,6 +31,7 @@ object Workspace {
     private val _tools = mutableStateOf<List<String>>(emptyList())
     private val _recent = mutableStateOf<List<String>>(emptyList())
     private val _onboarded = mutableStateOf(false)
+    private val _needs = mutableStateOf<List<String>>(emptyList())
 
     private var appCtx: Context? = null
 
@@ -50,6 +52,9 @@ object Workspace {
     /** True once onboarding has been completed or skipped. */
     val onboarded: Boolean get() = _onboarded.value
 
+    /** Category ids the user picked during onboarding, if any. */
+    val needIds: List<String> get() = _needs.value
+
     fun contains(id: String): Boolean = _tools.value.contains(id)
 
     fun init(ctx: Context) {
@@ -58,6 +63,8 @@ object Workspace {
         _tools.value = decode(p.getString(KEY_TOOLS, "").orEmpty())
         _recent.value = decode(p.getString(KEY_RECENT, "").orEmpty())
         _onboarded.value = p.getBoolean(KEY_ONBOARDED, false)
+        _needs.value = p.getString(KEY_NEEDS, "").orEmpty()
+            .split(SEP).map { it.trim() }.filter { it.isNotEmpty() }
     }
 
     /** Add a tool to the end of the workspace. No-op if unknown or already present. */
@@ -104,6 +111,12 @@ object Workspace {
         persist()
     }
 
+    /** Remember which categories onboarding was told about. */
+    fun setNeeds(categoryIds: List<String>) {
+        _needs.value = categoryIds.distinct()
+        persist()
+    }
+
     /** Mark onboarding done, whether the user completed or skipped it. */
     fun completeOnboarding() {
         _onboarded.value = true
@@ -124,6 +137,7 @@ object Workspace {
             .putString(KEY_TOOLS, _tools.value.joinToString(SEP))
             .putString(KEY_RECENT, _recent.value.joinToString(SEP))
             .putBoolean(KEY_ONBOARDED, _onboarded.value)
+            .putString(KEY_NEEDS, _needs.value.joinToString(SEP))
             .apply()
     }
 
