@@ -52,3 +52,21 @@
 # ---- UMP consent SDK ----
 -keep class com.google.android.ump.** { *; }
 -dontwarn com.google.android.ump.**
+
+# ---- Networking (HttpURLConnection for CloudConvert Worker) ----
+# HttpURLConnection is core Android — no keep needed, but keep our billing model
+# fields that we read/send to the Worker (activeToken/activeProductId).
+-keep class cc.devbangs.morpho.billing.BillingManager { *; }
+
+# ---- JSON handling (org.json is part of Android; safe) ----
+-dontwarn org.json.**
+
+# ---- Kotlin metadata / reflection safety ----
+-keep class kotlin.Metadata { *; }
+-keepattributes RuntimeVisibleAnnotations, RuntimeVisibleParameterAnnotations
+
+# ---- Enum classes (ToolCategory, DocType) — keep valueOf/values used in when-blocks ----
+-keepclassmembers enum cc.devbangs.morpho.** {
+    public static **[] values();
+    public static ** valueOf(java.lang.String);
+}
