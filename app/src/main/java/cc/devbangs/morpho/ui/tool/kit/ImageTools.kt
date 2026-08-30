@@ -32,6 +32,9 @@ import cc.devbangs.morpho.core.Shape
 import cc.devbangs.morpho.core.Space
 import cc.devbangs.morpho.ui.icon.MorphoIcon
 import cc.devbangs.morpho.ui.theme.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
 fun hasImageTool(id: String): Boolean = id in setOf(
@@ -143,23 +146,38 @@ private fun TransformBody(id: String, src: Bitmap, accent: Color) {
     var scalePct by remember { mutableStateOf(100) }
     var rotation by remember { mutableStateOf(0) }
     var strength by remember { mutableStateOf(50) }
-    var watermark by remember { mutableStateOf("Morpho") }
+    var watermarkText by remember { mutableStateOf("Morpho") }
 
-    val out = remember(id, src, quality, scalePct, rotation, strength, watermark) {
-        when (id) {
-            "image-resizer","thumbnail-creator" -> scale(src, scalePct / 100f)
-            "image-rotator" -> rotate(src, rotation.toFloat())
-            "image-blur" -> boxBlur(src, (strength / 100f * 12).toInt().coerceAtLeast(1))
-            "sharpen-image" -> sharpen(src, strength / 100f)
-            "watermark-image" -> watermark(src, watermark)
-            else -> src // compressor, exif-remover, batch-convert: pixels unchanged, output re-encoded
-        }
-    }
     val isPng = id in setOf("exif-remover")
     val fmt = if (isPng) Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG
     val q = if (id == "image-compressor") quality else 92
-    val outSize = remember(out, q, fmt) { bitmapBytes(out, fmt, q) }
-    val srcSize = remember(src) { bitmapBytes(src, Bitmap.CompressFormat.JPEG, 100) }
+
+    // Both the transform and the size readout are expensive on a large photo:
+    // the readout is a full re-encode. Running them in composition meant every
+    // control tap - and every watermark keystroke - blocked the main thread.
+    // LaunchedEffect cancels on each parameter change, so the leading delay
+    // debounces held taps and typing instead of queueing work per character.
+    var out by remember(src) { mutableStateOf(src) }
+    var outSize by remember(src) { mutableStateOf(0L) }
+    var srcSize by remember(src) { mutableStateOf(0L) }
+    var working by remember(src) { mutableStateOf(true) }
+
+    LaunchedEffect(src) {
+        srcSize = withContext(Dispatchers.Default) {
+            bitmapBytes(src, Bitmap.CompressFormat.JPEG, 100)
+        }
+    }
+    LaunchedEffect(id, src, quality, scalePct, rotation, strength, watermarkText, fmt, q) {
+        working = true
+        delay(140)
+        val result = withContext(Dispatchers.Default) {
+            val bmp = applyTransform(id, src, scalePct, rotation, strength, watermarkText)
+            bmp to bitmapBytes(bmp, fmt, q)
+        }
+        out = result.first
+        outSize = result.second
+        working = false
+    }
 
     // controls
     when (id) {
@@ -168,7 +186,7 @@ private fun TransformBody(id: String, src: Bitmap, accent: Color) {
         "thumbnail-creator" -> StepControl("SIZE %", scalePct, listOf(10,25,40,60), accent) { scalePct = it }
         "image-rotator" -> StepControl("ROTATE°", rotation, listOf(0,90,180,270), accent) { rotation = it }
         "image-blur","sharpen-image" -> StepControl("STRENGTH", strength, listOf(25,50,75,100), accent) { strength = it }
-        "watermark-image" -> Column { FieldLabel("WATERMARK TEXT"); ToolInput(watermark, { watermark = it }, "Your text", minLines = 1) }
+        "watermark-image" -> Column { FieldLabel("WATERMARK TEXT"); ToolInput(watermarkText, { watermarkText = it }, "Your text", minLines = 1) }
     }
 
     // preview
@@ -183,9 +201,10 @@ private fun TransformBody(id: String, src: Bitmap, accent: Color) {
     // stats
     StatGrid(listOf(
         "Dimensions" to "${out.width}×${out.height}",
-        if (id == "image-compressor") "New size" to bytesHuman(outSize) else "Output" to bytesHuman(outSize),
-        "Original" to bytesHuman(srcSize),
-        "Saved" to if (srcSize > 0) "${(100 - outSize*100/srcSize).coerceAtLeast(0)}%" else "—"
+        (if (id == "image-compressor") "New size" else "Output") to sizeLabel(working, outSize),
+        "Original" to sizeLabel(false, srcSize),
+        "Saved" to if (working || srcSize <= 0L || outSize <= 0L) "…"
+            else "${(100 - outSize * 100 / srcSize).coerceAtLeast(0)}%"
     ), accent)
 
     // actions
@@ -229,6 +248,26 @@ private fun OutlineButton(text: String, accent: Color, onClick: () -> Unit) {
 }
 
 // ---- bitmap ops ----
+/** Pure transform, safe to call off the main thread. */
+private fun applyTransform(
+    id: String,
+    src: Bitmap,
+    scalePct: Int,
+    rotation: Int,
+    strength: Int,
+    watermarkText: String
+): Bitmap = when (id) {
+    "image-resizer", "thumbnail-creator" -> scale(src, scalePct / 100f)
+    "image-rotator" -> rotate(src, rotation.toFloat())
+    "image-blur" -> boxBlur(src, (strength / 100f * 12).toInt().coerceAtLeast(1))
+    "sharpen-image" -> sharpen(src, strength / 100f)
+    "watermark-image" -> watermark(src, watermarkText)
+    else -> src // compressor, exif-remover, batch-convert: pixels unchanged, output re-encoded
+}
+
+private fun sizeLabel(pending: Boolean, bytes: Long): String =
+    if (pending || bytes <= 0L) "…" else bytesHuman(bytes)
+
 private fun scale(b: Bitmap, f: Float): Bitmap {
     val w = (b.width * f).roundToInt().coerceAtLeast(1)
     val h = (b.height * f).roundToInt().coerceAtLeast(1)
