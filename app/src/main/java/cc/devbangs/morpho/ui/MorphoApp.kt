@@ -20,6 +20,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import cc.devbangs.morpho.core.Dest
+import cc.devbangs.morpho.data.Workspace
+import cc.devbangs.morpho.ui.onboarding.OnboardingScreen
 import cc.devbangs.morpho.ui.category.CategoryScreen
 import cc.devbangs.morpho.ui.components.MorphoBottomBar
 import cc.devbangs.morpho.ui.home.HomeScreen
@@ -35,6 +37,11 @@ import androidx.compose.runtime.remember
 
 @Composable
 fun MorphoApp() {
+    if (!Workspace.onboarded) {
+        OnboardingScreen(onDone = { Workspace.completeOnboarding() })
+        return
+    }
+
     val nav = rememberNavController()
     val backStack by nav.currentBackStackEntryAsState()
     val route = backStack?.destination?.route

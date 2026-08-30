@@ -21,6 +21,7 @@ object Workspace {
     private const val FILE = "morpho_workspace"
     private const val KEY_TOOLS = "workspace_tools"
     private const val KEY_RECENT = "recent_tools"
+    private const val KEY_ONBOARDED = "onboarded"
     private const val SEP = ","
 
     /** How many recently-opened tools to keep. */
@@ -28,6 +29,7 @@ object Workspace {
 
     private val _tools = mutableStateOf<List<String>>(emptyList())
     private val _recent = mutableStateOf<List<String>>(emptyList())
+    private val _onboarded = mutableStateOf(false)
 
     private var appCtx: Context? = null
 
@@ -45,6 +47,9 @@ object Workspace {
 
     val isEmpty: Boolean get() = _tools.value.isEmpty()
 
+    /** True once onboarding has been completed or skipped. */
+    val onboarded: Boolean get() = _onboarded.value
+
     fun contains(id: String): Boolean = _tools.value.contains(id)
 
     fun init(ctx: Context) {
@@ -52,6 +57,7 @@ object Workspace {
         val p = prefs(ctx)
         _tools.value = decode(p.getString(KEY_TOOLS, "").orEmpty())
         _recent.value = decode(p.getString(KEY_RECENT, "").orEmpty())
+        _onboarded.value = p.getBoolean(KEY_ONBOARDED, false)
     }
 
     /** Add a tool to the end of the workspace. No-op if unknown or already present. */
@@ -98,6 +104,12 @@ object Workspace {
         persist()
     }
 
+    /** Mark onboarding done, whether the user completed or skipped it. */
+    fun completeOnboarding() {
+        _onboarded.value = true
+        persist()
+    }
+
     fun clearRecent() {
         if (_recent.value.isEmpty()) return
         _recent.value = emptyList()
@@ -111,6 +123,7 @@ object Workspace {
         prefs(ctx).edit()
             .putString(KEY_TOOLS, _tools.value.joinToString(SEP))
             .putString(KEY_RECENT, _recent.value.joinToString(SEP))
+            .putBoolean(KEY_ONBOARDED, _onboarded.value)
             .apply()
     }
 
