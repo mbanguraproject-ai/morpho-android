@@ -93,7 +93,7 @@ fun MorphoApp() {
                     categoryId = id,
                     onBack = { nav.popBackStack() },
                     onOpenTool = { nav.navigate(Dest.Tool(it).route) },
-                    contentPadding = PaddingValues()
+                    contentPadding = bottomBarPadding(false)
                 )
             }
             composable(
@@ -113,20 +113,20 @@ fun MorphoApp() {
                 SearchScreen(
                     onBack = { nav.popBackStack() },
                     onOpenTool = { nav.navigate(Dest.Tool(it).route) },
-                    contentPadding = PaddingValues()
+                    contentPadding = bottomBarPadding(false)
                 )
             }
             composable(Dest.Settings.route) {
                 SettingsScreen(
                     onBack = { nav.popBackStack() },
                     onOpenPlus = { nav.navigate(Dest.Plus.route) },
-                    contentPadding = PaddingValues()
+                    contentPadding = bottomBarPadding(false)
                 )
             }
             composable(Dest.Plus.route) {
                 PlusScreen(
                     onBack = { nav.popBackStack() },
-                    contentPadding = PaddingValues()
+                    contentPadding = bottomBarPadding(false)
                 )
             }
         }
@@ -151,10 +151,18 @@ fun MorphoApp() {
     }
 }
 
-/** Reserve space for the bottom bar (58dp) + nav inset on top-level screens. */
+/**
+ * Bottom content inset for scrollable screens.
+ *
+ * [withBar] is true only for top-level screens that sit beneath the floating
+ * bottom bar; those reserve the bar height on top of the system inset.
+ *
+ * Every screen gets the navigation-bar inset so the final row can always be
+ * scrolled clear of Android system navigation (gesture and 3-button alike).
+ * The inset belongs to the scrollable content, not to a permanent footer.
+ */
 @Composable
-private fun bottomBarPadding(show: Boolean): PaddingValues =
-    PaddingValues(
-        bottom = if (show) 92.dp + WindowInsets.navigationBars
-            .asPaddingValues().calculateBottomPadding() else 0.dp
-    )
+private fun bottomBarPadding(withBar: Boolean): PaddingValues {
+    val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    return PaddingValues(bottom = if (withBar) 92.dp + navInset else navInset)
+}
