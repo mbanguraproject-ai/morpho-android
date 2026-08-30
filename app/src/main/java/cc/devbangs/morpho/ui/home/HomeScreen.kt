@@ -59,6 +59,7 @@ fun HomeScreen(
     onOpenTool: (String) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenAddTools: () -> Unit,
+    onArrange: () -> Unit,
     onExploreTools: () -> Unit,
     contentPadding: PaddingValues
 ) {
@@ -84,7 +85,7 @@ fun HomeScreen(
             if (workspace.isEmpty()) {
                 item { EmptyWorkspace(onOpenAddTools) }
             } else {
-                item { Eyebrow("YOUR WORKSPACE") }
+                item { Eyebrow("YOUR WORKSPACE", "Edit", onArrange) }
                 itemsIndexed(workspace.chunked(2)) { idx, row ->
                     Row(
                         Modifier.fillMaxWidth()
@@ -169,13 +170,25 @@ private fun EmptyWorkspace(onAdd: () -> Unit) {
 }
 
 @Composable
-private fun Eyebrow(text: String) {
-    Text(
-        text, color = InkFaint, fontSize = 11.sp,
-        fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp,
-        modifier = Modifier.padding(start = Space.gutter, end = Space.gutter,
-            top = Space.xl, bottom = Space.sm)
-    )
+private fun Eyebrow(text: String, action: String? = null, onAction: (() -> Unit)? = null) {
+    Row(
+        Modifier.fillMaxWidth().padding(start = Space.gutter, end = Space.gutter,
+            top = Space.xl, bottom = Space.sm),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text, color = InkFaint, fontSize = 11.sp,
+            fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp,
+            modifier = Modifier.weight(1f)
+        )
+        if (action != null && onAction != null) Text(
+            action, color = Cobalt, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.clip(Shape.pill).clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null, onClick = onAction
+            ).padding(horizontal = 8.dp, vertical = 4.dp)
+        )
+    }
 }
 
 @Composable

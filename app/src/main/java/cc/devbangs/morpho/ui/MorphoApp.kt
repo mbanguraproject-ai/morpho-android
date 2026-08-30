@@ -30,6 +30,7 @@ import cc.devbangs.morpho.ui.settings.SettingsScreen
 import cc.devbangs.morpho.ui.plus.PlusScreen
 import cc.devbangs.morpho.ui.tool.ToolScreen
 import cc.devbangs.morpho.ui.workspace.AddToolsScreen
+import cc.devbangs.morpho.ui.workspace.ArrangeWorkspaceScreen
 import cc.devbangs.morpho.ui.theme.Paper
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.haze
@@ -76,6 +77,7 @@ fun MorphoApp() {
                     onOpenTool = { nav.navigate(Dest.Tool(it).route) },
                     onOpenSettings = { nav.navigate(Dest.Settings.route) },
                     onOpenAddTools = { nav.navigate(Dest.AddTools.route) },
+                    onArrange = { nav.navigate(Dest.Arrange.route) },
                     onExploreTools = {
                         nav.navigate(Dest.Categories.route) {
                             popUpTo(Dest.Home.route) { inclusive = false }
@@ -138,6 +140,12 @@ fun MorphoApp() {
             }
             composable(Dest.AddTools.route) {
                 AddToolsScreen(
+                    onBack = { nav.popBackStack() },
+                    contentPadding = bottomBarPadding(false)
+                )
+            }
+            composable(Dest.Arrange.route) {
+                ArrangeWorkspaceScreen(
                     onBack = { nav.popBackStack() },
                     contentPadding = bottomBarPadding(false)
                 )

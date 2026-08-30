@@ -15,8 +15,10 @@ import com.adamglin.phosphoricons.bold.Article
 import com.adamglin.phosphoricons.bold.Barcode
 import com.adamglin.phosphoricons.bold.BracketsCurly
 import com.adamglin.phosphoricons.bold.Brain
+import com.adamglin.phosphoricons.bold.CaretDown
 import com.adamglin.phosphoricons.bold.CaretLeft
 import com.adamglin.phosphoricons.bold.CaretRight
+import com.adamglin.phosphoricons.bold.CaretUp
 import com.adamglin.phosphoricons.bold.Check
 import com.adamglin.phosphoricons.bold.Checks
 import com.adamglin.phosphoricons.bold.Clock
@@ -198,6 +200,8 @@ object ToolIcons {
         "tab-search" to PhosphorIcons.Bold.MagnifyingGlass,
         "chevron-left" to PhosphorIcons.Bold.CaretLeft,
         "chevron-right" to PhosphorIcons.Bold.CaretRight,
+        "chevron-up" to PhosphorIcons.Bold.CaretUp,
+        "chevron-down" to PhosphorIcons.Bold.CaretDown,
         "close" to PhosphorIcons.Bold.X,
         "check" to PhosphorIcons.Bold.Check,
         "copy" to PhosphorIcons.Bold.Copy,
