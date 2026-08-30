@@ -156,6 +156,44 @@ object ToolSearch {
         }
     }
 
+    /**
+     * Blueprint section 11 - organise a category's depth into sections.
+     *
+     * Returns an empty list when the category should stay a flat grid: below
+     * [SECTION_MIN] tools it already reads fine, and fewer than three sections
+     * means the headers add structure without adding clarity.
+     *
+     * Popular leads when there are at least two popular tools. Sections of one
+     * fall into Advanced rather than standing as a header over a single card.
+     */
+    fun curate(tools: List<Tool>): List<Pair<String, List<Tool>>> {
+        if (tools.size < SECTION_MIN) return emptyList()
+
+        val popular = tools.filter { it.popular }
+        val leadWithPopular = popular.size >= 2
+        val rest = if (leadWithPopular) tools.filterNot { it.popular } else tools
+        val buckets = rest.groupBy { group(it) }
+
+        val out = mutableListOf<Pair<String, List<Tool>>>()
+        val leftovers = mutableListOf<Tool>()
+        if (leadWithPopular) out += "Popular" to popular
+
+        Group.entries.forEach { g ->
+            val bucket = buckets[g].orEmpty()
+            when {
+                bucket.isEmpty() -> Unit
+                g == Group.OTHER || bucket.size < 2 -> leftovers += bucket
+                else -> out += g.label to bucket
+            }
+        }
+        if (leftovers.isNotEmpty()) out += "Advanced" to leftovers
+
+        return if (out.size >= 3) out else emptyList()
+    }
+
+    /** Below this a category reads fine as one grid. */
+    private const val SECTION_MIN = 12
+
     /** Results split into intent groups, in a stable display order. */
     fun grouped(q: String): List<Pair<Group, List<Tool>>> {
         val hits = search(q)

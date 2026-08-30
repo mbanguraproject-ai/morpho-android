@@ -27,6 +27,7 @@ import cc.devbangs.morpho.core.Space
 import cc.devbangs.morpho.data.Tool
 import cc.devbangs.morpho.data.ToolCategory
 import cc.devbangs.morpho.data.ToolRegistry
+import cc.devbangs.morpho.data.ToolSearch
 import cc.devbangs.morpho.ui.components.IconButtonMorpho
 import cc.devbangs.morpho.ui.components.cornerPetal
 import cc.devbangs.morpho.ui.components.morphLift
@@ -43,6 +44,7 @@ fun CategoryScreen(
     val category = ToolCategory.from(categoryId)
     val tools = ToolRegistry.byCategory[category].orEmpty()
     val tint = category.accent
+    val sections = remember(category) { ToolSearch.curate(tools) }
 
     LazyColumn(
         Modifier.fillMaxSize().background(Paper),
@@ -79,15 +81,39 @@ fun CategoryScreen(
                 }
             }
         }
-        items(tools.chunked(2)) { row ->
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = Space.gutter, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(Space.md)
-            ) {
-                row.forEach { t -> ToolCardTall(t, { onOpenTool(t.id) }, Modifier.weight(1f)) }
-                if (row.size == 1) Spacer(Modifier.weight(1f))
+        if (sections.isEmpty()) {
+            items(tools.chunked(2), key = { it.first().id }) { row ->
+                ToolGridRow(row, onOpenTool)
+            }
+        } else {
+            sections.forEach { (label, list) ->
+                item(key = "sec-" + label) { SectionLabel(label) }
+                items(list.chunked(2), key = { it.first().id }) { row ->
+                    ToolGridRow(row, onOpenTool)
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text.uppercase(), color = InkFaint, fontSize = 11.sp,
+        fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp,
+        modifier = Modifier.padding(start = Space.gutter, end = Space.gutter,
+            top = Space.lg, bottom = Space.xs)
+    )
+}
+
+@Composable
+private fun ToolGridRow(row: List<Tool>, onOpenTool: (String) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = Space.gutter, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(Space.md)
+    ) {
+        row.forEach { t -> ToolCardTall(t, { onOpenTool(t.id) }, Modifier.weight(1f)) }
+        if (row.size == 1) Spacer(Modifier.weight(1f))
     }
 }
 
