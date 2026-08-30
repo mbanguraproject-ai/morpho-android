@@ -1,6 +1,7 @@
 package cc.devbangs.morpho.ui.tool
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -61,6 +62,7 @@ fun ToolScreen(
     toolId: String,
     onBack: () -> Unit,
     onOpenTool: (String) -> Unit,
+    onOpenPlus: () -> Unit = {},
     contentPadding: PaddingValues
 ) {
     val tool = ToolRegistry.byId(toolId)
@@ -133,7 +135,7 @@ fun ToolScreen(
             HowItWorks(tool.category.accent)
             Spacer(Modifier.height(Space.lg))
             // Real tool UIs mount here via dispatch.
-            ToolHost(tool = tool, onOpenTool = onOpenTool)
+            ToolHost(tool = tool, onOpenTool = onOpenTool, onOpenPlus = onOpenPlus)
         }
     }
 }
@@ -179,7 +181,7 @@ private fun RowScope.StepConnector(accent: Color) {
 @Composable
 private fun StatusLabel(tool: Tool) {
     val (txt, c) = if (tool.offline) "Works offline" to tool.category.accent
-                   else "Server tool · coming soon" to InkSoft
+                   else "Morpho Plus" to tool.category.accent
     Row(verticalAlignment = Alignment.CenterVertically) {
         MorphoIcon(if (tool.offline) "check" else "clock", tint = c, size = 13.dp)
         Spacer(Modifier.width(5.dp))
@@ -189,7 +191,12 @@ private fun StatusLabel(tool: Tool) {
 
 /** Dispatch to the real per-tool UI, else a branded placeholder. */
 @Composable
-private fun ToolHost(tool: Tool, onOpenTool: (String) -> Unit) {
+private fun ToolHost(tool: Tool, onOpenTool: (String) -> Unit, onOpenPlus: () -> Unit) {
+    // Plus gate: server tools require an active Plus subscription
+    if (!tool.offline && !cc.devbangs.morpho.ads.AdState.isPlus.value) {
+        PlusGate(tool, onOpenPlus)
+        return
+    }
     when {
         hasTextDevTool(tool.id) -> TextDevTool(tool.id, tool.category.accent)
         hasGeneratorTool(tool.id) -> GeneratorTool(tool.id, tool.category.accent)
@@ -207,6 +214,29 @@ private fun ToolHost(tool: Tool, onOpenTool: (String) -> Unit) {
         tool.id == "pdf-signer" -> PdfSignerTool(tool.category.accent)
         tool.id == "resume-builder" -> ResumeTool(tool.category.accent)
         else -> Placeholder(tool)
+    }
+}
+
+@Composable
+private fun PlusGate(tool: Tool, onOpenPlus: () -> Unit) {
+    Box(
+        Modifier.fillMaxWidth().clip(Shape.card).background(PaperSunk).padding(Space.xl),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally,
+               verticalArrangement = Arrangement.spacedBy(Space.md)) {
+            MorphoIcon("crown", tint = tool.category.accent, size = 34.dp)
+            Text("Morpho Plus feature", color = Ink, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text("${tool.name} runs on our secure conversion engine. Unlock it and all server tools with Morpho Plus.",
+                color = InkSoft, textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(Space.sm))
+            Box(
+                Modifier.clip(Shape.field).background(tool.category.accent)
+                    .clickable { onOpenPlus() }.padding(horizontal = 28.dp, vertical = 13.dp)
+            ) {
+                Text("Upgrade to Plus", color = Paper, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            }
+        }
     }
 }
 
