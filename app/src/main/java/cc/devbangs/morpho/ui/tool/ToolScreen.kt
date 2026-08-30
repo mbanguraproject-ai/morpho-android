@@ -27,6 +27,7 @@ import cc.devbangs.morpho.core.Shape
 import cc.devbangs.morpho.core.Space
 import cc.devbangs.morpho.data.Tool
 import cc.devbangs.morpho.data.ToolRegistry
+import cc.devbangs.morpho.data.Workspace
 import cc.devbangs.morpho.ui.components.IconButtonMorpho
 import cc.devbangs.morpho.ui.icon.MorphoIcon
 import cc.devbangs.morpho.ui.tool.kit.hasTextDevTool
@@ -76,6 +77,7 @@ fun ToolScreen(
         c as? android.app.Activity
     }
     androidx.compose.runtime.LaunchedEffect(toolId) {
+        Workspace.recordUse(toolId)
         AdState.resetUsed()
         activity?.let { InterstitialManager.preload(it) }  // keep one ready
     }

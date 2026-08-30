@@ -4,6 +4,7 @@ import android.app.Application
 import android.util.Log
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import com.google.android.gms.ads.MobileAds
+import cc.devbangs.morpho.data.Workspace
 import cc.devbangs.morpho.notify.Notifier
 
 class MorphoApplication : Application() {
@@ -23,6 +24,9 @@ class MorphoApplication : Application() {
 
         runCatching { Notifier.ensureChannel(applicationContext) }
             .onFailure { Log.e("MorphoInit", "Notifier channel failed", it) }
+
+        runCatching { Workspace.init(applicationContext) }
+            .onFailure { Log.e("MorphoInit", "Workspace init failed", it) }
 
         // AdMob on a background thread, wrapped so SDK init can never crash the app
         Thread {
