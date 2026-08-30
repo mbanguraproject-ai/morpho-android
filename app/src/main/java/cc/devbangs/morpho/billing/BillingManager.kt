@@ -23,6 +23,9 @@ object BillingManager {
     val monthlyPrice = mutableStateOf<String?>(null)   // e.g. "$2.99"
     val yearlyPrice = mutableStateOf<String?>(null)     // e.g. "$19.99"
     val statusMessage = mutableStateOf<String?>(null)
+    // retained for server-side verification (sent to the conversion Worker)
+    @Volatile var activeToken: String? = null
+    @Volatile var activeProductId: String? = null
 
     private var monthlyDetails: ProductDetails? = null
     private var yearlyDetails: ProductDetails? = null
@@ -116,6 +119,10 @@ object BillingManager {
                     it.purchaseState == Purchase.PurchaseState.PURCHASED
                 }
                 AdState.isPlus.value = active
+                purchases.firstOrNull { it.purchaseState == Purchase.PurchaseState.PURCHASED }?.let {
+                    activeToken = it.purchaseToken
+                    activeProductId = it.products.firstOrNull()
+                }
                 purchases.forEach { handlePurchase(it) }
             }
         }
@@ -126,6 +133,8 @@ object BillingManager {
         if (purchase.purchaseState != Purchase.PurchaseState.PURCHASED) return
         // Unlock Plus immediately
         AdState.isPlus.value = true
+        activeToken = purchase.purchaseToken
+        activeProductId = purchase.products.firstOrNull()
         statusMessage.value = null
         // Acknowledge (required within 3 days or Google refunds the purchase)
         if (!purchase.isAcknowledged) {

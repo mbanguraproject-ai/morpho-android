@@ -9,6 +9,7 @@ import java.net.URL
 
 /** Base URL of the Morpho conversion Worker. */
 private const val CONVERT_BASE = "https://morpho-convert.secretsafe-cc.workers.dev"
+private const val SHARED_SECRET = "ZQP2uWmHhajJzjUKm358h-ot1D4_INu9bHU7Q-kPKbI"
 
 /**
  * Send a file to the conversion Worker and get the converted bytes back.
@@ -27,6 +28,13 @@ fun cloudConvert(ctx: Context, uri: Uri, from: String, to: String, outName: Stri
             connectTimeout = 30000
             readTimeout = 120000   // conversions can take a bit
             setRequestProperty("Content-Type", "application/octet-stream")
+            setRequestProperty("X-Morpho-Key", SHARED_SECRET)
+            cc.devbangs.morpho.billing.BillingManager.activeToken?.let {
+                setRequestProperty("X-Morpho-Token", it)
+            }
+            cc.devbangs.morpho.billing.BillingManager.activeProductId?.let {
+                setRequestProperty("X-Morpho-Product", it)
+            }
         }
         conn.outputStream.use { it.write(input) }
 
