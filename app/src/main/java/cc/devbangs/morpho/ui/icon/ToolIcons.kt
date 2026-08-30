@@ -123,9 +123,17 @@ import com.adamglin.phosphoricons.bold.Function
 import com.adamglin.phosphoricons.bold.LinkBreak
 import com.adamglin.phosphoricons.bold.LinkSimpleHorizontal
 import com.adamglin.phosphoricons.bold.Textbox
+import com.adamglin.phosphoricons.bold.FileXls
+import com.adamglin.phosphoricons.bold.FilePpt
 
 object ToolIcons {
     private val map: Map<String, ImageVector> = mapOf(
+        "pdf-to-excel" to PhosphorIcons.Bold.FileXls,
+        "excel-to-pdf" to PhosphorIcons.Bold.FileXls,
+        "pdf-to-powerpoint" to PhosphorIcons.Bold.FilePpt,
+        "ppt-to-pdf" to PhosphorIcons.Bold.FilePpt,
+        "pdf-to-html" to PhosphorIcons.Bold.FileHtml,
+
         "text-formatter" to PhosphorIcons.Bold.TextAlignLeft,
         "remove-duplicate-lines" to PhosphorIcons.Bold.Rows,
         "text-sorter" to PhosphorIcons.Bold.SortAscending,

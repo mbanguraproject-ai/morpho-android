@@ -43,7 +43,7 @@ import java.io.ByteArrayOutputStream
 
 fun hasPdfTool(id: String): Boolean = id in setOf(
     "jpg-to-pdf","image-to-pdf","pdf-to-jpg","merge-pdf","pdf-page-rotator",
-    "pdf-page-numbering","pdf-watermark","pdf-splitter","pdf-page-extractor", "scan-to-pdf", "word-to-pdf", "pdf-to-word"
+    "pdf-page-numbering","pdf-watermark","pdf-splitter","pdf-page-extractor", "scan-to-pdf", "word-to-pdf", "pdf-to-word", "pdf-to-excel", "excel-to-pdf", "pdf-to-powerpoint", "ppt-to-pdf", "pdf-to-html", "svg-to-png", "mp3-converter", "video-compressor"
 )
 
 @Composable
@@ -52,7 +52,15 @@ fun PdfTool(id: String, accent: Color, onOpenTool: (String) -> Unit = {}) {
         "jpg-to-pdf","image-to-pdf" -> ImagesToPdf(accent, onOpenTool)
         "scan-to-pdf" -> ScanToPdf(accent, onOpenTool)
         "word-to-pdf" -> WordToPdf(accent)
-        "pdf-to-word" -> PdfToWord(accent)
+        "pdf-to-word" -> ConvertTool(accent, "pdf", "docx", "PDF", "Word", "application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+        "pdf-to-excel" -> ConvertTool(accent, "pdf", "xlsx", "PDF", "Excel", "application/pdf", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        "excel-to-pdf" -> ConvertTool(accent, "xlsx", "pdf", "Excel", "PDF", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/pdf")
+        "pdf-to-powerpoint" -> ConvertTool(accent, "pdf", "pptx", "PDF", "PowerPoint", "application/pdf", "application/vnd.openxmlformats-officedocument.presentationml.presentation")
+        "ppt-to-pdf" -> ConvertTool(accent, "pptx", "pdf", "PowerPoint", "PDF", "application/vnd.openxmlformats-officedocument.presentationml.presentation", "application/pdf")
+        "pdf-to-html" -> ConvertTool(accent, "pdf", "html", "PDF", "HTML", "application/pdf", "text/html")
+        "svg-to-png" -> ConvertTool(accent, "svg", "png", "SVG", "PNG", "image/svg+xml", "image/png")
+        "mp3-converter" -> ConvertTool(accent, "", "mp3", "Audio", "MP3", "audio/*", "audio/mpeg")
+        "video-compressor" -> VideoCompressor(accent)
         "merge-pdf" -> MergePdf(accent, onOpenTool)
         else -> PdfFromSingle(id, accent, onOpenTool)
     }
@@ -480,32 +488,85 @@ private fun WordToPdf(accent: Color) {
 }
 
 @androidx.compose.runtime.Composable
-private fun PdfToWord(accent: Color) {
+private fun ConvertTool(
+    accent: Color, from: String, to: String,
+    fromLabel: String, toLabel: String,
+    inputMime: String, outputMime: String
+) {
     val ctx = LocalContext.current
     var uri by remember { mutableStateOf<Uri?>(null) }
     var busy by remember { mutableStateOf(false) }
     var msg by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u -> uri = u; msg = "" }
+    val outExt = to
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
-        PickRow(if (uri == null) "Choose a PDF" else "PDF selected \u2713", "file-add", accent) {
-            picker.launch(arrayOf("application/pdf"))
+        PickRow(if (uri == null) "Choose a $fromLabel file" else "$fromLabel selected \u2713", "file-add", accent) {
+            picker.launch(arrayOf(inputMime))
         }
         if (uri != null) {
-            Text("Converts your PDF into an editable Word document. Needs internet.", color = InkFaint, fontSize = 12.sp)
-            if (busy) ProcessingCard("Converting to Word...", accent)
-            else ToolButton("Convert to Word", accent) {
+            Text("Converts your $fromLabel into $toLabel. Needs internet.", color = InkFaint, fontSize = 12.sp)
+            if (busy) ProcessingCard("Converting to $toLabel...", accent)
+            else ToolButton("Convert to $toLabel", accent) {
                 busy = true; val u = uri!!
                 scope.launch {
                     val out = withContext(Dispatchers.IO) {
-                        cloudConvert(ctx, u, "pdf", "docx", "converted_${System.currentTimeMillis()}.docx")
+                        cloudConvert(ctx, u, from, to, "converted_${System.currentTimeMillis()}.$outExt")
                     }
                     if (out != null) {
-                        saveMediaToGallery(ctx, out, out.name, false)
-                        msg = "Saved to your files \u2713"
+                        saveBytesToDownloads(ctx, out.readBytes(), out.name, outputMime)
+                        msg = "Saved to Download/Morpho \u2713"
                     } else {
                         msg = "\u26a0 Conversion failed. Check your connection and try again."
                     }
+                    busy = false
+                }
+            }
+            if (msg.isNotEmpty()) Text(msg, color = InkSoft, fontSize = 13.sp)
+        }
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun VideoCompressor(accent: Color) {
+    val ctx = LocalContext.current
+    var uri by remember { mutableStateOf<Uri?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    var msg by remember { mutableStateOf("") }
+    var level by remember { mutableStateOf(1) }  // 0=light,1=balanced,2=strong
+    val scope = rememberCoroutineScope()
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u -> uri = u; msg = "" }
+    // crf: higher = more compression / smaller. width caps resolution.
+    val presets = listOf(
+        Triple("Light", 23, 0),
+        Triple("Balanced", 28, 1280),
+        Triple("Strong", 32, 854)
+    )
+    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+        PickRow(if (uri == null) "Choose a video" else "Video selected \u2713", "cat-video", accent) {
+            picker.launch(arrayOf("video/*"))
+        }
+        if (uri != null) {
+            FieldLabel("COMPRESSION")
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+                presets.forEachIndexed { i, (lbl, _, _) ->
+                    Box(Modifier.weight(1f)) { ToolButton(lbl, if (level==i) accent else accent.copy(alpha=0.35f)) { level = i } }
+                }
+            }
+            Text("Re-encodes the video smaller. Needs internet.", color = InkFaint, fontSize = 12.sp)
+            if (busy) ProcessingCard("Compressing video...", accent)
+            else ToolButton("Compress video", accent) {
+                busy = true; val u = uri!!
+                val (_, crf, width) = presets[level]
+                val extra = "&crf=$crf" + (if (width > 0) "&width=$width" else "")
+                scope.launch {
+                    val out = withContext(Dispatchers.IO) {
+                        cloudConvert(ctx, u, "", "mp4", "compressed_${System.currentTimeMillis()}.mp4", extra)
+                    }
+                    if (out != null) {
+                        saveMediaToGallery(ctx, out, out.name, true)
+                        msg = "Saved to your gallery \u2713"
+                    } else msg = "\u26a0 Compression failed. Check your connection and try again."
                     busy = false
                 }
             }

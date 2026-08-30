@@ -52,6 +52,7 @@ import cc.devbangs.morpho.ui.tool.kit.hasEncoderTool
 import cc.devbangs.morpho.ui.tool.kit.EncoderTool
 import cc.devbangs.morpho.ui.tool.invoice.InvoiceTool
 import cc.devbangs.morpho.ui.tool.invoice.DocType
+import cc.devbangs.morpho.ui.tool.kit.PdfSignerTool
 import cc.devbangs.morpho.ui.tool.resume.ResumeTool
 import cc.devbangs.morpho.ui.theme.*
 
@@ -203,6 +204,7 @@ private fun ToolHost(tool: Tool, onOpenTool: (String) -> Unit) {
         tool.id == "invoice-generator" -> InvoiceTool(tool.category.accent, DocType.INVOICE)
         tool.id == "receipt-generator" -> InvoiceTool(tool.category.accent, DocType.RECEIPT)
         tool.id == "quotation-generator" -> InvoiceTool(tool.category.accent, DocType.QUOTE)
+        tool.id == "pdf-signer" -> PdfSignerTool(tool.category.accent)
         tool.id == "resume-builder" -> ResumeTool(tool.category.accent)
         else -> Placeholder(tool)
     }

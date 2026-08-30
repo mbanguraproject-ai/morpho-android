@@ -4,9 +4,14 @@ package cc.devbangs.morpho.data
 object ToolRegistry {
     val all: List<Tool> = listOf(
         Tool("pdf-unlocker", "PDF Unlocker", "Remove PDF password and restrictions", ToolCategory.PDF, "pdf-unlocker", offline = true, popular = false),
-        Tool("pdf-signer", "PDF Signer", "Add signatures to PDF documents", ToolCategory.PDF, "pdf-signer", offline = false, popular = false),
+        Tool("pdf-signer", "PDF Signer", "Draw and add your signature to a PDF", ToolCategory.PDF, "pdf-signer", offline = true, popular = false),
         Tool("pdf-editor", "PDF Editor", "Add text and annotations to PDFs", ToolCategory.PDF, "pdf-editor", offline = false, popular = false),
         Tool("pdf-to-word", "PDF to Word Converter", "Convert PDF files to editable Word documents", ToolCategory.PDF, "pdf-to-word", offline = false, popular = true),
+        Tool("pdf-to-excel", "PDF to Excel Converter", "Convert PDF tables to editable Excel", ToolCategory.PDF, "pdf-to-excel", offline = false, popular = true),
+        Tool("excel-to-pdf", "Excel to PDF Converter", "Convert Excel spreadsheets to PDF", ToolCategory.PDF, "excel-to-pdf", offline = false, popular = false),
+        Tool("pdf-to-powerpoint", "PDF to PowerPoint Converter", "Convert PDF into editable slides", ToolCategory.PDF, "pdf-to-powerpoint", offline = false, popular = false),
+        Tool("ppt-to-pdf", "PowerPoint to PDF Converter", "Convert slides to PDF", ToolCategory.PDF, "ppt-to-pdf", offline = false, popular = false),
+        Tool("pdf-to-html", "PDF to HTML Converter", "Convert PDF into an HTML page", ToolCategory.PDF, "pdf-to-html", offline = false, popular = false),
         Tool("word-to-pdf", "Word to PDF Converter", "Convert a Word document's text to PDF", ToolCategory.PDF, "word-to-pdf", offline = true, popular = true),
         Tool("pdf-compressor", "PDF Compressor", "Reduce PDF file size instantly", ToolCategory.PDF, "pdf-compressor", offline = true, popular = true),
         Tool("merge-pdf", "Merge PDF", "Combine multiple PDFs into one", ToolCategory.PDF, "merge-pdf", offline = true, popular = true),

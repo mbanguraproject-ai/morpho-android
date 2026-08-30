@@ -15,10 +15,12 @@ private const val CONVERT_BASE = "https://morpho-convert.secretsafe-cc.workers.d
  * Runs a blocking network call — call from Dispatchers.IO.
  * Returns the converted File in cache, or null on failure.
  */
-fun cloudConvert(ctx: Context, uri: Uri, from: String, to: String, outName: String): File? {
+fun cloudConvert(ctx: Context, uri: Uri, from: String, to: String, outName: String, extraParams: String = ""): File? {
     return try {
         val input = ctx.contentResolver.openInputStream(uri)?.readBytes() ?: return null
-        val url = URL("$CONVERT_BASE/?from=$from&to=$to&name=input.$from")
+        val ext = from.ifBlank { "bin" }
+        val fromParam = if (from.isBlank()) "" else "from=$from&"
+        val url = URL("$CONVERT_BASE/?${fromParam}to=$to&name=input.$ext$extraParams")
         val conn = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             doOutput = true
