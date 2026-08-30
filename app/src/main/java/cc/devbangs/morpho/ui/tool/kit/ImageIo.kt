@@ -26,11 +26,17 @@ fun decodeBitmap(ctx: Context, uri: Uri, maxDim: Int = 4096): Bitmap? {
     } catch (e: Exception) { null }
 }
 
-/** Save a bitmap to the gallery (Pictures/Morpho). Returns true on success. */
+/**
+ * Save a bitmap to the gallery (Pictures/Morpho). Returns true on success.
+ *
+ * Success is only reported once bytes are actually on disk. Previously the
+ * "saved to your gallery" notification and the ad-gating markUsed() both fired
+ * before the attempt, so a failed save still told the user it had worked - and
+ * a null output stream or a failed compress returned true, leaving a zero-byte
+ * entry in the user's gallery.
+ */
 fun saveToGallery(ctx: Context, bmp: Bitmap, name: String, format: Bitmap.CompressFormat, quality: Int): Boolean {
-    cc.devbangs.morpho.ads.AdState.markUsed()
-    cc.devbangs.morpho.notify.Notifier.notifyDone(ctx, "Image ready", "Your image was saved to your gallery.")
-    return try {
+    val ok = try {
         val ext = if (format == Bitmap.CompressFormat.PNG) "png" else "jpg"
         val mime = if (format == Bitmap.CompressFormat.PNG) "image/png" else "image/jpeg"
         val values = ContentValues().apply {
@@ -40,13 +46,28 @@ fun saveToGallery(ctx: Context, bmp: Bitmap, name: String, format: Bitmap.Compre
                 put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Morpho")
         }
         val uri = ctx.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
-            ?: return false
-        ctx.contentResolver.openOutputStream(uri)?.use { bmp.compress(format, quality, it) }
-        Toast.makeText(ctx, "Saved to Pictures/Morpho", Toast.LENGTH_SHORT).show()
-        true
+        if (uri == null) false
+        else {
+            val written = ctx.contentResolver.openOutputStream(uri)
+                ?.use { bmp.compress(format, quality, it) } ?: false
+            // Never leave an empty row behind in the user's gallery.
+            if (!written) ctx.contentResolver.delete(uri, null, null)
+            written
+        }
     } catch (e: Exception) {
-        Toast.makeText(ctx, "Save failed", Toast.LENGTH_SHORT).show(); false
+        false
     }
+
+    if (ok) {
+        cc.devbangs.morpho.ads.AdState.markUsed()
+        cc.devbangs.morpho.notify.Notifier.notifyDone(
+            ctx, "Image ready", "Your image was saved to your gallery."
+        )
+        Toast.makeText(ctx, "Saved to Pictures/Morpho", Toast.LENGTH_SHORT).show()
+    } else {
+        Toast.makeText(ctx, "Couldn't save the image", Toast.LENGTH_SHORT).show()
+    }
+    return ok
 }
 
 /** Share a bitmap via the system share sheet (through FileProvider cache). */

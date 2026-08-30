@@ -32,6 +32,45 @@ import cc.devbangs.morpho.core.Space
 import cc.devbangs.morpho.ui.icon.MorphoIcon
 import cc.devbangs.morpho.ui.theme.*
 
+/**
+ * Blueprint section 26 - an error answers what happened, whether it can be
+ * recovered, and what to do next. Never leave a failure unexplained.
+ */
+@Composable
+fun ToolErrorCard(
+    title: String,
+    body: String,
+    accent: Color,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null
+) {
+    Column(
+        Modifier.fillMaxWidth().clip(Shape.card)
+            .background(Color(0xFFB4231E).copy(alpha = 0.06f))
+            .border(1.dp, Color(0xFFB4231E).copy(alpha = 0.20f), Shape.card)
+            .padding(Space.lg)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            MorphoIcon("info", tint = Color(0xFFB4231E), size = 18.dp)
+            Spacer(Modifier.width(Space.sm))
+            Text(title, style = MaterialTheme.typography.titleMedium, color = Ink)
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(body, style = MaterialTheme.typography.bodyMedium, color = InkSoft)
+        if (actionLabel != null && onAction != null) {
+            Spacer(Modifier.height(Space.md))
+            Box(
+                Modifier.clip(Shape.pill).background(accent)
+                    .clickable(onClick = onAction)
+                    .padding(horizontal = Space.lg, vertical = 9.dp)
+            ) {
+                Text(actionLabel, color = Paper, fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold)
+            }
+        }
+    }
+}
+
 /** Section label above a field/result. */
 @Composable
 fun FieldLabel(text: String) {

@@ -48,21 +48,40 @@ fun ImageTool(id: String, accent: Color) {
     val ctx = LocalContext.current
     var src by remember { mutableStateOf<Bitmap?>(null) }
     var picked by remember { mutableStateOf<Uri?>(null) }
+    var loadFailed by remember { mutableStateOf(false) }
 
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia()
     ) { uri ->
-        if (uri != null) { picked = uri; src = decodeBitmap(ctx, uri) }
+        if (uri != null) {
+            picked = uri
+            val decoded = decodeBitmap(ctx, uri)
+            src = decoded
+            // decodeBitmap returns null on any failure; without this the user
+            // picked a file and the screen simply did nothing.
+            loadFailed = decoded == null
+        }
     }
+    val pick = { launcher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
 
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
         // picker / input preview
         ImagePickPreview(
             bitmap = src,
             accent = accent,
-            onPick = { launcher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
-            onClear = { src = null; picked = null }
+            onPick = { loadFailed = false; pick() },
+            onClear = { src = null; picked = null; loadFailed = false }
         )
+        if (loadFailed) {
+            ToolErrorCard(
+                title = "Couldn't open that image",
+                body = "It may be in a format Morpho can't read, or the file may be damaged. " +
+                    "Try another image.",
+                accent = accent,
+                actionLabel = "Choose another",
+                onAction = { loadFailed = false; pick() }
+            )
+        }
         val bmp = src
         if (bmp != null) {
             when (id) {
