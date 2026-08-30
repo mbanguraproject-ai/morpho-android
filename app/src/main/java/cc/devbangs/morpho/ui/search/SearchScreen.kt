@@ -18,7 +18,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -27,6 +26,7 @@ import cc.devbangs.morpho.core.Space
 import cc.devbangs.morpho.data.Tool
 import cc.devbangs.morpho.data.ToolRegistry
 import cc.devbangs.morpho.data.ToolSearch
+import cc.devbangs.morpho.ui.components.Eyebrow
 import cc.devbangs.morpho.ui.components.IconButtonMorpho
 import cc.devbangs.morpho.ui.components.morphLift
 import cc.devbangs.morpho.ui.icon.MorphoIcon
@@ -104,24 +104,17 @@ fun SearchScreen(
                 )
             ) {
                 if (query.isBlank()) {
-                    item { GroupHeader("POPULAR") }
+                    item { Eyebrow("POPULAR", gutter = false) }
                     items(popular, key = { it.id }) { t -> SearchRow(t) { onOpenTool(t.id) } }
                 } else {
                     groups.forEach { (group, tools) ->
-                        item(key = "h-" + group.name) { GroupHeader(group.label.uppercase()) }
+                        item(key = "h-" + group.name) { Eyebrow(group.label.uppercase(), gutter = false) }
                         items(tools, key = { it.id }) { t -> SearchRow(t) { onOpenTool(t.id) } }
                     }
                 }
             }
         }
     }
-}
-
-@Composable
-private fun GroupHeader(text: String) {
-    Text(text, color = InkFaint, fontSize = 11.sp, fontWeight = FontWeight.Bold,
-        letterSpacing = 1.2.sp,
-        modifier = Modifier.padding(top = Space.md, bottom = Space.xs))
 }
 
 @Composable

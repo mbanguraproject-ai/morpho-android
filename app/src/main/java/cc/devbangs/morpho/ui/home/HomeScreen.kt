@@ -38,6 +38,7 @@ import cc.devbangs.morpho.core.Shape
 import cc.devbangs.morpho.core.Space
 import cc.devbangs.morpho.data.Tool
 import cc.devbangs.morpho.data.Workspace
+import cc.devbangs.morpho.ui.components.Eyebrow
 import cc.devbangs.morpho.ui.components.cornerPetal
 import cc.devbangs.morpho.ui.components.morphLift
 import cc.devbangs.morpho.ui.icon.MorphoIcon
@@ -85,15 +86,19 @@ fun HomeScreen(
             if (workspace.isEmpty()) {
                 item { EmptyWorkspace(onOpenAddTools) }
             } else {
-                item { Eyebrow("YOUR WORKSPACE", "Edit", onArrange) }
+                item { Eyebrow("YOUR WORKSPACE", action = "Edit", onAction = onArrange) }
                 itemsIndexed(workspace.chunked(2)) { idx, row ->
                     Row(
                         Modifier.fillMaxWidth()
                             .padding(horizontal = Space.gutter, vertical = 5.dp)
+                            .height(IntrinsicSize.Min)
                             .reveal(idx),
                         horizontalArrangement = Arrangement.spacedBy(Space.md)
                     ) {
-                        row.forEach { t -> WorkspaceCard(t, { onOpenTool(t.id) }, Modifier.weight(1f)) }
+                        row.forEach { t ->
+                            WorkspaceCard(t, { onOpenTool(t.id) },
+                                Modifier.weight(1f).fillMaxHeight())
+                        }
                         if (row.size == 1) Spacer(Modifier.weight(1f))
                     }
                 }
@@ -170,28 +175,6 @@ private fun EmptyWorkspace(onAdd: () -> Unit) {
 }
 
 @Composable
-private fun Eyebrow(text: String, action: String? = null, onAction: (() -> Unit)? = null) {
-    Row(
-        Modifier.fillMaxWidth().padding(start = Space.gutter, end = Space.gutter,
-            top = Space.xl, bottom = Space.sm),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text, color = InkFaint, fontSize = 11.sp,
-            fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp,
-            modifier = Modifier.weight(1f)
-        )
-        if (action != null && onAction != null) Text(
-            action, color = Cobalt, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.clip(Shape.pill).clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null, onClick = onAction
-            ).padding(horizontal = 8.dp, vertical = 4.dp)
-        )
-    }
-}
-
-@Composable
 private fun WorkspaceCard(t: Tool, onClick: () -> Unit, modifier: Modifier) {
     val i = remember { MutableInteractionSource() }
     val pressed by i.collectIsPressedAsState()
@@ -212,7 +195,7 @@ private fun WorkspaceCard(t: Tool, onClick: () -> Unit, modifier: Modifier) {
             maxLines = 2, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.heightIn(min = 40.dp))
         Text(t.short, style = MaterialTheme.typography.bodyMedium, color = InkSoft,
-            maxLines = 1, overflow = TextOverflow.Ellipsis)
+            maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
 }
 

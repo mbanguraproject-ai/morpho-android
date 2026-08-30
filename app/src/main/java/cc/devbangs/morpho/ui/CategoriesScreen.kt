@@ -15,7 +15,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -27,6 +26,11 @@ import cc.devbangs.morpho.data.ToolRegistry
 import cc.devbangs.morpho.ui.components.morphLift
 import cc.devbangs.morpho.ui.icon.MorphoIcon
 import cc.devbangs.morpho.ui.theme.*
+import androidx.compose.ui.zIndex
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.haze
+import dev.chrisbanes.haze.hazeChild
+import dev.chrisbanes.haze.materials.HazeMaterials
 
 @Composable
 fun CategoriesScreen(
@@ -34,43 +38,53 @@ fun CategoriesScreen(
     contentPadding: PaddingValues
 ) {
     val cats = ToolCategory.entries
-    LazyColumn(
-        Modifier.fillMaxSize().background(Paper),
-        contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding() + Space.xxl)
-    ) {
-        item {
-            Column(
-                Modifier.fillMaxWidth().background(
-                    Brush.verticalGradient(0f to Color_HeroTint, 1f to Paper)
-                )
-            ) {
+    val hazeState = remember { HazeState() }
+
+    Box(Modifier.fillMaxSize().background(Paper)) {
+        LazyColumn(
+            Modifier.fillMaxSize().haze(hazeState),
+            contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding() + Space.xxl)
+        ) {
+            item {
                 Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
-                Column(Modifier.padding(start = Space.gutter, end = Space.gutter, top = Space.xl, bottom = Space.lg)) {
-                    Text("All tools", style = MaterialTheme.typography.displaySmall, color = Ink)
-                    Text("${ToolRegistry.all.size} tools across ${cats.size} categories",
-                        style = MaterialTheme.typography.bodyMedium, color = InkSoft)
+                Spacer(Modifier.height(60.dp))
+                Spacer(Modifier.height(Space.md))
+            }
+            items(cats.chunked(2)) { row ->
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = Space.gutter, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Space.md)
+                ) {
+                    row.forEach { c -> BigCategoryCard(c, { onOpenCategory(c.id) }, Modifier.weight(1f)) }
+                    if (row.size == 1) Spacer(Modifier.weight(1f))
                 }
             }
-        }
-        items(cats.chunked(2)) { row ->
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = Space.gutter, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(Space.md)
-            ) {
-                row.forEach { c -> BigCategoryCard(c, { onOpenCategory(c.id) }, Modifier.weight(1f)) }
-                if (row.size == 1) Spacer(Modifier.weight(1f))
+            // Native "you might like" ad card at the bottom (non-Plus only; renders nothing otherwise)
+            item {
+                NativeAdCard(
+                    Modifier.fillMaxWidth().padding(horizontal = Space.gutter, vertical = Space.lg)
+                )
             }
         }
-        // Native "you might like" ad card at the bottom (non-Plus only; renders nothing otherwise)
-        item {
-            NativeAdCard(
-                Modifier.fillMaxWidth().padding(horizontal = Space.gutter, vertical = Space.lg)
-            )
+
+        // Same pinned frosted bar as Home: both are top-level tabs, so they use
+        // one header pattern rather than each screen inventing its own.
+        Row(
+            Modifier.fillMaxWidth().zIndex(1f)
+                .hazeChild(hazeState, style = HazeMaterials.ultraThin(Paper))
+                .windowInsetsPadding(WindowInsets.statusBars)
+                .padding(start = Space.gutter, end = Space.gutter, top = Space.sm, bottom = Space.sm),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text("All tools", style = MaterialTheme.typography.titleLarge, color = Ink,
+                    fontWeight = FontWeight.Bold)
+                Text("${ToolRegistry.all.size} tools across ${cats.size} categories",
+                    style = MaterialTheme.typography.bodySmall, color = InkFaint, fontSize = 11.sp)
+            }
         }
     }
 }
-
-private val Color_HeroTint = androidx.compose.ui.graphics.Color(0xFFF0F3FF)
 
 @Composable
 private fun BigCategoryCard(c: ToolCategory, onClick: () -> Unit, modifier: Modifier) {

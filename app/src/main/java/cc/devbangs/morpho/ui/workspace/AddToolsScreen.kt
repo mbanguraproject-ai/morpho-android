@@ -29,6 +29,7 @@ import cc.devbangs.morpho.data.Tool
 import cc.devbangs.morpho.data.ToolCategory
 import cc.devbangs.morpho.data.ToolRegistry
 import cc.devbangs.morpho.data.Workspace
+import cc.devbangs.morpho.ui.components.Eyebrow
 import cc.devbangs.morpho.ui.components.IconButtonMorpho
 import cc.devbangs.morpho.ui.components.morphLift
 import cc.devbangs.morpho.ui.icon.MorphoIcon
@@ -148,11 +149,11 @@ fun AddToolsScreen(
                 )
             ) {
                 if (recommended.isNotEmpty()) {
-                    item { AddSectionLabel(recLabel) }
+                    item { Eyebrow(recLabel, gutter = false) }
                     items(recommended, key = { "rec-" + it.tool.id }) { s ->
                         AddToolRow(s.tool, s.reason)
                     }
-                    item { AddSectionLabel("ALL TOOLS") }
+                    item { Eyebrow("ALL TOOLS", gutter = false) }
                 }
                 items(results, key = { it.id }) { t -> AddToolRow(t) }
             }
@@ -179,13 +180,6 @@ private fun FilterChip(
         Text(label, color = if (selected) Paper else InkSoft,
             fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
     }
-}
-
-@Composable
-private fun AddSectionLabel(text: String) {
-    Text(text, color = InkFaint, fontSize = 11.sp, fontWeight = FontWeight.Bold,
-        letterSpacing = 1.2.sp,
-        modifier = Modifier.padding(top = Space.md, bottom = Space.xs))
 }
 
 @Composable
