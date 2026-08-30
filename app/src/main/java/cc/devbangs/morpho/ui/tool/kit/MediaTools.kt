@@ -65,18 +65,20 @@ private fun TrimTool(id: String, accent: Color) {
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { u ->
+    val onPicked: (Uri?) -> Unit = { u ->
         if (u != null) {
             uri = u; durMs = mediaDurationUs(ctx, u) / 1000
             startMs = 0; endMs = durMs
         }
     }
+    // video uses the visual-media picker; audio uses a document picker filtered to audio/*
+    val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { onPicked(it) }
+    val audioPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { onPicked(it) }
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
         PickRow(if (isVideo) "Choose a video" else "Choose audio",
             if (isVideo) "cat-video" else "cat-audio", accent) {
-            picker.launch(PickVisualMediaRequest(
-                if (isVideo) ActivityResultContracts.PickVisualMedia.VideoOnly
-                else ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+            if (isVideo) videoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly))
+            else audioPicker.launch(arrayOf("audio/*"))
         }
         if (uri != null && durMs > 0) {
             Text("Duration ${fmtTime(durMs)}", color = InkSoft, fontSize = 13.sp)
