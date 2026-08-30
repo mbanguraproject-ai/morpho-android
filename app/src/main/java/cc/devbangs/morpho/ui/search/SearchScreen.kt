@@ -68,7 +68,7 @@ fun SearchScreen(
                     Spacer(Modifier.width(Space.md))
                     Box(Modifier.weight(1f)) {
                         if (query.isEmpty())
-                            Text("Search 82 tools…", color = InkFaint, fontSize = 15.sp)
+                            Text("Search tools…", color = InkFaint, fontSize = 15.sp)
                         BasicTextField(
                             value = query, onValueChange = { query = it }, singleLine = true,
                             textStyle = TextStyle(color = Ink, fontSize = 15.sp),

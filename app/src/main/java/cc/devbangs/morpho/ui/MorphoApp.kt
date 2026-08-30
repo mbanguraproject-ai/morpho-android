@@ -27,6 +27,7 @@ import cc.devbangs.morpho.ui.search.SearchScreen
 import cc.devbangs.morpho.ui.settings.SettingsScreen
 import cc.devbangs.morpho.ui.plus.PlusScreen
 import cc.devbangs.morpho.ui.tool.ToolScreen
+import cc.devbangs.morpho.ui.workspace.AddToolsScreen
 import cc.devbangs.morpho.ui.theme.Paper
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.haze
@@ -66,10 +67,9 @@ fun MorphoApp() {
             composable(Dest.Home.route) {
                 HomeScreen(
                     onOpenTool = { nav.navigate(Dest.Tool(it).route) },
-                    onOpenCategory = { nav.navigate(Dest.Category(it).route) },
-                    onOpenSearch = { nav.navigate(Dest.Search.route) },
                     onOpenSettings = { nav.navigate(Dest.Settings.route) },
-                    onSeeAllCategories = {
+                    onOpenAddTools = { nav.navigate(Dest.AddTools.route) },
+                    onExploreTools = {
                         nav.navigate(Dest.Categories.route) {
                             popUpTo(Dest.Home.route) { inclusive = false }
                             launchSingleTop = true
@@ -125,6 +125,12 @@ fun MorphoApp() {
             }
             composable(Dest.Plus.route) {
                 PlusScreen(
+                    onBack = { nav.popBackStack() },
+                    contentPadding = bottomBarPadding(false)
+                )
+            }
+            composable(Dest.AddTools.route) {
+                AddToolsScreen(
                     onBack = { nav.popBackStack() },
                     contentPadding = bottomBarPadding(false)
                 )
