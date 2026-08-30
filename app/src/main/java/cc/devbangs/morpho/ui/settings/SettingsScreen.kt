@@ -12,6 +12,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import cc.devbangs.morpho.BuildConfig
+import cc.devbangs.morpho.data.ToolRegistry
 import cc.devbangs.morpho.notify.Prefs
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -88,12 +90,13 @@ fun SettingsScreen(
                 NotificationsToggle(ctx)
             }
             SettingsGroup("ABOUT") {
-                SettingRow("info", "About Morpho", "v1.0.0") { openUrl(ctx, "https://play.google.com/store/apps/details?id=$PACKAGE") }
+                SettingRow("info", "About Morpho", "v${BuildConfig.VERSION_NAME}") { openUrl(ctx, "https://play.google.com/store/apps/details?id=$PACKAGE") }
                 SettingRow("shield", "Privacy Policy", null) { openUrl(ctx, PRIVACY_URL) }
                 SettingRow("file-text", "Terms of Use", null) { openUrl(ctx, TERMS_URL) }
                 SettingRow("star", "Rate Morpho", null) { openPlayRating(ctx) }
             }
-            Text("Morpho v1.0.0  ·  81 tools", color = InkFaint, fontSize = 12.sp,
+            Text("Morpho v${BuildConfig.VERSION_NAME}  ·  ${ToolRegistry.all.size} tools",
+                color = InkFaint, fontSize = 12.sp,
                 modifier = Modifier.padding(top = Space.md).align(Alignment.CenterHorizontally))
         }
     }

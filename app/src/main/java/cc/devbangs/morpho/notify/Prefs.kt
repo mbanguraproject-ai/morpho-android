@@ -6,7 +6,6 @@ import android.content.Context
 object Prefs {
     private const val FILE = "morpho_prefs"
     private const val KEY_NOTIFS = "notifications_enabled"
-    private const val KEY_DARK = "dark_mode"
 
     private fun prefs(ctx: Context) = ctx.getSharedPreferences(FILE, Context.MODE_PRIVATE)
 
@@ -14,9 +13,4 @@ object Prefs {
         prefs(ctx).getBoolean(KEY_NOTIFS, false)   // off by default (user opts in)
     fun setNotifications(ctx: Context, on: Boolean) =
         prefs(ctx).edit().putBoolean(KEY_NOTIFS, on).apply()
-
-    fun darkMode(ctx: Context): Boolean =
-        prefs(ctx).getBoolean(KEY_DARK, false)      // light by default
-    fun setDarkMode(ctx: Context, on: Boolean) =
-        prefs(ctx).edit().putBoolean(KEY_DARK, on).apply()
 }
