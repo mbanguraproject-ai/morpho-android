@@ -143,11 +143,6 @@ object ToolRegistry {
 
     val popular: List<Tool> = all.filter { it.popular }
 
-    fun search(q: String): List<Tool> {
-        val s = q.trim().lowercase()
-        if (s.isEmpty()) return emptyList()
-        return all.filter {
-            it.name.lowercase().contains(s) || it.short.lowercase().contains(s) || it.category.label.lowercase().contains(s)
-        }
-    }
+    /** Task-oriented search - see [ToolSearch]. */
+    fun search(q: String): List<Tool> = ToolSearch.search(q)
 }

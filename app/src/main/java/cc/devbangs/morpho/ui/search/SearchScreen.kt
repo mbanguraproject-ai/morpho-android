@@ -26,6 +26,7 @@ import cc.devbangs.morpho.core.Shape
 import cc.devbangs.morpho.core.Space
 import cc.devbangs.morpho.data.Tool
 import cc.devbangs.morpho.data.ToolRegistry
+import cc.devbangs.morpho.data.ToolSearch
 import cc.devbangs.morpho.ui.components.IconButtonMorpho
 import cc.devbangs.morpho.ui.components.morphLift
 import cc.devbangs.morpho.ui.icon.MorphoIcon
@@ -41,9 +42,11 @@ fun SearchScreen(
 ) {
     var query by remember { mutableStateOf("") }
     val focus = remember { FocusRequester() }
-    val results = remember(query) {
-        if (query.isBlank()) ToolRegistry.popular else ToolRegistry.search(query)
+    val groups = remember(query) {
+        if (query.isBlank()) emptyList() else ToolSearch.grouped(query)
     }
+    val popular = ToolRegistry.popular
+    val nothing = if (query.isBlank()) popular.isEmpty() else groups.isEmpty()
     LaunchedEffect(Unit) { focus.requestFocus() }
 
     Column(Modifier.fillMaxSize().background(Paper)) {
@@ -82,7 +85,7 @@ fun SearchScreen(
             }
         }
 
-        if (results.isEmpty()) {
+        if (nothing) {
             Box(Modifier.fillMaxSize().padding(Space.gutter), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     MorphoIcon("tab-search", tint = InkFaint, size = 32.dp)
@@ -100,14 +103,25 @@ fun SearchScreen(
                     top = Space.sm, bottom = contentPadding.calculateBottomPadding() + Space.xxl
                 )
             ) {
-                if (query.isBlank()) item {
-                    Text("POPULAR", color = InkFaint, fontSize = 11.sp, fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.2.sp, modifier = Modifier.padding(vertical = Space.sm))
+                if (query.isBlank()) {
+                    item { GroupHeader("POPULAR") }
+                    items(popular, key = { it.id }) { t -> SearchRow(t) { onOpenTool(t.id) } }
+                } else {
+                    groups.forEach { (group, tools) ->
+                        item(key = "h-" + group.name) { GroupHeader(group.label.uppercase()) }
+                        items(tools, key = { it.id }) { t -> SearchRow(t) { onOpenTool(t.id) } }
+                    }
                 }
-                items(results, key = { it.id }) { t -> SearchRow(t) { onOpenTool(t.id) } }
             }
         }
     }
+}
+
+@Composable
+private fun GroupHeader(text: String) {
+    Text(text, color = InkFaint, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+        letterSpacing = 1.2.sp,
+        modifier = Modifier.padding(top = Space.md, bottom = Space.xs))
 }
 
 @Composable
