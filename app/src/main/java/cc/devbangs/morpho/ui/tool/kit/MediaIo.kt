@@ -119,6 +119,54 @@ fun muteVideo(ctx: Context, uri: Uri): File? {
     } catch (e: Exception) { null } finally { extractor.release() }
 }
 
+
+
+/**
+ * Remux a video into a fresh MP4 container to drop container-level metadata
+ * (location, tags). Copies video + audio streams without re-encoding.
+ */
+fun stripVideoMetadata(ctx: Context, uri: Uri): File? {
+    val extractor = MediaExtractor()
+    return try {
+        extractor.setDataSource(ctx, uri, null)
+        val out = File(ctx.cacheDir, "clean_${System.currentTimeMillis()}.mp4")
+        val muxer = MediaMuxer(out.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+        val indexMap = HashMap<Int, Int>()
+        var maxBuffer = 1 shl 20
+        for (i in 0 until extractor.trackCount) {
+            val fmt = extractor.getTrackFormat(i)
+            val mime = fmt.getString(android.media.MediaFormat.KEY_MIME) ?: continue
+            if (mime.startsWith("video/") || mime.startsWith("audio/")) {
+                extractor.selectTrack(i)
+                indexMap[i] = muxer.addTrack(fmt)
+                if (fmt.containsKey(android.media.MediaFormat.KEY_MAX_INPUT_SIZE))
+                    maxBuffer = maxOf(maxBuffer, fmt.getInteger(android.media.MediaFormat.KEY_MAX_INPUT_SIZE))
+            }
+        }
+        // deliberately do NOT call muxer.setLocation() or setOrientationHint from source metadata
+        muxer.start()
+        val buffer = ByteBuffer.allocate(maxBuffer)
+        val info = android.media.MediaCodec.BufferInfo()
+        for (srcTrack in indexMap.keys) extractor.unselectTrack(srcTrack)
+        for ((srcTrack, dstTrack) in indexMap) {
+            extractor.selectTrack(srcTrack)
+            extractor.seekTo(0, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
+            while (true) {
+                info.offset = 0
+                info.size = extractor.readSampleData(buffer, 0)
+                if (info.size < 0) break
+                info.presentationTimeUs = extractor.sampleTime
+                info.flags = extractor.sampleFlags
+                muxer.writeSampleData(dstTrack, buffer, info)
+                extractor.advance()
+            }
+            extractor.unselectTrack(srcTrack)
+        }
+        muxer.stop(); muxer.release()
+        out
+    } catch (e: Exception) { null } finally { extractor.release() }
+}
+
 /** Save a cache media file to the gallery (Movies or Music). */
 fun saveMediaToGallery(ctx: Context, file: File, displayName: String, isVideo: Boolean): Boolean {
     cc.devbangs.morpho.ads.AdState.markUsed()

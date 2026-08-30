@@ -125,9 +125,13 @@ import com.adamglin.phosphoricons.bold.LinkSimpleHorizontal
 import com.adamglin.phosphoricons.bold.Textbox
 import com.adamglin.phosphoricons.bold.FileXls
 import com.adamglin.phosphoricons.bold.FilePpt
+import com.adamglin.phosphoricons.bold.ShieldCheck
 
 object ToolIcons {
     private val map: Map<String, ImageVector> = mapOf(
+        "pdf-metadata-remover" to PhosphorIcons.Bold.Eraser,
+        "video-metadata-remover" to PhosphorIcons.Bold.ShieldCheck,
+
         "pdf-to-excel" to PhosphorIcons.Bold.FileXls,
         "excel-to-pdf" to PhosphorIcons.Bold.FileXls,
         "pdf-to-powerpoint" to PhosphorIcons.Bold.FilePpt,
@@ -188,6 +192,7 @@ object ToolIcons {
         "cat-generator" to PhosphorIcons.Bold.Sparkle,
         "cat-developer" to PhosphorIcons.Bold.Code,
         "cat-ai" to PhosphorIcons.Bold.Brain,
+        "cat-privacy" to PhosphorIcons.Bold.ShieldCheck,
         "tab-home" to PhosphorIcons.Bold.House,
         "tab-grid" to PhosphorIcons.Bold.SquaresFour,
         "tab-search" to PhosphorIcons.Bold.MagnifyingGlass,

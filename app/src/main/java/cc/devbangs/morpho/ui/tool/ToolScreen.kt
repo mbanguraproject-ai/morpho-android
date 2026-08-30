@@ -205,6 +205,7 @@ private fun ToolHost(tool: Tool, onOpenTool: (String) -> Unit, onOpenPlus: () ->
         hasConverterTool(tool.id) -> ConverterTool(tool.id, tool.category.accent)
         hasExtraTool(tool.id) -> ExtraTool(tool.id, tool.category.accent)
         hasMediaTool(tool.id) -> MediaTool(tool.id, tool.category.accent)
+        hasEncoderTool(tool.id) -> EncoderTool(tool.id, tool.category.accent)
         hasOcrTool(tool.id) -> OcrTool(tool.id, tool.category.accent)
         hasLastTool(tool.id) -> LastTool(tool.id, tool.category.accent)
         hasPdfBoxTool(tool.id) -> PdfBoxTool(tool.id, tool.category.accent, onOpenTool)

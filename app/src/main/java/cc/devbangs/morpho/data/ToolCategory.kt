@@ -17,7 +17,8 @@ enum class ToolCategory(
     TEXT("text", "Text", "Extract, count & transform text", CatText),
     GENERATOR("generator", "Generate", "QR, passwords, invoices & more", CatGenerator),
     DEVELOPER("developer", "Developer", "JSON, color, hashing & encoding", CatDeveloper),
-    AI("ai", "AI", "Smart writing & image helpers", CatAi);
+    AI("ai", "AI", "Smart writing & image helpers", CatAi),
+    PRIVACY("privacy", "Privacy", "Strip hidden data before you share", CatPrivacy);
 
     companion object {
         fun from(id: String): ToolCategory = entries.first { it.id == id }

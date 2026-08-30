@@ -41,8 +41,7 @@ import java.io.ByteArrayOutputStream
 
 fun hasPdfBoxTool(id: String): Boolean = id in setOf(
     "pdf-text-extractor","pdf-password-protector","pdf-unlocker","pdf-compressor",
-    "pdf-page-deleter","pdf-metadata-editor","html-to-pdf","pdf-image-extractor","pdf-ocr-scanner"
-)
+    "pdf-page-deleter","pdf-metadata-editor","html-to-pdf","pdf-image-extractor","pdf-ocr-scanner", "pdf-metadata-remover")
 
 @Composable
 fun PdfBoxTool(id: String, accent: Color, onOpenTool: (String) -> Unit = {}) {
@@ -53,6 +52,7 @@ fun PdfBoxTool(id: String, accent: Color, onOpenTool: (String) -> Unit = {}) {
         "pdf-compressor" -> Compress(accent, onOpenTool)
         "pdf-page-deleter" -> PageDeleter(accent)
         "pdf-metadata-editor" -> MetadataEditor(accent)
+        "pdf-metadata-remover" -> MetadataRemover(accent)
         "html-to-pdf" -> HtmlToPdf(accent)
         "pdf-image-extractor" -> ImageExtractor(accent)
         "pdf-ocr-scanner" -> PdfOcrScanner(accent)
@@ -504,6 +504,50 @@ private fun PdfOcrScanner(accent: Color) {
                 }
             }
             if (result.isNotEmpty()) ToolResult(result, accent, mono = false, label = "EXTRACTED TEXT")
+            if (msg.isNotEmpty()) Text(msg, color = InkSoft, fontSize = 13.sp)
+        }
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun MetadataRemover(accent: Color) {
+    val ctx = LocalContext.current
+    var uri by remember { mutableStateOf<Uri?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    var msg by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u -> uri = u; msg = "" }
+    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+        PickRow(if (uri == null) "Choose a PDF" else "PDF selected \u2713", accent) { picker.launch(arrayOf("application/pdf")) }
+        if (uri != null) {
+            Text("Removes author, title, creator, and dates \u2014 all hidden document info. Runs on your device.", color = InkFaint, fontSize = 12.sp)
+            if (busy) ProcessingCard("Removing metadata...", accent)
+            else ToolButton("Remove all metadata", accent) {
+                busy = true; val u = uri!!
+                scope.launch {
+                    val result = withContext(Dispatchers.Default) {
+                        try {
+                            readBytes(ctx, u)?.let { bytes ->
+                                PDDocument.load(bytes).use { doc ->
+                                    val info = doc.documentInformation
+                                    info.title = null; info.author = null; info.subject = null
+                                    info.keywords = null; info.creator = null; info.producer = null
+                                    info.creationDate = null; info.modificationDate = null
+                                    try { info.setCustomMetadataValue("", null) } catch (e: Exception) {}
+                                    // also drop XMP metadata stream if present
+                                    try { doc.documentCatalog.metadata = null } catch (e: Exception) {}
+                                    val out = java.io.ByteArrayOutputStream()
+                                    doc.save(out)
+                                    out.toByteArray()
+                                }
+                            }
+                        } catch (e: Exception) { null }
+                    }
+                    if (result != null) { savePdfToDownloads(ctx, result, "cleaned_${System.currentTimeMillis()}"); msg = "Metadata removed \u2713 Saved to Download/Morpho." }
+                    else msg = "\u26a0 Could not process this PDF."
+                    busy = false
+                }
+            }
             if (msg.isNotEmpty()) Text(msg, color = InkSoft, fontSize = 13.sp)
         }
     }

@@ -40,7 +40,7 @@ import cc.devbangs.morpho.ui.icon.MorphoIcon
 import cc.devbangs.morpho.ui.theme.*
 
 fun hasMediaTool(id: String): Boolean = id in setOf(
-    "video-trimmer","audio-trimmer","mp4-to-mp3","meme-generator","silence-video"
+    "video-trimmer","audio-trimmer","mp4-to-mp3","meme-generator","silence-video","video-metadata-remover"
 )
 
 @Composable
@@ -48,6 +48,7 @@ fun MediaTool(id: String, accent: Color) {
     when (id) {
         "meme-generator" -> MemeTool(accent)
         "silence-video" -> SilenceVideo(accent)
+        "video-metadata-remover" -> VideoMetadataRemover(accent)
         else -> TrimTool(id, accent)
     }
 }
@@ -286,6 +287,37 @@ private fun SilenceVideo(accent: Color) {
                 scope.launch {
                     val file = withContext(Dispatchers.Default) { muteVideo(ctx, u) }
                     if (file != null) saveMediaToGallery(ctx, file, "morpho_${System.currentTimeMillis()}.mp4", true)
+                    else msg = "\u26a0 Could not process this video."
+                    busy = false
+                }
+            }
+            if (msg.isNotEmpty()) Text(msg, color = InkSoft, fontSize = 13.sp)
+        }
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun VideoMetadataRemover(accent: Color) {
+    val ctx = LocalContext.current
+    var uri by remember { mutableStateOf<Uri?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    var msg by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { u ->
+        if (u != null) { uri = u; msg = "" }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+        PickRow(if (uri == null) "Choose a video" else "Video selected \u2713", "cat-video", accent) {
+            picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly))
+        }
+        if (uri != null) {
+            Text("Rebuilds the video without location tags or hidden metadata. Runs on your device.", color = InkFaint, fontSize = 12.sp)
+            if (busy) ProcessingCard("Cleaning metadata...", accent)
+            else ToolButton("Remove metadata", accent) {
+                busy = true; val u = uri!!
+                scope.launch {
+                    val file = withContext(Dispatchers.Default) { stripVideoMetadata(ctx, u) }
+                    if (file != null) { saveMediaToGallery(ctx, file, "clean_${System.currentTimeMillis()}.mp4", true); msg = "Metadata removed \u2713 Saved to gallery." }
                     else msg = "\u26a0 Could not process this video."
                     busy = false
                 }
