@@ -35,7 +35,15 @@ fun decodeBitmap(ctx: Context, uri: Uri, maxDim: Int = 4096): Bitmap? {
  * a null output stream or a failed compress returned true, leaving a zero-byte
  * entry in the user's gallery.
  */
-fun saveToGallery(ctx: Context, bmp: Bitmap, name: String, format: Bitmap.CompressFormat, quality: Int): Boolean {
+fun saveToGallery(
+    ctx: Context,
+    bmp: Bitmap,
+    name: String,
+    format: Bitmap.CompressFormat,
+    quality: Int,
+    /** False when a batch caller reports the whole run itself. */
+    report: Boolean = true
+): Boolean {
     val ok = try {
         val ext = if (format == Bitmap.CompressFormat.PNG) "png" else "jpg"
         val mime = if (format == Bitmap.CompressFormat.PNG) "image/png" else "image/jpeg"
@@ -58,15 +66,10 @@ fun saveToGallery(ctx: Context, bmp: Bitmap, name: String, format: Bitmap.Compre
         false
     }
 
-    if (ok) {
-        cc.devbangs.morpho.ads.AdState.markUsed()
-        cc.devbangs.morpho.notify.Notifier.notifyDone(
-            ctx, "Image ready", "Your image was saved to your gallery."
-        )
-        Toast.makeText(ctx, "Saved to Pictures/Morpho", Toast.LENGTH_SHORT).show()
-    } else {
-        Toast.makeText(ctx, "Couldn't save the image", Toast.LENGTH_SHORT).show()
-    }
+    if (report) reportSave(
+        ctx, ok, "Image ready", "Your image was saved to your gallery.",
+        "Saved to Pictures/Morpho", "Couldn't save the image"
+    )
     return ok
 }
 

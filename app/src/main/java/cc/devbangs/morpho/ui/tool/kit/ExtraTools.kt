@@ -68,8 +68,19 @@ private fun FaviconTool(accent: Color) {
                 var ok = 0
                 sizes.forEach { sz ->
                     val scaled = Bitmap.createScaledBitmap(bmp, sz, sz, true)
-                    if (saveToGallery(ctx, scaled, "favicon_${sz}", Bitmap.CompressFormat.PNG, 100)) ok++
+                    if (saveToGallery(ctx, scaled, "favicon_${sz}",
+                            Bitmap.CompressFormat.PNG, 100, report = false)) ok++
                 }
+                // The count was previously computed and then discarded, so a
+                // partial failure looked identical to a complete success.
+                reportSave(
+                    ctx, ok > 0, "Icons ready",
+                    if (ok == sizes.size) "All ${sizes.size} icon sizes were saved."
+                    else "$ok of ${sizes.size} icon sizes were saved.",
+                    if (ok == sizes.size) "Saved ${sizes.size} sizes to Pictures/Morpho"
+                    else "Saved $ok of ${sizes.size} sizes",
+                    "Couldn't save the icons"
+                )
             }
         }
     }
@@ -83,8 +94,12 @@ private fun PdfCropTool(accent: Color) {
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     var margin by remember { mutableStateOf(8) }
+    var loadError by remember { mutableStateOf("") }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u ->
-        if (u != null) pages = renderPdf(ctx, u, 900)
+        if (u != null) {
+            pages = renderPdf(ctx, u, 900)
+            loadError = if (pages.isEmpty()) pdfFailureReason(ctx, u) else ""
+        }
     }
     val cropped = remember(pages, margin) {
         pages.map { p ->
@@ -95,6 +110,10 @@ private fun PdfCropTool(accent: Color) {
     }
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
         PickRow("Choose a PDF", "file-add", accent) { picker.launch(arrayOf("application/pdf")) }
+        if (loadError.isNotEmpty()) ToolErrorCard(
+            "Couldn't open this PDF", loadError, accent,
+            "Choose another", { loadError = ""; picker.launch(arrayOf("application/pdf")) }
+        )
         if (cropped.isNotEmpty()) {
             StepControl("MARGIN %", margin, listOf(4,8,12,16), accent) { margin = it }
             LazyRow(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
@@ -136,11 +155,20 @@ private fun PdfReorderTool(accent: Color) {
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     var order by remember { mutableStateOf("") }
+    var loadError by remember { mutableStateOf("") }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u ->
-        if (u != null) { pages = renderPdf(ctx, u, 900); order = (1..pages.size).joinToString(",") }
+        if (u != null) {
+            pages = renderPdf(ctx, u, 900)
+            order = (1..pages.size).joinToString(",")
+            loadError = if (pages.isEmpty()) pdfFailureReason(ctx, u) else ""
+        }
     }
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
         PickRow("Choose a PDF", "file-add", accent) { picker.launch(arrayOf("application/pdf")) }
+        if (loadError.isNotEmpty()) ToolErrorCard(
+            "Couldn't open this PDF", loadError, accent,
+            "Choose another", { loadError = ""; picker.launch(arrayOf("application/pdf")) }
+        )
         if (pages.isNotEmpty()) {
             Text("${pages.size} pages — current order shown below", color = InkSoft, fontSize = 13.sp)
             LazyRow(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {

@@ -38,6 +38,27 @@ fun renderPdf(ctx: Context, uri: Uri, targetWidth: Int = 1240): List<Bitmap> {
     return out
 }
 
+/**
+ * Blueprint section 26 - explain permissions and corruption when known.
+ *
+ * renderPdf swallows failures and returns whatever it managed to read, so an
+ * encrypted or damaged file comes back as an empty page list and the screen
+ * silently shows nothing. Call this only when that happens; the cost is paid
+ * on the failure path.
+ */
+fun pdfFailureReason(ctx: Context, uri: Uri): String = try {
+    ctx.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+        PdfRenderer(pfd).use { r ->
+            if (r.pageCount == 0) "This PDF has no pages in it."
+            else "Morpho could open this PDF but couldn't render its pages."
+        }
+    } ?: "Morpho couldn't open that file. It may have been moved or deleted."
+} catch (e: SecurityException) {
+    "This PDF is password-protected. Unlock it first, then try again."
+} catch (e: Exception) {
+    "This file may be damaged, or it may not really be a PDF."
+}
+
 fun pdfPageCount(ctx: Context, uri: Uri): Int = try {
     ctx.contentResolver.openFileDescriptor(uri, "r")?.use {
         PdfRenderer(it).use { r -> r.pageCount }
@@ -116,14 +137,17 @@ internal fun reportSave(
     ok: Boolean,
     notifyTitle: String,
     notifyBody: String,
-    successToast: String
+    successToast: String,
+    failToast: String = "Couldn't save the file"
 ) {
     if (ok) {
         cc.devbangs.morpho.ads.AdState.markUsed()
         cc.devbangs.morpho.notify.Notifier.notifyDone(ctx, notifyTitle, notifyBody)
-        Toast.makeText(ctx, successToast, Toast.LENGTH_SHORT).show()
-    } else {
-        Toast.makeText(ctx, "Couldn't save the file", Toast.LENGTH_SHORT).show()
+        // Blank toast means the screen already shows its own result message.
+        if (successToast.isNotEmpty())
+            Toast.makeText(ctx, successToast, Toast.LENGTH_SHORT).show()
+    } else if (failToast.isNotEmpty()) {
+        Toast.makeText(ctx, failToast, Toast.LENGTH_SHORT).show()
     }
 }
 

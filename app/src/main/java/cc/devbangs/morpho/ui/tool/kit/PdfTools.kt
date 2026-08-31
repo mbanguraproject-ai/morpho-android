@@ -158,21 +158,37 @@ private fun PdfFromSingle(id: String, accent: Color, onOpenTool: (String) -> Uni
     var rotation by remember { mutableStateOf(90) }
     var wm by remember { mutableStateOf("DRAFT") }
     var range by remember { mutableStateOf("1") }
+    var loadError by remember { mutableStateOf("") }
 
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
-    ) { u -> if (u != null) { uri = u; pages = renderPdf(ctx, u, 900) } }
+    ) { u ->
+        if (u != null) {
+            uri = u
+            pages = renderPdf(ctx, u, 900)
+            loadError = if (pages.isEmpty()) pdfFailureReason(ctx, u) else ""
+        }
+    }
 
     // Receive a handed-off file from a previous tool
     LaunchedEffect(Unit) {
         WorkflowBus.consume()?.let { pf ->
             val u = bytesToTempUri(ctx, pf.bytes)
-            uri = u; pages = renderPdf(ctx, u, 900)
+            uri = u
+            pages = renderPdf(ctx, u, 900)
+            loadError = if (pages.isEmpty()) pdfFailureReason(ctx, u) else ""
         }
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
         PickRow("Choose a PDF", "file-add", accent) { picker.launch(arrayOf("application/pdf")) }
+        if (loadError.isNotEmpty()) ToolErrorCard(
+            title = "Couldn't open this PDF",
+            body = loadError,
+            accent = accent,
+            actionLabel = "Choose another",
+            onAction = { loadError = ""; picker.launch(arrayOf("application/pdf")) }
+        )
         if (pages.isNotEmpty()) {
             Text("${pages.size} page(s)", color = InkSoft, fontSize = 13.sp)
             LazyRow(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
@@ -323,11 +339,23 @@ private fun buildSingle(
             sel.forEach { idx -> pages.getOrNull(idx)?.let { bitmapToPdfPage(doc, it) } }
         }
         "pdf-to-jpg" -> {
-            // save each page to gallery instead of building a PDF
+            // Save each page to the gallery instead of building a PDF. Each page
+            // reports quietly so a 20-page document produces one notification
+            // and one toast rather than twenty of each.
+            var saved = 0
             pages.forEachIndexed { i, p ->
-                saveToGallery(ctx, p, "pdf_page_${i+1}_${System.currentTimeMillis()}",
-                    Bitmap.CompressFormat.JPEG, 92)
+                if (saveToGallery(ctx, p, "pdf_page_${i+1}_${System.currentTimeMillis()}",
+                        Bitmap.CompressFormat.JPEG, 92, report = false)) saved++
             }
+            val total = pages.size
+            reportSave(
+                ctx, saved > 0, "Pages ready",
+                if (saved == total) "All $total pages were saved to your gallery."
+                else "$saved of $total pages were saved to your gallery.",
+                if (saved == total) "Saved $total pages to Pictures/Morpho"
+                else "Saved $saved of $total pages",
+                "Couldn't save any pages"
+            )
             doc.close(); return ByteArray(0)
         }
         else -> pages.forEach { bitmapToPdfPage(doc, it) }

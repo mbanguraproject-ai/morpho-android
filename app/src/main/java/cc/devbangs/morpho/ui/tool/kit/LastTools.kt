@@ -139,12 +139,20 @@ private fun PdfStamp(id: String, accent: Color) {
     var footer by remember { mutableStateOf("") }
     var prefix by remember { mutableStateOf("MORPHO") }
     var start by remember { mutableStateOf("1") }
+    var loadError by remember { mutableStateOf("") }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u ->
-        if (u != null) pages = renderPdf(ctx, u, 900)
+        if (u != null) {
+            pages = renderPdf(ctx, u, 900)
+            loadError = if (pages.isEmpty()) pdfFailureReason(ctx, u) else ""
+        }
     }
     val bates = id == "pdf-bates-numbering"
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
         PickRow("Choose a PDF", "file-add", accent) { picker.launch(arrayOf("application/pdf")) }
+        if (loadError.isNotEmpty()) ToolErrorCard(
+            "Couldn't open this PDF", loadError, accent,
+            "Choose another", { loadError = ""; picker.launch(arrayOf("application/pdf")) }
+        )
         if (pages.isNotEmpty()) {
             if (bates) {
                 Column { FieldLabel("PREFIX"); ToolInput(prefix, { prefix = it }, "MORPHO", minLines = 1) }

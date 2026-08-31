@@ -436,7 +436,7 @@ private fun ImageExtractor(accent: Color) {
                                                 if (xobj is PDImageXObject) {
                                                     val bmp: Bitmap? = xobj.image
                                                     if (bmp != null) {
-                                                        if (saveToGallery(ctx, bmp, "pdfimg_${System.currentTimeMillis()}_$n", Bitmap.CompressFormat.PNG, 100)) n++
+                                                        if (saveToGallery(ctx, bmp, "pdfimg_${System.currentTimeMillis()}_$n", Bitmap.CompressFormat.PNG, 100, report = false)) n++
                                                     }
                                                 }
                                             } catch (e: Exception) {}
@@ -448,6 +448,12 @@ private fun ImageExtractor(accent: Color) {
                         } catch (e: Exception) { -2 }
                     }
                     found = count
+                    // The screen prints its own result below, so the toast is
+                    // suppressed; without this every extracted image notified.
+                    if (count > 0) reportSave(
+                        ctx, true, "Images ready",
+                        "$count image(s) were saved to your gallery.", ""
+                    )
                     msg = when {
                         count > 0 -> "\u2713 Saved $count image(s) to your gallery."
                         count == 0 -> "No embedded images found in this PDF."
