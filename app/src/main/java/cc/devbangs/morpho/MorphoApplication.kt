@@ -4,6 +4,7 @@ import android.app.Application
 import android.util.Log
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import com.google.android.gms.ads.MobileAds
+import cc.devbangs.morpho.core.Motion
 import cc.devbangs.morpho.data.Workspace
 import cc.devbangs.morpho.notify.Notifier
 
@@ -27,6 +28,9 @@ class MorphoApplication : Application() {
 
         runCatching { Workspace.init(applicationContext) }
             .onFailure { Log.e("MorphoInit", "Workspace init failed", it) }
+
+        runCatching { Motion.init(applicationContext) }
+            .onFailure { Log.e("MorphoInit", "Motion init failed", it) }
 
         // AdMob on a background thread, wrapped so SDK init can never crash the app
         Thread {

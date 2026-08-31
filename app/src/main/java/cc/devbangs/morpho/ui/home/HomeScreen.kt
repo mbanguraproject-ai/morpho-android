@@ -1,6 +1,5 @@
 package cc.devbangs.morpho.ui.home
 
-import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.Spring
@@ -34,6 +33,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import cc.devbangs.morpho.R
 import cc.devbangs.morpho.ads.AdState
+import cc.devbangs.morpho.core.Motion
 import cc.devbangs.morpho.core.Shape
 import cc.devbangs.morpho.core.Space
 import cc.devbangs.morpho.data.Tool
@@ -284,7 +284,11 @@ private fun Modifier.reveal(indexKey: Int): Modifier {
     LaunchedEffect(indexKey) { shown = true }
     val p by animateFloatAsState(
         targetValue = if (shown) 1f else 0f,
-        animationSpec = tween(durationMillis = 420, delayMillis = (indexKey.coerceAtMost(8)) * 45, easing = EaseOutCubic),
+        animationSpec = tween(
+            durationMillis = Motion.d(Motion.COMPONENT),
+            delayMillis = Motion.stagger(indexKey),
+            easing = Motion.Enter
+        ),
         label = "reveal"
     )
     return this.graphicsLayer { translationY = (1f - p) * 34f; this.alpha = p }

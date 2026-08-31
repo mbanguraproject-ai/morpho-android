@@ -1,7 +1,6 @@
 package cc.devbangs.morpho.ui.onboarding
 
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -24,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import cc.devbangs.morpho.core.Motion
 import cc.devbangs.morpho.core.Shape
 import cc.devbangs.morpho.core.Space
 import cc.devbangs.morpho.data.Tool
@@ -78,7 +78,7 @@ fun OnboardingScreen(onDone: () -> Unit) {
             )
         }
 
-        Crossfade(targetState = step, animationSpec = tween(260), label = "step",
+        Crossfade(targetState = step, animationSpec = tween(Motion.d(Motion.TAB)), label = "step",
             modifier = Modifier.weight(1f)) { s ->
             when (s) {
                 0 -> Identity()
@@ -277,7 +277,11 @@ private fun OrganisingTiles() {
         keys.forEachIndexed { i, (key, tint) ->
             val p by animateFloatAsState(
                 targetValue = if (go) 1f else 0f,
-                animationSpec = tween(520, delayMillis = i * 90, easing = EaseOutCubic),
+                animationSpec = tween(
+                    Motion.d(Motion.COMPONENT),
+                    delayMillis = Motion.stagger(i),
+                    easing = Motion.Enter
+                ),
                 label = "tile$i"
             )
             Box(

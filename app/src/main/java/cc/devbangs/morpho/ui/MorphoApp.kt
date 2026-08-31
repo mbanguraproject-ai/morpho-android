@@ -20,6 +20,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import cc.devbangs.morpho.core.Dest
+import cc.devbangs.morpho.core.Motion
 import cc.devbangs.morpho.data.Workspace
 import cc.devbangs.morpho.ui.onboarding.OnboardingScreen
 import cc.devbangs.morpho.ui.category.CategoryScreen
@@ -60,16 +61,20 @@ fun MorphoApp() {
             startDestination = Dest.Home.route,
             modifier = Modifier.fillMaxSize().haze(barHaze),
             enterTransition = {
-                slideInHorizontally(tween(320)) { it / 5 } + fadeIn(tween(320))
+                slideInHorizontally(tween(Motion.d(Motion.PAGE), easing = Motion.Large)) { it / 5 } +
+                    fadeIn(tween(Motion.d(Motion.PAGE)))
             },
             exitTransition = {
-                slideOutHorizontally(tween(320)) { -it / 8 } + fadeOut(tween(220))
+                slideOutHorizontally(tween(Motion.d(Motion.PAGE), easing = Motion.Large)) { -it / 8 } +
+                    fadeOut(tween(Motion.d(Motion.EXIT)))
             },
             popEnterTransition = {
-                slideInHorizontally(tween(320)) { -it / 8 } + fadeIn(tween(320))
+                slideInHorizontally(tween(Motion.d(Motion.PAGE), easing = Motion.Large)) { -it / 8 } +
+                    fadeIn(tween(Motion.d(Motion.PAGE)))
             },
             popExitTransition = {
-                slideOutHorizontally(tween(320)) { it / 5 } + fadeOut(tween(220))
+                slideOutHorizontally(tween(Motion.d(Motion.PAGE), easing = Motion.Large)) { it / 5 } +
+                    fadeOut(tween(Motion.d(Motion.EXIT)))
             }
         ) {
             composable(Dest.Home.route) {

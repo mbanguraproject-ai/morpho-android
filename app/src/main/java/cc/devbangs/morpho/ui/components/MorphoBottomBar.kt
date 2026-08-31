@@ -16,6 +16,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import cc.devbangs.morpho.core.Motion
 import cc.devbangs.morpho.core.Shape
 import cc.devbangs.morpho.ui.icon.MorphoIcon
 import cc.devbangs.morpho.ui.theme.*
@@ -79,7 +80,11 @@ fun MorphoBottomBar(
 
 @Composable
 private fun RowScope.TabItem(tab: BottomTab, selected: Boolean, onClick: () -> Unit) {
-    val tint by animateColorAsState(if (selected) Cobalt else InkFaint, label = "tint")
+    val tint by animateColorAsState(
+        if (selected) Cobalt else InkFaint,
+        animationSpec = androidx.compose.animation.core.tween(Motion.d(Motion.SMALL)),
+        label = "tint"
+    )
     Column(
         Modifier
             .weight(1f)
