@@ -270,11 +270,22 @@ private fun ExploreRow(onClick: () -> Unit) {
 private fun SettingsButton(onClick: () -> Unit) {
     val i = remember { MutableInteractionSource() }
     val pressed by i.collectIsPressedAsState()
+    // Section 39: the painted surface stays 38dp; the touch target is 48dp.
     Box(
-        Modifier.size(38.dp).morphLift(Shape.chip, elevation = 4.dp, pressed = pressed)
-            .clickable(interactionSource = i, indication = null, onClick = onClick),
+        Modifier.size(48.dp).clickable(
+            interactionSource = i, indication = null,
+            role = androidx.compose.ui.semantics.Role.Button, onClick = onClick
+        ),
         contentAlignment = Alignment.Center
-    ) { MorphoIcon("settings", tint = InkSoft, size = 19.dp) }
+    ) {
+        Box(
+            Modifier.size(38.dp).morphLift(Shape.chip, elevation = 4.dp, pressed = pressed),
+            contentAlignment = Alignment.Center
+        ) {
+            MorphoIcon("settings", tint = InkSoft, size = 19.dp,
+                contentDescription = "Settings")
+        }
+    }
 }
 
 /** Staggered rise + fade-in reveal for list items. */

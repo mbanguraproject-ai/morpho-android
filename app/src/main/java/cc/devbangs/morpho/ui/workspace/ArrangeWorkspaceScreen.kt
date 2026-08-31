@@ -125,10 +125,10 @@ private fun ArrangeRow(
             maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         Spacer(Modifier.width(Space.sm))
 
+        // No spacers: each button is a 48dp target around a 36dp circle, so the
+        // padding inside the targets already separates them visually.
         StepButton("chevron-up", canMoveUp, onUp, label = "Move " + tool.name + " up")
-        Spacer(Modifier.width(6.dp))
         StepButton("chevron-down", canMoveDown, onDown, label = "Move " + tool.name + " down")
-        Spacer(Modifier.width(6.dp))
         StepButton("close", true, onRemove, danger = true,
             label = "Remove " + tool.name + " from your workspace")
     }
@@ -153,12 +153,16 @@ private fun StepButton(
         else -> Cobalt
     }
     Box(
-        Modifier.size(36.dp).clip(Shape.pill).background(bg)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null, enabled = enabled,
-                role = androidx.compose.ui.semantics.Role.Button, onClick = onClick
-            ),
+        Modifier.size(48.dp).clickable(
+            interactionSource = remember { MutableInteractionSource() },
+            indication = null, enabled = enabled,
+            role = androidx.compose.ui.semantics.Role.Button, onClick = onClick
+        ),
         contentAlignment = Alignment.Center
-    ) { MorphoIcon(icon, tint = fg, size = 15.dp, contentDescription = label) }
+    ) {
+        Box(
+            Modifier.size(36.dp).clip(Shape.pill).background(bg),
+            contentAlignment = Alignment.Center
+        ) { MorphoIcon(icon, tint = fg, size = 15.dp, contentDescription = label) }
+    }
 }

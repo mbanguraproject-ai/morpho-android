@@ -77,11 +77,13 @@ fun IconButtonMorpho(
 ) {
     Box(
         Modifier
-            .size(42.dp)
+            // Section 39: Android's minimum interactive size. Only the 22dp
+            // glyph is painted, so the larger box costs nothing visually.
+            .size(48.dp)
             .clip(Shape.pill)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
-                indication = ripple(bounded = false, radius = 22.dp),
+                indication = ripple(bounded = false, radius = 24.dp),
                 role = androidx.compose.ui.semantics.Role.Button,
                 onClick = onClick
             ),

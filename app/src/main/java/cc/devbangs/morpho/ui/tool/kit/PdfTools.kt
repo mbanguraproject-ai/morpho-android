@@ -541,11 +541,12 @@ private fun ConvertTool(
                     val out = withContext(Dispatchers.IO) {
                         cloudConvert(ctx, u, from, to, "converted_${System.currentTimeMillis()}.$outExt")
                     }
-                    if (out != null) {
-                        saveBytesToDownloads(ctx, out.readBytes(), out.name, outputMime)
-                        msg = "Saved to Download/Morpho \u2713"
-                    } else {
-                        msg = "\u26a0 Conversion failed. Check your connection and try again."
+                    when (out) {
+                        is ConvertOutcome.Success -> {
+                            saveBytesToDownloads(ctx, out.file.readBytes(), out.file.name, outputMime)
+                            msg = "Saved to Download/Morpho \u2713"
+                        }
+                        is ConvertOutcome.Failure -> msg = "\u26a0 " + out.reason
                     }
                     busy = false
                 }
@@ -591,10 +592,13 @@ private fun VideoCompressor(accent: Color) {
                     val out = withContext(Dispatchers.IO) {
                         cloudConvert(ctx, u, "", "mp4", "compressed_${System.currentTimeMillis()}.mp4", extra)
                     }
-                    if (out != null) {
-                        saveMediaToGallery(ctx, out, out.name, true)
-                        msg = "Saved to your gallery \u2713"
-                    } else msg = "\u26a0 Compression failed. Check your connection and try again."
+                    when (out) {
+                        is ConvertOutcome.Success -> {
+                            saveMediaToGallery(ctx, out.file, out.file.name, true)
+                            msg = "Saved to your gallery \u2713"
+                        }
+                        is ConvertOutcome.Failure -> msg = "\u26a0 " + out.reason
+                    }
                     busy = false
                 }
             }

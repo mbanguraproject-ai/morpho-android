@@ -203,25 +203,30 @@ private fun AddToolRow(t: Tool, reason: String? = null) {
                 color = if (reason != null) Cobalt else InkSoft,
                 maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
-        Spacer(Modifier.width(Space.md))
+        Spacer(Modifier.width(Space.xs))
+        // Section 39: 34dp pill, 48dp touch target.
         Box(
-            Modifier.size(34.dp).clip(Shape.pill)
-                .background(if (inWorkspace) Cobalt else CobaltWash)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    role = androidx.compose.ui.semantics.Role.Button
-                ) { Workspace.toggle(t.id) },
+            Modifier.size(48.dp).clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                role = androidx.compose.ui.semantics.Role.Button
+            ) { Workspace.toggle(t.id) },
             contentAlignment = Alignment.Center
         ) {
-            MorphoIcon(
-                if (inWorkspace) "check" else "plus",
-                tint = if (inWorkspace) Paper else Cobalt,
-                size = 17.dp,
-                contentDescription =
-                    if (inWorkspace) "Remove " + t.name + " from your workspace"
-                    else "Add " + t.name + " to your workspace"
-            )
+            Box(
+                Modifier.size(34.dp).clip(Shape.pill)
+                    .background(if (inWorkspace) Cobalt else CobaltWash),
+                contentAlignment = Alignment.Center
+            ) {
+                MorphoIcon(
+                    if (inWorkspace) "check" else "plus",
+                    tint = if (inWorkspace) Paper else Cobalt,
+                    size = 17.dp,
+                    contentDescription =
+                        if (inWorkspace) "Remove " + t.name + " from your workspace"
+                        else "Add " + t.name + " to your workspace"
+                )
+            }
         }
     }
 }
