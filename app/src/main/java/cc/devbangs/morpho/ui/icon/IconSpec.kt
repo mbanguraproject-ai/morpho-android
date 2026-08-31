@@ -19,11 +19,17 @@ fun MorphoIcon(
     tint: Color,
     modifier: Modifier = Modifier,
     size: Dp = 24.dp,
-    strokeWidth: Float = 1.9f
+    strokeWidth: Float = 1.9f,
+    /**
+     * Blueprint section 39 - screen-reader labels.
+     * Null is correct for a decorative icon sitting beside its own text label;
+     * an icon that is the only content of a control must pass one.
+     */
+    contentDescription: String? = null
 ) {
     Icon(
         imageVector = ToolIcons.of(key),
-        contentDescription = null,
+        contentDescription = contentDescription,
         tint = tint,
         modifier = modifier.size(size)
     )

@@ -78,7 +78,7 @@ fun AddToolsScreen(
                 Modifier.fillMaxWidth().height(56.dp).padding(horizontal = Space.sm),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButtonMorpho("chevron-left", onBack)
+                IconButtonMorpho("chevron-left", onBack, contentDescription = "Back")
                 Spacer(Modifier.width(Space.xs))
                 Column(Modifier.weight(1f)) {
                     Text("Add tools", style = MaterialTheme.typography.headlineSmall, color = Ink)
@@ -111,7 +111,8 @@ fun AddToolsScreen(
                     )
                 }
                 if (query.isNotEmpty())
-                    IconButtonMorpho("close", { query = "" }, tint = InkFaint)
+                    IconButtonMorpho("close", { query = "" }, tint = InkFaint,
+                        contentDescription = "Clear search")
             }
 
             LazyRow(
@@ -208,14 +209,18 @@ private fun AddToolRow(t: Tool, reason: String? = null) {
                 .background(if (inWorkspace) Cobalt else CobaltWash)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
-                    indication = null
+                    indication = null,
+                    role = androidx.compose.ui.semantics.Role.Button
                 ) { Workspace.toggle(t.id) },
             contentAlignment = Alignment.Center
         ) {
             MorphoIcon(
                 if (inWorkspace) "check" else "plus",
                 tint = if (inWorkspace) Paper else Cobalt,
-                size = 17.dp
+                size = 17.dp,
+                contentDescription =
+                    if (inWorkspace) "Remove " + t.name + " from your workspace"
+                    else "Add " + t.name + " to your workspace"
             )
         }
     }

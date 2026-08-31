@@ -60,7 +60,7 @@ fun SearchScreen(
                 Modifier.fillMaxWidth().padding(start = Space.sm, end = Space.gutter, top = Space.sm, bottom = Space.md),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButtonMorpho("chevron-left", onBack)
+                IconButtonMorpho("chevron-left", onBack, contentDescription = "Back")
                 Spacer(Modifier.width(Space.xs))
                 Row(
                     Modifier.weight(1f).morphLift(Shape.card, elevation = 8.dp)
@@ -80,7 +80,8 @@ fun SearchScreen(
                         )
                     }
                     if (query.isNotEmpty())
-                        IconButtonMorpho("close", { query = "" }, tint = InkFaint)
+                        IconButtonMorpho("close", { query = "" }, tint = InkFaint,
+                        contentDescription = "Clear search")
                 }
             }
         }

@@ -103,7 +103,7 @@ fun ToolScreen(
                     top = Space.sm, bottom = Space.lg),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButtonMorpho("chevron-left", backWithAd)
+                IconButtonMorpho("chevron-left", backWithAd, contentDescription = "Back")
                 Spacer(Modifier.width(4.dp))
                 if (tool != null) {
                     Box(

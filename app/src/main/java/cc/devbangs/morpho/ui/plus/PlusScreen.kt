@@ -51,7 +51,7 @@ fun PlusScreen(
                 .height(56.dp).padding(horizontal = Space.sm),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButtonMorpho("chevron-left", onBack)
+            IconButtonMorpho("chevron-left", onBack, contentDescription = "Back")
             Spacer(Modifier.width(4.dp))
             Text("Morpho Plus", style = MaterialTheme.typography.headlineSmall, color = Ink)
         }

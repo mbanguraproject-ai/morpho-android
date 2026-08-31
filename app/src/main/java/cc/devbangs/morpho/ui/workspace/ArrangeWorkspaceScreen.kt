@@ -54,7 +54,7 @@ fun ArrangeWorkspaceScreen(
                 Modifier.fillMaxWidth().height(56.dp).padding(horizontal = Space.sm),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButtonMorpho("chevron-left", onBack)
+                IconButtonMorpho("chevron-left", onBack, contentDescription = "Back")
                 Spacer(Modifier.width(Space.xs))
                 Column(Modifier.weight(1f)) {
                     Text("Arrange workspace",
@@ -125,11 +125,12 @@ private fun ArrangeRow(
             maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         Spacer(Modifier.width(Space.sm))
 
-        StepButton("chevron-up", canMoveUp, onUp)
+        StepButton("chevron-up", canMoveUp, onUp, label = "Move " + tool.name + " up")
         Spacer(Modifier.width(6.dp))
-        StepButton("chevron-down", canMoveDown, onDown)
+        StepButton("chevron-down", canMoveDown, onDown, label = "Move " + tool.name + " down")
         Spacer(Modifier.width(6.dp))
-        StepButton("close", true, onRemove, danger = true)
+        StepButton("close", true, onRemove, danger = true,
+            label = "Remove " + tool.name + " from your workspace")
     }
 }
 
@@ -138,7 +139,8 @@ private fun StepButton(
     icon: String,
     enabled: Boolean,
     onClick: () -> Unit,
-    danger: Boolean = false
+    danger: Boolean = false,
+    label: String
 ) {
     val bg = when {
         !enabled -> PaperSunk
@@ -154,8 +156,9 @@ private fun StepButton(
         Modifier.size(36.dp).clip(Shape.pill).background(bg)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
-                indication = null, enabled = enabled, onClick = onClick
+                indication = null, enabled = enabled,
+                role = androidx.compose.ui.semantics.Role.Button, onClick = onClick
             ),
         contentAlignment = Alignment.Center
-    ) { MorphoIcon(icon, tint = fg, size = 15.dp) }
+    ) { MorphoIcon(icon, tint = fg, size = 15.dp, contentDescription = label) }
 }

@@ -11,6 +11,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -51,7 +53,9 @@ fun Eyebrow(
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = 1.sp,
-            modifier = Modifier.weight(1f)
+            // Lets a screen reader jump between sections instead of reading
+            // every tool in a 32-tool category to reach the next group.
+            modifier = Modifier.weight(1f).semantics { heading() }
         )
         if (action != null && onAction != null) Text(
             action,

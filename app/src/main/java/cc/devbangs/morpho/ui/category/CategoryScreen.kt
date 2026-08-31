@@ -60,7 +60,7 @@ fun CategoryScreen(
                 Modifier.fillMaxWidth().height(56.dp).padding(horizontal = Space.sm),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButtonMorpho("chevron-left", onBack)
+                IconButtonMorpho("chevron-left", onBack, contentDescription = "Back")
                 Spacer(Modifier.width(Space.xs))
                 Box(
                     Modifier.size(40.dp).clip(Shape.card).background(tint),

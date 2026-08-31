@@ -48,7 +48,7 @@ fun MorphoTopBar(
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (onBack != null) {
-                IconButtonMorpho("chevron-left", onBack)
+                IconButtonMorpho("chevron-left", onBack, contentDescription = "Back")
                 Spacer(Modifier.width(Space.xs))
             } else {
                 Spacer(Modifier.width(Space.sm))
@@ -68,7 +68,13 @@ fun MorphoTopBar(
 }
 
 @Composable
-fun IconButtonMorpho(glyph: String, onClick: () -> Unit, tint: androidx.compose.ui.graphics.Color = Ink) {
+fun IconButtonMorpho(
+    glyph: String,
+    onClick: () -> Unit,
+    tint: androidx.compose.ui.graphics.Color = Ink,
+    /** Required: this control is an icon with no visible text beside it. */
+    contentDescription: String
+) {
     Box(
         Modifier
             .size(42.dp)
@@ -76,10 +82,12 @@ fun IconButtonMorpho(glyph: String, onClick: () -> Unit, tint: androidx.compose.
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = ripple(bounded = false, radius = 22.dp),
+                role = androidx.compose.ui.semantics.Role.Button,
                 onClick = onClick
             ),
         contentAlignment = Alignment.Center
     ) {
-        MorphoIcon(glyph, tint = tint, size = 22.dp, strokeWidth = 2f)
+        MorphoIcon(glyph, tint = tint, size = 22.dp, strokeWidth = 2f,
+            contentDescription = contentDescription)
     }
 }
