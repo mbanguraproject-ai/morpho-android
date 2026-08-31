@@ -48,9 +48,7 @@ fun pdfPageCount(ctx: Context, uri: Uri): Int = try {
 
 /** Save arbitrary bytes to Download/Morpho with a full filename + mime type. */
 fun saveBytesToDownloads(ctx: Context, bytes: ByteArray, fileName: String, mime: String): Boolean {
-    cc.devbangs.morpho.ads.AdState.markUsed()
-    cc.devbangs.morpho.notify.Notifier.notifyDone(ctx, "File ready", "Saved to Downloads/Morpho.")
-    return try {
+    val ok = try {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val values = ContentValues().apply {
                 put(MediaStore.Downloads.DISPLAY_NAME, fileName)
@@ -58,24 +56,27 @@ fun saveBytesToDownloads(ctx: Context, bytes: ByteArray, fileName: String, mime:
                 put(MediaStore.Downloads.RELATIVE_PATH, "Download/Morpho")
             }
             val uri = ctx.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
-                ?: return false
-            ctx.contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
+            if (uri == null) false
+            else {
+                val stream = ctx.contentResolver.openOutputStream(uri)
+                if (stream == null) { ctx.contentResolver.delete(uri, null, null); false }
+                else { stream.use { it.write(bytes) }; true }
+            }
         } else {
             val dir = File(android.os.Environment.getExternalStoragePublicDirectory(
                 android.os.Environment.DIRECTORY_DOWNLOADS), "Morpho").apply { mkdirs() }
             FileOutputStream(File(dir, fileName)).use { it.write(bytes) }
+            true
         }
-        Toast.makeText(ctx, "Saved to Download/Morpho", Toast.LENGTH_SHORT).show()
-        true
     } catch (e: Exception) {
-        Toast.makeText(ctx, "Save failed", Toast.LENGTH_SHORT).show(); false
+        false
     }
+    reportSave(ctx, ok, "File ready", "Saved to Downloads/Morpho.", "Saved to Download/Morpho")
+    return ok
 }
 
 fun savePdfToDownloads(ctx: Context, bytes: ByteArray, name: String): Boolean {
-    cc.devbangs.morpho.ads.AdState.markUsed()
-    cc.devbangs.morpho.notify.Notifier.notifyDone(ctx, "PDF ready", "Your PDF was saved to Downloads/Morpho.")
-    return try {
+    val ok = try {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val values = ContentValues().apply {
                 put(MediaStore.Downloads.DISPLAY_NAME, "$name.pdf")
@@ -83,17 +84,46 @@ fun savePdfToDownloads(ctx: Context, bytes: ByteArray, name: String): Boolean {
                 put(MediaStore.Downloads.RELATIVE_PATH, "Download/Morpho")
             }
             val uri = ctx.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
-                ?: return false
-            ctx.contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
+            if (uri == null) false
+            else {
+                val stream = ctx.contentResolver.openOutputStream(uri)
+                if (stream == null) { ctx.contentResolver.delete(uri, null, null); false }
+                else { stream.use { it.write(bytes) }; true }
+            }
         } else {
             val dir = File(android.os.Environment.getExternalStoragePublicDirectory(
                 android.os.Environment.DIRECTORY_DOWNLOADS), "Morpho").apply { mkdirs() }
             FileOutputStream(File(dir, "$name.pdf")).use { it.write(bytes) }
+            true
         }
-        Toast.makeText(ctx, "Saved to Download/Morpho", Toast.LENGTH_SHORT).show()
-        true
     } catch (e: Exception) {
-        Toast.makeText(ctx, "Save failed", Toast.LENGTH_SHORT).show(); false
+        false
+    }
+    reportSave(ctx, ok, "PDF ready", "Your PDF was saved to Downloads/Morpho.",
+        "Saved to Download/Morpho")
+    return ok
+}
+
+/**
+ * Blueprint section 26 - report the outcome only once it is known.
+ *
+ * Every save used to fire markUsed() and the "ready" notification before
+ * attempting the write, so a failure left a notification claiming success
+ * behind a two-second failure toast.
+ */
+internal fun reportSave(
+    ctx: Context,
+    ok: Boolean,
+    notifyTitle: String,
+    notifyBody: String,
+    successToast: String
+) {
+    if (ok) {
+        cc.devbangs.morpho.ads.AdState.markUsed()
+        cc.devbangs.morpho.notify.Notifier.notifyDone(ctx, notifyTitle, notifyBody)
+        Toast.makeText(ctx, successToast, Toast.LENGTH_SHORT).show()
+    } else {
+        Toast.makeText(ctx, "Couldn't save the file", Toast.LENGTH_SHORT).show()
     }
 }
 

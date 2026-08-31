@@ -169,9 +169,7 @@ fun stripVideoMetadata(ctx: Context, uri: Uri): File? {
 
 /** Save a cache media file to the gallery (Movies or Music). */
 fun saveMediaToGallery(ctx: Context, file: File, displayName: String, isVideo: Boolean): Boolean {
-    cc.devbangs.morpho.ads.AdState.markUsed()
-    cc.devbangs.morpho.notify.Notifier.notifyDone(ctx, "File ready", "Your file was saved to your gallery.")
-    return try {
+    val ok = try {
         val mime = if (isVideo) "video/mp4" else "audio/mp4"
         val collection = if (isVideo) MediaStore.Video.Media.EXTERNAL_CONTENT_URI
                          else MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
@@ -182,11 +180,19 @@ fun saveMediaToGallery(ctx: Context, file: File, displayName: String, isVideo: B
                 put(MediaStore.MediaColumns.RELATIVE_PATH,
                     (if (isVideo) "Movies/Morpho" else "Music/Morpho"))
         }
-        val dst = ctx.contentResolver.insert(collection, values) ?: return false
-        ctx.contentResolver.openOutputStream(dst)?.use { o -> file.inputStream().use { it.copyTo(o) } }
-        Toast.makeText(ctx, "Saved to ${if (isVideo) "Movies" else "Music"}/Morpho", Toast.LENGTH_SHORT).show()
-        true
-    } catch (e: Exception) { Toast.makeText(ctx, "Save failed", Toast.LENGTH_SHORT).show(); false }
+        val dst = ctx.contentResolver.insert(collection, values)
+        if (dst == null) false
+        else {
+            val stream = ctx.contentResolver.openOutputStream(dst)
+            if (stream == null) { ctx.contentResolver.delete(dst, null, null); false }
+            else { stream.use { o -> file.inputStream().use { it.copyTo(o) } }; true }
+        }
+    } catch (e: Exception) {
+        false
+    }
+    reportSave(ctx, ok, "File ready", "Your file was saved to your gallery.",
+        "Saved to ${if (isVideo) "Movies" else "Music"}/Morpho")
+    return ok
 }
 
 fun fmtTime(ms: Long): String {
