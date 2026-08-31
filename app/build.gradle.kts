@@ -69,6 +69,9 @@ dependencies {
     implementation("com.adamglin:phosphor-icon:1.0.0")
     implementation("com.google.zxing:core:3.5.3")
     implementation("com.google.mlkit:text-recognition:16.0.1")
+    // On-device subject segmentation for Background Remover.
+    // Unbundled: ~200KB in the APK, the model arrives via Play services.
+    implementation("com.google.android.gms:play-services-mlkit-subject-segmentation:16.0.0-beta1")
     implementation("com.tom-roush:pdfbox-android:2.0.27.0")
     implementation("dev.chrisbanes.haze:haze:1.6.10")
     implementation("dev.chrisbanes.haze:haze-materials:1.6.10")

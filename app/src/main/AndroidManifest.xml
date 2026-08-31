@@ -30,6 +30,12 @@
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="ca-app-pub-9121922395304175~3190267514" />
 
+        <!-- Fetch the segmentation model at install time so Background Remover
+             works on first open instead of downloading when the user taps it. -->
+        <meta-data
+            android:name="com.google.mlkit.vision.DEPENDENCIES"
+            android:value="subject_segment" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

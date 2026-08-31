@@ -64,6 +64,17 @@ fun ImageTool(id: String, accent: Color) {
     }
     val pick = { launcher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
 
+    // Receive a file handed over by a previous tool. Only PDF tools consumed
+    // the bus before, so an image handed to an image tool was silently dropped
+    // and the user arrived at an empty picker with their file gone.
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        cc.devbangs.morpho.workflow.WorkflowBus.consume()?.let { handed ->
+            val decoded = decodeBitmapBytes(handed.bytes)
+            src = decoded
+            loadFailed = decoded == null
+        }
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
         // picker / input preview
         ImagePickPreview(

@@ -13,6 +13,24 @@ import androidx.core.content.FileProvider
 import java.io.File
 import java.io.FileOutputStream
 
+/**
+ * Decode bytes handed over by another tool, with the same downsampling as
+ * [decodeBitmap] so a workflow hand-off cannot OOM where a picked file would not.
+ */
+fun decodeBitmapBytes(bytes: ByteArray, maxDim: Int = 4096): Bitmap? {
+    return try {
+        val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+        var sample = 1
+        val largest = maxOf(opts.outWidth, opts.outHeight)
+        while (largest / sample > maxDim) sample *= 2
+        val real = BitmapFactory.Options().apply { inSampleSize = sample }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, real)
+    } catch (e: Exception) {
+        null
+    }
+}
+
 /** Decode a picked Uri into a Bitmap (downsampled to a safe max to avoid OOM). */
 fun decodeBitmap(ctx: Context, uri: Uri, maxDim: Int = 4096): Bitmap? {
     return try {
