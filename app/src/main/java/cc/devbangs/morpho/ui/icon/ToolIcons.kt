@@ -47,6 +47,7 @@ import com.adamglin.phosphoricons.bold.FileImage
 import com.adamglin.phosphoricons.bold.FilePdf
 import com.adamglin.phosphoricons.bold.FilePlus
 import com.adamglin.phosphoricons.bold.FileSvg
+import com.adamglin.phosphoricons.bold.Folder
 import com.adamglin.phosphoricons.bold.FileVideo
 import com.adamglin.phosphoricons.bold.Fingerprint
 import com.adamglin.phosphoricons.bold.FrameCorners
@@ -200,6 +201,9 @@ object ToolIcons {
         "tab-search" to PhosphorIcons.Bold.MagnifyingGlass,
         "chevron-left" to PhosphorIcons.Bold.CaretLeft,
         "chevron-right" to PhosphorIcons.Bold.CaretRight,
+        "sparkle" to PhosphorIcons.Bold.Sparkle,
+        "tab-files" to PhosphorIcons.Bold.Folder,
+        "list" to PhosphorIcons.Bold.Rows,
         "chevron-up" to PhosphorIcons.Bold.CaretUp,
         "chevron-down" to PhosphorIcons.Bold.CaretDown,
         "close" to PhosphorIcons.Bold.X,
