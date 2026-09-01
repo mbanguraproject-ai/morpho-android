@@ -232,6 +232,53 @@ object ToolSearch {
         }
     }
 
+    /**
+     * The three steps this specific tool actually involves.
+     *
+     * Every tool screen used to show the same "Choose, Adjust, Save" strip,
+     * which says nothing on a QR generator and is wrong on a text tool. Both
+     * halves are already known: [inputFamilies] says what goes in, and [group]
+     * says what the tool does to it.
+     */
+    fun steps(t: Tool): Triple<String, String, String> {
+        // File-matching is happy to treat a Text tool as accepting a .txt, but
+        // for steps that is wrong: Word Counter takes typed text in a field, not
+        // a picked file. Only trust a file input when the id gives evidence for
+        // one, or the category is inherently file-based.
+        val idEvidence = "-to-" in t.id ||
+            t.id.substringBefore('-') in setOf("pdf", "image", "exif", "video", "audio")
+        val fileCategory = t.category in setOf(
+            ToolCategory.PDF, ToolCategory.IMAGE, ToolCategory.VIDEO,
+            ToolCategory.AUDIO, ToolCategory.CONVERTER, ToolCategory.PRIVACY
+        )
+        val input = if (idEvidence || fileCategory) inputFamilies(t).firstOrNull() else null
+
+        val verb = when (group(t)) {
+            Group.CONVERT -> "Convert"
+            Group.OPTIMIZE -> "Compress"
+            Group.EDIT -> "Edit"
+            Group.ORGANIZE -> "Arrange"
+            Group.CREATE -> "Generate"
+            Group.OTHER -> "Process"
+        }
+        if (input == null) {
+            // Nothing is picked and nothing is written to storage.
+            return Triple("Type", verb, "Copy")
+        }
+        val noun = when (input) {
+            "pdf" -> "a PDF"
+            "image" -> "an image"
+            "video" -> "a video"
+            "audio" -> "audio"
+            "text" -> "a file"
+            "word" -> "a Word file"
+            "excel" -> "a spreadsheet"
+            "powerpoint" -> "a deck"
+            else -> "a file"
+        }
+        return Triple("Choose $noun", verb, "Save")
+    }
+
     /** Which intent bucket a tool belongs to. Derived from id and name. */
     fun group(t: Tool): Group {
         val id = t.id
