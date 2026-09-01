@@ -124,7 +124,7 @@ private fun RowScope.MasterSlot(onClick: () -> Unit) {
             Image(
                 painter = painterResource(cc.devbangs.morpho.R.drawable.ic_launcher_foreground),
                 contentDescription = null,
-                modifier = Modifier.size(46.dp)
+                modifier = Modifier.size(52.dp)
             )
         }
     }

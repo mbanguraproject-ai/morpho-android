@@ -31,6 +31,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -242,16 +243,29 @@ fun PdfMarkupTool(id: String, accent: Color) {
                         )
                     }
                 }
+                // The preview has to agree with the export or the tool is
+                // guessing. Both now derive from the same fractions: size is
+                // 2.8% of the page width, and the offset is applied in pixels
+                // rather than through a hardcoded density figure, which was
+                // only correct on one class of screen.
+                //
+                // The export draws from the text baseline while Compose draws
+                // from the top, so the preview is lifted by roughly one cap
+                // height to land in the same place.
+                val density = LocalDensity.current
                 texts.filter { it.page == page }.forEach { t ->
+                    val sizePx = previewSize.width * 0.028f
                     Text(
                         t.text,
                         color = Color(t.argb),
-                        fontSize = 14.sp,
+                        fontSize = with(density) { sizePx.toSp() },
                         fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.offset(
-                            x = (t.at.x * previewSize.width).dp / 2.75f,
-                            y = (t.at.y * previewSize.height).dp / 2.75f
-                        )
+                        modifier = Modifier.offset {
+                            androidx.compose.ui.unit.IntOffset(
+                                (t.at.x * previewSize.width).toInt(),
+                                (t.at.y * previewSize.height - sizePx * 0.8f).toInt()
+                            )
+                        }
                     )
                 }
             }

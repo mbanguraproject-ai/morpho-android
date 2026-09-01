@@ -132,6 +132,25 @@ fun ToolResultCard(
     }
 }
 
+
+/**
+ * Whether a tool is mid-operation.
+ *
+ * Back used to abandon work silently: the coroutine scope died with the screen
+ * and whatever was half-finished went with it, with no indication that anything
+ * had been lost.
+ *
+ * A count rather than a flag because a tool can legitimately show more than one
+ * processing state, and the last one to finish should be the one that clears it.
+ */
+object ToolWork {
+    private val count = androidx.compose.runtime.mutableStateOf(0)
+    val busy: Boolean get() = count.value > 0
+    fun start() { count.value++ }
+    fun done() { if (count.value > 0) count.value-- }
+    fun reset() { count.value = 0 }
+}
+
 /** Section label above a field/result. */
 @Composable
 fun FieldLabel(text: String) {
@@ -274,6 +293,14 @@ fun copyToClipboard(ctx: Context, text: String) {
 /** On-brand animated processing state — shows while a tool is working. */
 @androidx.compose.runtime.Composable
 fun ProcessingCard(label: String, accent: Color) {
+    // Every tool shows this card while it works, so the card itself is the
+    // most reliable place to record that something is in progress - no tool
+    // has to remember to report it, and it clears when the card leaves.
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        ToolWork.start()
+        onDispose { ToolWork.done() }
+    }
+
     val transition = rememberInfiniteTransition(label = "processing")
     val angle by transition.animateFloat(
         initialValue = 0f, targetValue = 360f,

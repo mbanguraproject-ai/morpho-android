@@ -361,13 +361,13 @@ private fun WingsMark() {
         label = "wingSpread"
     )
     Box(
-        Modifier.size(32.dp).clip(Shape.chip).background(Cobalt),
+        Modifier.size(34.dp).clip(Shape.chip).background(Cobalt),
         contentAlignment = Alignment.Center
     ) {
         Image(
             painter = painterResource(R.drawable.ic_launcher_foreground),
             contentDescription = null,
-            modifier = Modifier.size(30.dp).graphicsLayer {
+            modifier = Modifier.size(34.dp).graphicsLayer {
                 scaleX = wingSpread
                 scaleY = 0.9f + (wingSpread * 0.1f)
             }

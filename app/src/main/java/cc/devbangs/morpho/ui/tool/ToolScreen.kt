@@ -8,6 +8,11 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,6 +44,7 @@ import cc.devbangs.morpho.ui.tool.kit.BackgroundRemoverTool
 import cc.devbangs.morpho.ui.tool.kit.PdfMarkupTool
 import cc.devbangs.morpho.ui.tool.kit.hasMarkupTool
 import cc.devbangs.morpho.ui.tool.kit.hasImageTool
+import cc.devbangs.morpho.ui.tool.kit.ToolWork
 import cc.devbangs.morpho.ui.tool.kit.ImageTool
 import cc.devbangs.morpho.ui.tool.kit.hasPdfTool
 import cc.devbangs.morpho.ui.tool.kit.PdfTool
@@ -93,7 +99,16 @@ fun ToolScreen(
         } else onBack()
     }
     // Catch the system back gesture/button too, not just the chevron
-    BackHandler { backWithAd() }
+    var confirmLeave by remember { mutableStateOf(false) }
+    LaunchedEffect(confirmLeave) {
+        if (confirmLeave) { kotlinx.coroutines.delay(4000); confirmLeave = false }
+    }
+    BackHandler {
+        // Leaving mid-operation loses the work, so say so once rather than
+        // silently discarding it.
+        if (ToolWork.busy && !confirmLeave) confirmLeave = true else backWithAd()
+    }
+    DisposableEffect(Unit) { onDispose { ToolWork.reset() } }
 
     Column(Modifier.fillMaxSize().background(Paper)) {
         // top zone
@@ -108,7 +123,9 @@ fun ToolScreen(
                     top = Space.sm, bottom = Space.lg),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButtonMorpho("chevron-left", backWithAd, contentDescription = "Back")
+                IconButtonMorpho("chevron-left", {
+                if (ToolWork.busy && !confirmLeave) confirmLeave = true else backWithAd()
+            }, contentDescription = "Back")
                 Spacer(Modifier.width(4.dp))
                 if (tool != null) {
                     Box(
@@ -137,6 +154,22 @@ fun ToolScreen(
                 .padding(start = Space.gutter, end = Space.gutter, top = Space.md,
                     bottom = contentPadding.calculateBottomPadding() + Space.xxl)
         ) {
+            if (confirmLeave) {
+                Row(
+                    Modifier.fillMaxWidth().clip(Shape.card)
+                        .background(Color(0xFFB4231E).copy(alpha = 0.08f))
+                        .padding(Space.md),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    MorphoIcon("info", tint = Color(0xFFB4231E), size = 17.dp)
+                    Spacer(Modifier.width(Space.sm))
+                    Text(
+                        "Still working. Press back again to stop and lose it.",
+                        color = Ink, style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+                Spacer(Modifier.height(Space.md))
+            }
             Text(tool.short, style = MaterialTheme.typography.bodyLarge, color = InkSoft)
             Spacer(Modifier.height(Space.lg))
             HowItWorks(tool, tool.category.accent)
