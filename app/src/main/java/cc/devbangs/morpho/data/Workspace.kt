@@ -72,6 +72,7 @@ object Workspace {
         if (ToolRegistry.byId(id) == null || contains(id)) return
         _tools.value = _tools.value + id
         persist()
+        Stats.addedToWorkspace(id)
     }
 
     /** Remove a tool from the workspace. No-op if absent. */

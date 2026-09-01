@@ -47,6 +47,15 @@ fun SearchScreen(
     }
     val popular = ToolRegistry.popular
     val nothing = if (query.isBlank()) popular.isEmpty() else groups.isEmpty()
+
+    // Section 46 asks for this by name. Debounced, so a phrase is recorded once
+    // it is finished rather than once per keystroke on the way there.
+    LaunchedEffect(query) {
+        if (query.isNotBlank() && groups.isEmpty()) {
+            kotlinx.coroutines.delay(900)
+            cc.devbangs.morpho.data.Stats.searchMissed(query)
+        }
+    }
     LaunchedEffect(Unit) { focus.requestFocus() }
 
     Column(Modifier.fillMaxSize().background(Paper)) {

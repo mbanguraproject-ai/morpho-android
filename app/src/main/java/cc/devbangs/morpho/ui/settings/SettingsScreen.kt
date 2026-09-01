@@ -58,6 +58,7 @@ private fun openPlayRating(ctx: android.content.Context) {
 fun SettingsScreen(
     onBack: () -> Unit,
     onOpenPlus: () -> Unit,
+    onOpenStats: () -> Unit,
     contentPadding: PaddingValues
 ) {
     val ctx = LocalContext.current
@@ -88,6 +89,7 @@ fun SettingsScreen(
 
             SettingsGroup("GENERAL") {
                 NotificationsToggle(ctx)
+                SettingRow("tab-grid", "Usage", "On this device") { onOpenStats() }
             }
             SettingsGroup("ABOUT") {
                 SettingRow("info", "About Morpho", "v${BuildConfig.VERSION_NAME}") { openUrl(ctx, "https://play.google.com/store/apps/details?id=$PACKAGE") }

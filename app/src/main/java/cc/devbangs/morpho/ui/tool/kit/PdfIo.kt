@@ -140,6 +140,10 @@ internal fun reportSave(
     successToast: String,
     failToast: String = "Couldn't save the file"
 ) {
+    // Section 46: every save in the app funnels through here, so this is the
+    // one place completion and failure can be counted without threading a tool
+    // id through several dozen call sites.
+    cc.devbangs.morpho.data.Stats.recordOutcome(ok)
     if (ok) {
         cc.devbangs.morpho.ads.AdState.markUsed()
         cc.devbangs.morpho.notify.Notifier.notifyDone(ctx, notifyTitle, notifyBody)
