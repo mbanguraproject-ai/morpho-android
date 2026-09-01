@@ -5,7 +5,12 @@ import android.util.Log
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import com.google.android.gms.ads.MobileAds
 import cc.devbangs.morpho.core.Motion
+import cc.devbangs.morpho.ads.AdState
+import cc.devbangs.morpho.ads.ConsentManager
+import cc.devbangs.morpho.billing.BillingManager
+import cc.devbangs.morpho.data.FileStore
 import cc.devbangs.morpho.data.Stats
+import cc.devbangs.morpho.workflow.WorkflowBus
 import cc.devbangs.morpho.data.Workspace
 import cc.devbangs.morpho.notify.Notifier
 
@@ -35,6 +40,25 @@ class MorphoApplication : Application() {
 
         runCatching { Stats.init(applicationContext) }
             .onFailure { Log.e("MorphoInit", "Stats init failed", it) }
+
+        // A Kotlin object initialises the first time anything touches it, and a
+        // mutableStateOf created inside a composition snapshot cannot be read in
+        // that same pass. PlanPill reading AdState.isPlus was the first touch of
+        // AdState, so the state was born mid-composition and every launch threw
+        // IllegalStateException: "Reading a state that was created after the
+        // snapshot was taken".
+        //
+        // Touching each of these here forces class initialisation outside any
+        // snapshot. FileStore, BillingManager and ConsentManager are the same
+        // shape and would have failed the same way on whichever screen happened
+        // to reach them first.
+        runCatching {
+            AdState.isPlus
+            FileStore.loaded
+            BillingManager.isReady
+            ConsentManager.canRequestAdsState
+            WorkflowBus.hasPending
+        }.onFailure { Log.e("MorphoInit", "State warm-up failed", it) }
 
         // AdMob on a background thread, wrapped so SDK init can never crash the app
         Thread {

@@ -9,7 +9,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -180,15 +184,30 @@ fun StatsScreen(onBack: () -> Unit, contentPadding: PaddingValues) {
 
             item {
                 Spacer(Modifier.height(Space.xl))
+                // Section 29: confirm a meaningful destructive action. This is
+                // the only irreversible one in the app, and a second tap is
+                // enough - a dialog would be the first in the whole product.
+                var armed by remember { mutableStateOf(false) }
+                LaunchedEffect(armed) {
+                    if (armed) { kotlinx.coroutines.delay(4000); armed = false }
+                }
                 Box(
-                    Modifier.fillMaxWidth().clip(Shape.card).background(PaperSunk)
+                    Modifier.fillMaxWidth().clip(Shape.card)
+                        .background(if (armed) Warn.copy(alpha = 0.10f) else PaperSunk)
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null
-                        ) { Stats.clear() }
+                        ) {
+                            if (armed) { Stats.clear(); armed = false } else armed = true
+                        }
                         .padding(vertical = 14.dp),
                     contentAlignment = Alignment.Center
-                ) { Text("Clear usage data", color = InkSoft, fontSize = 14.sp) }
+                ) {
+                    Text(
+                        if (armed) "Tap again to clear everything" else "Clear usage data",
+                        color = if (armed) Warn else InkSoft, fontSize = 14.sp
+                    )
+                }
             }
         }
     }

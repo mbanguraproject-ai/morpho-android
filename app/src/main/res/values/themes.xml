@@ -1,11 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!--
+        No statusBarColor, navigationBarColor or windowLayoutInDisplayCutoutMode
+        here. All three are deprecated from Android 15 and Play flags them, and
+        enableEdgeToEdge() in MainActivity already makes the bars transparent and
+        draws around cutouts - the theme was doing the deprecated version of a
+        job the API does properly.
+    -->
     <style name="Theme.Morpho" parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:statusBarColor">@android:color/transparent</item>
-        <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowLightNavigationBar">true</item>
-        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
     </style>
 
     <style name="Theme.Morpho.Splash" parent="Theme.SplashScreen">

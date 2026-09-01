@@ -12,6 +12,11 @@ object WorkflowBus {
     // avoids FileProvider path config entirely — robust for internal hand-off.
     private val pending = mutableStateOf<PendingFile?>(null)
 
+    /** Whether a file is waiting to be picked up. Also gives the warm-up in
+     *  MorphoApplication something to read so this object initialises outside
+     *  a composition snapshot. */
+    val hasPending: Boolean get() = pending.value != null
+
     fun handOff(bytes: ByteArray, mime: String) { pending.value = PendingFile(bytes, mime) }
 
     /** Consume the pending file if present (returns once, then clears). */

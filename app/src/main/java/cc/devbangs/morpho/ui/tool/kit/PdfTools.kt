@@ -172,6 +172,17 @@ private fun OptionRow(
     }
 }
 
+/** What the button on a single-PDF tool should say it is about to do. */
+private fun actionLabel(id: String): String = when (id) {
+    "pdf-to-jpg" -> "Save pages to gallery"
+    "pdf-page-rotator" -> "Rotate PDF"
+    "pdf-watermark" -> "Add watermark"
+    "pdf-splitter" -> "Split PDF"
+    "pdf-page-extractor" -> "Extract pages"
+    "pdf-page-numbering" -> "Add page numbers"
+    else -> "Create PDF"
+}
+
 // ---- Merge PDFs ----
 @Composable
 private fun MergePdf(accent: Color, onOpenTool: (String) -> Unit = {}) {
@@ -242,6 +253,8 @@ private fun PdfFromSingle(id: String, accent: Color, onOpenTool: (String) -> Uni
     var range by remember { mutableStateOf("1") }
     var loadError by remember { mutableStateOf("") }
     var working by remember { mutableStateOf(false) }
+    var output by remember { mutableStateOf<ByteArray?>(null) }
+    var outName by remember { mutableStateOf("") }
     var job by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     val scope = rememberCoroutineScope()
 
@@ -252,6 +265,7 @@ private fun PdfFromSingle(id: String, accent: Color, onOpenTool: (String) -> Uni
             uri = u
             pages = renderPdf(ctx, u, 900)
             loadError = if (pages.isEmpty()) pdfFailureReason(ctx, u) else ""
+            output = null
         }
     }
 
@@ -289,50 +303,53 @@ private fun PdfFromSingle(id: String, accent: Color, onOpenTool: (String) -> Uni
                 "pdf-splitter","pdf-page-extractor" -> Column { FieldLabel("PAGES (e.g. 1,3,5)"); ToolInput(range, { range = it }, "1,2", minLines = 1) }
             }
             val u = uri!!
-            ActionRow(accent,
-                // buildSingle walks every page, so it runs off the main thread
-                // and the busy flag survives across frames - which is what
-                // actually stops a queued second tap producing a second file.
-                onSave = {
-                    if (!working) {
-                        working = true
-                        job = scope.launch {
-                            val bytes = withContext(Dispatchers.Default) {
-                                buildSingle(ctx, id, u, pages, rotation, wm, range)
-                            }
-                            // pdf-to-jpg saves pages itself and returns no PDF;
-                            // writing the empty result produced a 0-byte file in
-                            // Downloads that then reported success.
-                            if (bytes != null && bytes.isNotEmpty())
-                                savePdfToDownloads(ctx, bytes, "morpho_${System.currentTimeMillis()}")
-                            working = false
+            val toGallery = id == "pdf-to-jpg"
+
+            if (working) {
+                ProcessingCard(
+                    if (toGallery) "Saving pages..." else "Building your PDF...", accent
+                )
+                // Cancelling discards the result so nothing is written. The page
+                // loop itself is not interruptible, so it may run on briefly in
+                // the background before it stops mattering.
+                Box(
+                    Modifier.fillMaxWidth().clip(Shape.field)
+                        .background(accent.copy(alpha = 0.10f))
+                        .clickable {
+                            job?.cancel(); job = null; working = false
                         }
+                        .padding(vertical = 14.dp),
+                    contentAlignment = Alignment.Center
+                ) { Text("Cancel", color = accent, fontSize = 15.sp) }
+            } else ToolButton(actionLabel(id), accent) {
+                working = true
+                output = null
+                job = scope.launch {
+                    // Built once. Save and Share then reuse the same bytes
+                    // instead of re-rendering every page for the second action.
+                    val bytes = withContext(Dispatchers.Default) {
+                        buildSingle(ctx, id, u, pages, rotation, wm, range)
                     }
-                },
-                onShare = {
-                    if (!working) {
-                        working = true
-                        job = scope.launch {
-                            val bytes = withContext(Dispatchers.Default) {
-                                buildSingle(ctx, id, u, pages, rotation, wm, range)
-                            }
-                            if (bytes != null && bytes.isNotEmpty())
-                                sharePdf(ctx, bytes, "morpho_${System.currentTimeMillis()}")
-                            working = false
-                        }
+                    // pdf-to-jpg writes its pages to the gallery itself and
+                    // returns nothing, so there is no document to offer.
+                    if (bytes != null && bytes.isNotEmpty()) {
+                        output = bytes
+                        outName = "morpho_${System.currentTimeMillis()}"
                     }
-                },
-                saveLabel = if (id == "pdf-to-jpg") "Save pages to gallery" else "Save PDF",
-                pdfToJpg = id == "pdf-to-jpg",
-                busy = working,
-                // Cancelling discards the result so nothing is written. The
-                // page loop itself is not interruptible, so it may run on
-                // briefly in the background before it stops mattering.
-                onCancel = {
-                    job?.cancel()
-                    job = null
                     working = false
-                })
+                }
+            }
+
+            output?.let { bytes ->
+                ToolResultCard(
+                    fileName = "$outName.pdf",
+                    sizeBytes = bytes.size.toLong(),
+                    accent = accent,
+                    detail = "${pages.size} page(s)",
+                    onSave = { savePdfToDownloads(ctx, bytes, outName) },
+                    onShare = { sharePdf(ctx, bytes, outName) }
+                )
+            }
             val steps = WorkflowGraph.nextSteps(id)
             if (steps.isNotEmpty() && id != "pdf-to-jpg") {
                 NextStepSuggestions(steps) { step ->
