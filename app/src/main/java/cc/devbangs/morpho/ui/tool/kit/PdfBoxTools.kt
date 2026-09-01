@@ -91,6 +91,7 @@ private fun PasswordProtect(accent: Color, onOpenTool: (String) -> Unit = {}) {
     var uri by remember { mutableStateOf<Uri?>(null) }
     var pw by remember { mutableStateOf("") }
     var output by remember { mutableStateOf<ByteArray?>(null) }
+    var outName by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u -> uri = u; output = null }
@@ -101,26 +102,28 @@ private fun PasswordProtect(accent: Color, onOpenTool: (String) -> Unit = {}) {
             Column { FieldLabel("PASSWORD"); ToolInput(pw, { pw = it }, "Set a password", minLines = 1) }
             if (pw.isNotBlank()) {
                 val u = uri!!
-                if (busy) {
-                    ProcessingCard("Protecting your PDF...", accent)
-                } else {
-                    ActionRow(accent,
-                        {
-                            busy = true
-                            scope.launch {
-                                val r = withContext(Dispatchers.Default) { protectPdf(ctx, u, pw) }
-                                r?.let { output = it; savePdfToDownloads(ctx, it, "protected_${System.currentTimeMillis()}") }
-                                busy = false
-                            }
-                        },
-                        {
-                            busy = true
-                            scope.launch {
-                                val r = withContext(Dispatchers.Default) { protectPdf(ctx, u, pw) }
-                                r?.let { output = it; sharePdf(ctx, it, "protected_${System.currentTimeMillis()}") }
-                                busy = false
-                            }
-                        })
+                if (busy) ProcessingCard("Protecting your PDF...", accent)
+                else ToolButton("Protect PDF", accent) {
+                    busy = true
+                    scope.launch {
+                        // Encrypted once; both actions use the same result.
+                        val r = withContext(Dispatchers.Default) { protectPdf(ctx, u, pw) }
+                        if (r != null) {
+                            output = r
+                            outName = "protected_${System.currentTimeMillis()}"
+                        }
+                        busy = false
+                    }
+                }
+                output?.let { bytes ->
+                    ToolResultCard(
+                        fileName = "$outName.pdf",
+                        sizeBytes = bytes.size.toLong(),
+                        accent = accent,
+                        detail = "password set",
+                        onSave = { savePdfToDownloads(ctx, bytes, outName) },
+                        onShare = { sharePdf(ctx, bytes, outName) }
+                    )
                 }
                 output?.let { bytes ->
                     NextStepSuggestions(WorkflowGraph.nextSteps("pdf-password-protector")) { step ->
@@ -178,6 +181,7 @@ private fun Compress(accent: Color, onOpenTool: (String) -> Unit = {}) {
     var uri by remember { mutableStateOf<Uri?>(null) }
     var origSize by remember { mutableStateOf(0L) }
     var output by remember { mutableStateOf<ByteArray?>(null) }
+    var outName by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u ->
@@ -196,26 +200,30 @@ private fun Compress(accent: Color, onOpenTool: (String) -> Unit = {}) {
             Text("Original: ${bytesHuman(origSize)}", color = InkSoft, fontSize = 13.sp)
             Text("Re-renders pages at reduced resolution to shrink size.", color = InkFaint, fontSize = 12.sp)
             val u = uri!!
-            if (busy) {
-                ProcessingCard("Compressing your PDF...", accent)
-            } else {
-                ActionRow(accent,
-                    {
-                        busy = true
-                        scope.launch {
-                            val r = withContext(Dispatchers.Default) { compressPdf(ctx, u) }
-                            r?.let { output = it; savePdfToDownloads(ctx, it, "compressed_${System.currentTimeMillis()}") }
-                            busy = false
-                        }
-                    },
-                    {
-                        busy = true
-                        scope.launch {
-                            val r = withContext(Dispatchers.Default) { compressPdf(ctx, u) }
-                            r?.let { output = it; sharePdf(ctx, it, "compressed_${System.currentTimeMillis()}") }
-                            busy = false
-                        }
-                    })
+            if (busy) ProcessingCard("Compressing your PDF...", accent)
+            else ToolButton("Compress PDF", accent) {
+                busy = true
+                scope.launch {
+                    val r = withContext(Dispatchers.Default) { compressPdf(ctx, u) }
+                    if (r != null) {
+                        output = r
+                        outName = "compressed_${System.currentTimeMillis()}"
+                    }
+                    busy = false
+                }
+            }
+            output?.let { bytes ->
+                // The saving is the whole point of this tool, so it leads.
+                val saved = if (origSize > 0)
+                    (100 - bytes.size * 100L / origSize).coerceAtLeast(0) else 0
+                ToolResultCard(
+                    fileName = "$outName.pdf",
+                    sizeBytes = bytes.size.toLong(),
+                    accent = accent,
+                    detail = if (origSize > 0) "was ${bytesHuman(origSize)}, $saved% smaller" else null,
+                    onSave = { savePdfToDownloads(ctx, bytes, outName) },
+                    onShare = { sharePdf(ctx, bytes, outName) }
+                )
             }
 
             output?.let { bytes ->

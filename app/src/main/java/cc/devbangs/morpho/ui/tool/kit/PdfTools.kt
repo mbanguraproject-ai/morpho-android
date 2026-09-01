@@ -178,38 +178,51 @@ private fun MergePdf(accent: Color, onOpenTool: (String) -> Unit = {}) {
     val ctx = LocalContext.current
     var uris by remember { mutableStateOf<List<Uri>>(emptyList()) }
     var output by remember { mutableStateOf<ByteArray?>(null) }
+    var outName by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
+    var failed by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenMultipleDocuments()
-    ) { uris = it; output = null }
+    ) { uris = it; output = null; failed = false }
 
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
         PickRow("Choose PDF files", "file-add", accent) { picker.launch(arrayOf("application/pdf")) }
         if (uris.isNotEmpty()) {
             Text("${uris.size} PDF(s) selected", color = InkSoft, fontSize = 13.sp)
-            if (busy) {
-                ProcessingCard("Merging your PDFs...", accent)
-            } else {
-                ActionRow(accent,
-                    onSave = {
-                        busy = true
-                        scope.launch {
-                            val b = withContext(Dispatchers.Default) { mergePdfs(ctx, uris) }
-                            if (b != null) { output = b; savePdfToDownloads(ctx, b, "merged_${System.currentTimeMillis()}") }
-                            busy = false
-                        }
-                    },
-                    onShare = {
-                        busy = true
-                        scope.launch {
-                            val b = withContext(Dispatchers.Default) { mergePdfs(ctx, uris) }
-                            if (b != null) { output = b; sharePdf(ctx, b, "merged_${System.currentTimeMillis()}") }
-                            busy = false
-                        }
-                    })
+
+            if (busy) ProcessingCard("Merging your PDFs...", accent)
+            else ToolButton("Merge PDFs", accent) {
+                busy = true; failed = false
+                val srcs = uris.toList()
+                scope.launch {
+                    // Merged once. Save and Share act on the same bytes rather
+                    // than re-rendering every page of every document again.
+                    val b = withContext(Dispatchers.Default) { mergePdfs(ctx, srcs) }
+                    if (b == null || b.isEmpty()) failed = true
+                    else {
+                        output = b
+                        outName = "merged_${System.currentTimeMillis()}"
+                    }
+                    busy = false
+                }
             }
+
+            if (failed) ToolErrorCard(
+                "Couldn't merge those files",
+                "One or more of them couldn't be read. They may be damaged or password-protected.",
+                accent
+            )
+
             output?.let { bytes ->
+                ToolResultCard(
+                    fileName = "$outName.pdf",
+                    sizeBytes = bytes.size.toLong(),
+                    accent = accent,
+                    detail = "${uris.size} document(s)",
+                    onSave = { savePdfToDownloads(ctx, bytes, outName) },
+                    onShare = { sharePdf(ctx, bytes, outName) }
+                )
                 NextStepSuggestions(WorkflowGraph.nextSteps("merge-pdf")) { step ->
                     WorkflowBus.handOff(bytes, "application/pdf"); onOpenTool(step.toolId)
                 }
