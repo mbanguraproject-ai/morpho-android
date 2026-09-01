@@ -6,6 +6,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -37,6 +38,7 @@ import cc.devbangs.morpho.core.Motion
 import cc.devbangs.morpho.core.Shape
 import cc.devbangs.morpho.core.Space
 import cc.devbangs.morpho.data.Tool
+import cc.devbangs.morpho.data.ToolRegistry
 import cc.devbangs.morpho.data.Workspace
 import cc.devbangs.morpho.ui.components.Eyebrow
 import cc.devbangs.morpho.ui.components.cornerPetal
@@ -81,13 +83,21 @@ fun HomeScreen(
                     style = MaterialTheme.typography.displaySmall, color = Ink,
                     modifier = Modifier.padding(start = Space.gutter, end = Space.gutter, top = Space.lg)
                 )
+                Text(
+                    "Let's get your work done",
+                    style = MaterialTheme.typography.bodyLarge, color = InkSoft,
+                    modifier = Modifier.padding(start = Space.gutter, end = Space.gutter, top = 2.dp)
+                )
             }
 
             if (workspace.isEmpty()) {
                 item { EmptyWorkspace(onOpenAddTools) }
             } else {
-                item { Eyebrow("YOUR WORKSPACE", action = "Edit", onAction = onArrange) }
-                itemsIndexed(workspace.chunked(2)) { idx, row ->
+                item { Eyebrow("YOUR WORKSPACE", action = "Manage", onAction = onArrange) }
+                // The add cell is the last slot in the grid rather than a link
+                // underneath it, so adding reads as part of the workspace.
+                val slots = (0..workspace.size).toList()
+                itemsIndexed(slots.chunked(2)) { idx, row ->
                     Row(
                         Modifier.fillMaxWidth()
                             .padding(horizontal = Space.gutter, vertical = 5.dp)
@@ -95,14 +105,18 @@ fun HomeScreen(
                             .reveal(idx),
                         horizontalArrangement = Arrangement.spacedBy(Space.md)
                     ) {
-                        row.forEach { t ->
-                            WorkspaceCard(t, { onOpenTool(t.id) },
-                                Modifier.weight(1f).fillMaxHeight())
+                        row.forEach { slot ->
+                            val cell = Modifier.weight(1f).fillMaxHeight()
+                            if (slot < workspace.size) {
+                                val t = workspace[slot]
+                                WorkspaceCard(t, { onOpenTool(t.id) }, cell)
+                            } else {
+                                AddToolsCell(onOpenAddTools, cell)
+                            }
                         }
                         if (row.size == 1) Spacer(Modifier.weight(1f))
                     }
                 }
-                item { AddToolsRow(onOpenAddTools) }
             }
 
             if (recent.isNotEmpty()) {
@@ -112,7 +126,7 @@ fun HomeScreen(
                 }
             }
 
-            item { ExploreRow(onExploreTools) }
+            item { ToolsBanner(onExploreTools) }
         }
 
         Row(
@@ -200,29 +214,6 @@ private fun WorkspaceCard(t: Tool, onClick: () -> Unit, modifier: Modifier) {
 }
 
 @Composable
-private fun AddToolsRow(onClick: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth()
-            .padding(horizontal = Space.gutter, vertical = Space.md)
-            .clip(Shape.card)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null, onClick = onClick
-            )
-            .padding(vertical = Space.md),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            Modifier.size(30.dp).clip(Shape.pill).background(CobaltWash),
-            contentAlignment = Alignment.Center
-        ) { MorphoIcon("plus", tint = Cobalt, size = 15.dp) }
-        Spacer(Modifier.width(Space.md))
-        Text("Add tools to your workspace", color = Cobalt,
-            fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-    }
-}
-
-@Composable
 private fun RecentRow(t: Tool, onClick: () -> Unit) {
     val accent = t.category.accent
     Row(
@@ -246,23 +237,61 @@ private fun RecentRow(t: Tool, onClick: () -> Unit) {
     }
 }
 
+/** The one route from Home into the full catalog. Count is live. */
 @Composable
-private fun ExploreRow(onClick: () -> Unit) {
+private fun ToolsBanner(onClick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth()
             .padding(horizontal = Space.gutter, vertical = Space.xl)
-            .clip(Shape.card)
+            .clip(Shape.card).background(CobaltWash)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null, onClick = onClick
             )
-            .padding(vertical = Space.md),
+            .padding(Space.md),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text("Explore tools", color = Ink,
-            style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.width(6.dp))
-        MorphoIcon("arrow-right", tint = Cobalt, size = 16.dp)
+        Box(
+            Modifier.size(38.dp).clip(Shape.chip).background(Cobalt),
+            contentAlignment = Alignment.Center
+        ) { MorphoIcon("tab-grid", tint = Paper, size = 19.dp) }
+        Spacer(Modifier.width(Space.md))
+        Column(Modifier.weight(1f)) {
+            Text("${ToolRegistry.all.size} tools at your fingertips",
+                style = MaterialTheme.typography.titleMedium, color = Ink)
+            Text("Explore the complete collection",
+                style = MaterialTheme.typography.bodyMedium, color = InkSoft)
+        }
+        MorphoIcon("chevron-right", tint = Cobalt, size = 16.dp)
+    }
+}
+
+/** Dashed slot that sits in the workspace grid as its final cell. */
+@Composable
+private fun AddToolsCell(onClick: () -> Unit, modifier: Modifier) {
+    Column(
+        modifier.clip(Shape.card)
+            .border(1.dp, Cobalt.copy(alpha = 0.35f), Shape.card)
+            .background(CobaltWash.copy(alpha = 0.45f))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                role = androidx.compose.ui.semantics.Role.Button,
+                onClick = onClick
+            )
+            .padding(15.dp)
+    ) {
+        Box(
+            Modifier.size(42.dp).clip(Shape.chip).background(CobaltWash),
+            contentAlignment = Alignment.Center
+        ) { MorphoIcon("plus", tint = Cobalt, size = 22.dp) }
+        Spacer(Modifier.height(16.dp))
+        Text("Add tools", style = MaterialTheme.typography.titleMedium, color = Cobalt,
+            maxLines = 2, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.heightIn(min = 40.dp))
+        Text("Customize your workspace",
+            style = MaterialTheme.typography.bodyMedium, color = InkSoft,
+            maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
 }
 

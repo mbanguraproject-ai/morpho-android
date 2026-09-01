@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -22,6 +24,10 @@ import androidx.navigation.navArgument
 import cc.devbangs.morpho.core.Dest
 import cc.devbangs.morpho.core.Motion
 import cc.devbangs.morpho.data.Workspace
+import cc.devbangs.morpho.data.MorphoFile
+import cc.devbangs.morpho.ui.files.FileViewerScreen
+import cc.devbangs.morpho.ui.files.FilesScreen
+import cc.devbangs.morpho.ui.master.MasterSheet
 import cc.devbangs.morpho.ui.onboarding.OnboardingScreen
 import cc.devbangs.morpho.ui.category.CategoryScreen
 import cc.devbangs.morpho.ui.components.MorphoBottomBar
@@ -45,13 +51,18 @@ fun MorphoApp() {
     }
 
     val nav = rememberNavController()
+    var showMaster by remember { mutableStateOf(false) }
+    var viewing by remember { mutableStateOf<MorphoFile?>(null) }
+    var masterFile by remember { mutableStateOf<MorphoFile?>(null) }
     val backStack by nav.currentBackStackEntryAsState()
     val route = backStack?.destination?.route
 
-    val topLevel = route == Dest.Home.route || route == Dest.Categories.route
+    val topLevel = route == Dest.Home.route || route == Dest.Categories.route ||
+        route == Dest.Files.route
     val barHaze = remember { HazeState() }
     val currentTab = when (route) {
         Dest.Categories.route -> "categories"
+        Dest.Files.route -> "files"
         else -> "home"
     }
 
@@ -90,6 +101,12 @@ fun MorphoApp() {
                         }
                     },
                     contentPadding = bottomBarPadding(topLevel)
+                )
+            }
+            composable(Dest.Files.route) {
+                FilesScreen(
+                    contentPadding = bottomBarPadding(true),
+                    onOpenFile = { viewing = it }
                 )
             }
             composable(Dest.Categories.route) {
@@ -162,16 +179,45 @@ fun MorphoApp() {
                 hazeState = barHaze,
                 current = currentTab,
                 onSelect = { tab ->
-                    val dest = if (tab == "categories") Dest.Categories.route
-                    else if (tab == "search") Dest.Search.route
-                    else Dest.Home.route
+                    val dest = when (tab) {
+                        "categories" -> Dest.Categories.route
+                        "files" -> Dest.Files.route
+                        "search" -> Dest.Search.route
+                        else -> Dest.Home.route
+                    }
                     if (tab == "search") nav.navigate(Dest.Search.route)
                     else nav.navigate(dest) {
                         popUpTo(Dest.Home.route) { inclusive = false }
                         launchSingleTop = true
                     }
                 },
+                onMaster = { showMaster = true },
                 modifier = Modifier.align(Alignment.BottomCenter)
+            )
+        }
+
+        // Full-screen over everything, including the bar.
+        viewing?.let { f ->
+            FileViewerScreen(
+                file = f,
+                onBack = { viewing = null },
+                onUseTool = {
+                    viewing = null
+                    masterFile = it
+                    showMaster = true
+                }
+            )
+        }
+
+        if (showMaster) {
+            MasterSheet(
+                onDismiss = { showMaster = false; masterFile = null },
+                onOpenTool = {
+                    showMaster = false
+                    masterFile = null
+                    nav.navigate(Dest.Tool(it).route)
+                },
+                initial = masterFile
             )
         }
     }
@@ -180,7 +226,7 @@ fun MorphoApp() {
 /**
  * Bottom content inset for scrollable screens.
  *
- * [withBar] is true only for top-level screens that sit beneath the floating
+ * [withBar] is true only for top-level screens that sit beneath the docked
  * bottom bar; those reserve the bar height on top of the system inset.
  *
  * Every screen gets the navigation-bar inset so the final row can always be
@@ -190,5 +236,6 @@ fun MorphoApp() {
 @Composable
 private fun bottomBarPadding(withBar: Boolean): PaddingValues {
     val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    return PaddingValues(bottom = if (withBar) 92.dp + navInset else navInset)
+    // 67dp of bar above the inset: hairline + 6dp + the 52dp centre button + 8dp.
+    return PaddingValues(bottom = if (withBar) 67.dp + navInset else navInset)
 }
