@@ -16,6 +16,12 @@ val CobaltPress = Color(0xFF1638BE)
 val CobaltWash  = Color(0xFFEAEEFF) // tinted chip / selected bg
 val CobaltEdge  = Color(0xFFC8D3FF) // tinted hairline
 
+// Section 34 asks for semantic tokens and section 19 names a green success
+// state, but green only existed as a category accent. Same value, given the
+// role it was already meant to have.
+val Success     = Color(0xFF15803D)
+val SuccessWash = Color(0xFFE8F5ED)
+
 // Category accents (muted, derived from cobalt family — used sparingly as 1px marks)
 val CatPdf       = Color(0xFF1A46E5)
 val CatImage     = Color(0xFF0E7C86)

@@ -72,11 +72,18 @@ private fun ImagesToPdf(accent: Color, onOpenTool: (String) -> Unit = {}) {
     val ctx = LocalContext.current
     var uris by remember { mutableStateOf<List<Uri>>(emptyList()) }
     var output by remember { mutableStateOf<ByteArray?>(null) }
+    var outName by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
+    var failed by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+
+    var pageSize by remember { mutableStateOf("A4") }
+    var landscape by remember { mutableStateOf(false) }
+    var quality by remember { mutableStateOf(90) }
+
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia(30)
-    ) { uris = it; output = null }
+    ) { uris = it; output = null; failed = false }
 
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
         PickRow("Choose images", "image-add", accent) {
@@ -85,19 +92,81 @@ private fun ImagesToPdf(accent: Color, onOpenTool: (String) -> Unit = {}) {
         }
         if (uris.isNotEmpty()) {
             Text("${uris.size} image(s) selected", color = InkSoft, fontSize = 13.sp)
-            ActionRow(accent,
-                onSave = {
-                    val bytes = buildImagesPdf(ctx, uris) ?: return@ActionRow
-                    output = bytes; savePdfToDownloads(ctx, bytes, "morpho_${System.currentTimeMillis()}")
-                },
-                onShare = {
-                    val bytes = buildImagesPdf(ctx, uris) ?: return@ActionRow
-                    output = bytes; sharePdf(ctx, bytes, "morpho_${System.currentTimeMillis()}")
-                })
+
+            FieldLabel("PAGE SIZE")
+            OptionRow(listOf("A4", "Letter", "Original"), pageSize, accent) {
+                pageSize = it; output = null
+            }
+            if (pageSize != "Original") {
+                FieldLabel("ORIENTATION")
+                OptionRow(
+                    listOf("Portrait", "Landscape"),
+                    if (landscape) "Landscape" else "Portrait", accent
+                ) { landscape = it == "Landscape"; output = null }
+            }
+            StepControl("QUALITY %", quality, listOf(60, 75, 90, 100), accent) {
+                quality = it; output = null
+            }
+
+            if (busy) ProcessingCard("Building your PDF...", accent)
+            else ToolButton("Create PDF", accent) {
+                busy = true; failed = false
+                val srcs = uris.toList()
+                val size = pageSize; val land = landscape; val q = quality
+                scope.launch {
+                    val bytes = withContext(Dispatchers.Default) {
+                        buildImagesPdf(ctx, srcs, size, land, q)
+                    }
+                    if (bytes == null || bytes.isEmpty()) failed = true
+                    else {
+                        output = bytes
+                        outName = "morpho_${System.currentTimeMillis()}"
+                    }
+                    busy = false
+                }
+            }
+
+            if (failed) ToolErrorCard(
+                "Couldn't build that PDF",
+                "One or more of those images couldn't be read. Try a different selection.",
+                accent
+            )
+
             output?.let { bytes ->
+                ToolResultCard(
+                    fileName = "$outName.pdf",
+                    sizeBytes = bytes.size.toLong(),
+                    accent = accent,
+                    detail = "${uris.size} page(s)",
+                    onSave = { savePdfToDownloads(ctx, bytes, outName) },
+                    onShare = { sharePdf(ctx, bytes, outName) }
+                )
                 NextStepSuggestions(WorkflowGraph.nextSteps("jpg-to-pdf")) { step ->
                     WorkflowBus.handOff(bytes, "application/pdf"); onOpenTool(step.toolId)
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OptionRow(
+    options: List<String>,
+    selected: String,
+    accent: Color,
+    onSelect: (String) -> Unit
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+        options.forEach { option ->
+            val on = option == selected
+            Box(
+                Modifier.weight(1f).clip(Shape.field)
+                    .background(if (on) accent else PaperSunk)
+                    .clickable { onSelect(option) }
+                    .padding(vertical = 11.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(option, color = if (on) Paper else InkSoft, fontSize = 14.sp)
             }
         }
     }
@@ -160,6 +229,7 @@ private fun PdfFromSingle(id: String, accent: Color, onOpenTool: (String) -> Uni
     var range by remember { mutableStateOf("1") }
     var loadError by remember { mutableStateOf("") }
     var working by remember { mutableStateOf(false) }
+    var job by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     val scope = rememberCoroutineScope()
 
     val picker = rememberLauncherForActivityResult(
@@ -213,7 +283,7 @@ private fun PdfFromSingle(id: String, accent: Color, onOpenTool: (String) -> Uni
                 onSave = {
                     if (!working) {
                         working = true
-                        scope.launch {
+                        job = scope.launch {
                             val bytes = withContext(Dispatchers.Default) {
                                 buildSingle(ctx, id, u, pages, rotation, wm, range)
                             }
@@ -229,7 +299,7 @@ private fun PdfFromSingle(id: String, accent: Color, onOpenTool: (String) -> Uni
                 onShare = {
                     if (!working) {
                         working = true
-                        scope.launch {
+                        job = scope.launch {
                             val bytes = withContext(Dispatchers.Default) {
                                 buildSingle(ctx, id, u, pages, rotation, wm, range)
                             }
@@ -241,7 +311,15 @@ private fun PdfFromSingle(id: String, accent: Color, onOpenTool: (String) -> Uni
                 },
                 saveLabel = if (id == "pdf-to-jpg") "Save pages to gallery" else "Save PDF",
                 pdfToJpg = id == "pdf-to-jpg",
-                busy = working)
+                busy = working,
+                // Cancelling discards the result so nothing is written. The
+                // page loop itself is not interruptible, so it may run on
+                // briefly in the background before it stops mattering.
+                onCancel = {
+                    job?.cancel()
+                    job = null
+                    working = false
+                })
             val steps = WorkflowGraph.nextSteps(id)
             if (steps.isNotEmpty() && id != "pdf-to-jpg") {
                 NextStepSuggestions(steps) { step ->
@@ -279,16 +357,24 @@ private fun PickRow(label: String, icon: String, accent: Color, onClick: () -> U
 private fun ActionRow(
     accent: Color, onSave: () -> Unit, onShare: () -> Unit,
     saveLabel: String = "Save PDF", pdfToJpg: Boolean = false,
-    busy: Boolean = false
+    busy: Boolean = false, onCancel: (() -> Unit)? = null
 ) {
     val ctx = LocalContext.current
-    // Section 29: a button must never look available while its job is running.
+    // Section 29: a button must never look available while its job is running,
+    // and cancellation has to be explicit. While work is in flight the second
+    // slot becomes Cancel rather than adding a control that is dead most of
+    // the time.
     Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
         Box(Modifier.weight(1f)) {
             ToolButton(if (busy) "Working\u2026" else saveLabel, accent, enabled = !busy) { onSave() }
         }
-        if (!pdfToJpg) Box(Modifier.weight(1f)) {
-            OutlineBtn("Share", accent, enabled = !busy) { onShare() }
+        when {
+            busy && onCancel != null -> Box(Modifier.weight(1f)) {
+                OutlineBtn("Cancel", accent) { onCancel() }
+            }
+            !pdfToJpg -> Box(Modifier.weight(1f)) {
+                OutlineBtn("Share", accent, enabled = !busy) { onShare() }
+            }
         }
     }
 }
@@ -327,10 +413,67 @@ private fun docBytes(doc: PdfDocument): ByteArray {
     val s = ByteArrayOutputStream(); doc.writeTo(s); doc.close(); return s.toByteArray()
 }
 
-private fun buildImagesPdf(ctx: android.content.Context, uris: List<Uri>): ByteArray? {
+/**
+ * Page dimensions at 150dpi, the point where a phone photo stops looking soft
+ * in print without the file becoming unreasonable.
+ */
+private fun pageDims(size: String, landscape: Boolean): Pair<Int, Int>? = when (size) {
+    "A4" -> if (landscape) 1754 to 1240 else 1240 to 1754
+    "Letter" -> if (landscape) 1650 to 1275 else 1275 to 1650
+    else -> null
+}
+
+/**
+ * Quality drives both how large the image is decoded and how hard it is
+ * re-encoded, so the setting has a real effect on the output rather than
+ * being a number that changes nothing.
+ */
+private fun imageAtQuality(ctx: android.content.Context, uri: Uri, quality: Int): Bitmap? {
+    val maxDim = 900 + (quality / 100f * 1500).toInt()
+    val src = decodeBitmap(ctx, uri, maxDim) ?: return null
+    if (quality >= 100) return src
+    return try {
+        val bos = java.io.ByteArrayOutputStream()
+        src.compress(Bitmap.CompressFormat.JPEG, quality, bos)
+        val bytes = bos.toByteArray()
+        android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: src
+    } catch (e: Exception) {
+        src
+    }
+}
+
+private fun buildImagesPdf(
+    ctx: android.content.Context,
+    uris: List<Uri>,
+    pageSize: String = "Original",
+    landscape: Boolean = false,
+    quality: Int = 90
+): ByteArray? {
     if (uris.isEmpty()) return null
     val doc = PdfDocument()
-    uris.forEach { u -> decodeBitmap(ctx, u, 1600)?.let { bitmapToPdfPage(doc, it) } }
+    val dims = pageDims(pageSize, landscape)
+    uris.forEach { u ->
+        val bmp = imageAtQuality(ctx, u, quality) ?: return@forEach
+        if (dims == null) {
+            bitmapToPdfPage(doc, bmp)
+        } else {
+            val pw = dims.first
+            val ph = dims.second
+            val info = PdfDocument.PageInfo.Builder(pw, ph, doc.pages.size + 1).create()
+            val page = doc.startPage(info)
+            page.canvas.drawColor(android.graphics.Color.WHITE)
+            val scale = minOf(pw / bmp.width.toFloat(), ph / bmp.height.toFloat())
+            val w = bmp.width * scale
+            val h = bmp.height * scale
+            val left = (pw - w) / 2f
+            val top = (ph - h) / 2f
+            page.canvas.drawBitmap(
+                bmp, null,
+                android.graphics.RectF(left, top, left + w, top + h), null
+            )
+            doc.finishPage(page)
+        }
+    }
     return docBytes(doc)
 }
 

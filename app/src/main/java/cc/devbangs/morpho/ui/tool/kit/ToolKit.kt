@@ -28,6 +28,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cc.devbangs.morpho.core.Shape
@@ -69,6 +70,63 @@ fun ToolErrorCard(
             ) {
                 Text(actionLabel, color = Paper, fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold)
+            }
+        }
+    }
+}
+
+/**
+ * Blueprint section 42 - a result is a destination, not a toast.
+ *
+ * Says what was made, how big it is, and offers the actions separately from
+ * the thing that made it. Most tools used to write straight to storage on the
+ * button press, so the user never saw what they got and rebuilding it for a
+ * second action meant doing the whole job twice.
+ */
+@Composable
+fun ToolResultCard(
+    fileName: String,
+    sizeBytes: Long,
+    accent: Color,
+    onSave: () -> Unit,
+    onShare: () -> Unit,
+    detail: String? = null
+) {
+    Column(
+        Modifier.fillMaxWidth().clip(Shape.card)
+            .background(SuccessWash)
+            .border(1.dp, Success.copy(alpha = 0.22f), Shape.card)
+            .padding(Space.lg)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(28.dp).clip(Shape.pill).background(Success),
+                contentAlignment = Alignment.Center
+            ) { MorphoIcon("check", tint = Paper, size = 15.dp) }
+            Spacer(Modifier.width(Space.sm))
+            Text("Ready", style = MaterialTheme.typography.titleMedium, color = Ink)
+        }
+        Spacer(Modifier.height(Space.sm))
+        Text(fileName, color = Ink, fontSize = 14.sp, maxLines = 1,
+            overflow = TextOverflow.Ellipsis)
+        Text(
+            buildString {
+                append(bytesHuman(sizeBytes))
+                if (detail != null) { append("  \u00b7  "); append(detail) }
+            },
+            color = InkSoft, fontSize = 13.sp
+        )
+        Spacer(Modifier.height(Space.md))
+        Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+            Box(Modifier.weight(1f)) { ToolButton("Save", accent, onClick = onSave) }
+            Box(Modifier.weight(1f)) {
+                Box(
+                    Modifier.fillMaxWidth().clip(Shape.field)
+                        .background(accent.copy(alpha = 0.10f))
+                        .clickable(onClick = onShare)
+                        .padding(vertical = 15.dp),
+                    contentAlignment = Alignment.Center
+                ) { Text("Share", color = accent, fontSize = 15.sp) }
             }
         }
     }
