@@ -10,12 +10,21 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import cc.devbangs.morpho.ui.theme.Ink
 import cc.devbangs.morpho.ui.theme.Paper
+import cc.devbangs.morpho.ui.theme.PaperLine
 
 /**
- * Signature elevation: white surface + tinted lift + a 1px top inset highlight,
- * so cards read as physical objects catching light (the mockup's depth).
- * [accent] tints the shadow; defaults to cobalt.
+ * Signature elevation: white surface, a grounded shadow, and an edge that
+ * catches light at the top and defines the card at the bottom.
+ *
+ * The surface is [Paper] and so is every page background, so the card and the
+ * page are the same colour - separation has to come entirely from the shadow
+ * and the edge. Previously neither did the job: the shadow was tinted with the
+ * accent at low alpha, which reads as a faint colour haze rather than depth on
+ * white, and the border was a white highlight, invisible against a white page.
+ *
+ * [accent] still tints the lift, but only slightly, over a neutral base.
  */
 fun Modifier.morphLift(
     shape: Shape,
@@ -27,13 +36,16 @@ fun Modifier.morphLift(
         elevation = if (pressed) 3.dp else elevation,
         shape = shape,
         clip = false,
-        ambientColor = accent.copy(alpha = 0.14f),
-        spotColor = accent.copy(alpha = 0.22f)
+        // Ink, not accent: a shadow is an absence of light, not a colour.
+        ambientColor = Ink.copy(alpha = 0.18f),
+        spotColor = Ink.copy(alpha = 0.26f)
     )
     .background(Paper, shape)
-    // faint top highlight = the inset 0 1px 0 rgba(255,255,255,.9)
+    // Light catch at the very top, a real hairline everywhere else, so the
+    // card has a defined edge even where the shadow falls away.
     .border(1.dp, Brush.verticalGradient(
-        0f to Color.White.copy(alpha = 0.85f),
-        0.5f to Color.Transparent
+        0f to Color.White.copy(alpha = 0.9f),
+        0.18f to PaperLine,
+        1f to PaperLine
     ), shape)
     .clip(shape)
