@@ -141,6 +141,8 @@ private fun Unlock(accent: Color) {
     var uri by remember { mutableStateOf<Uri?>(null) }
     var pw by remember { mutableStateOf("") }
     var msg by remember { mutableStateOf("") }
+    var output by remember { mutableStateOf<ByteArray?>(null) }
+    var outName by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u -> uri = u; msg = "" }
@@ -149,26 +151,28 @@ private fun Unlock(accent: Color) {
         if (uri != null) {
             Column { FieldLabel("CURRENT PASSWORD"); ToolInput(pw, { pw = it }, "Enter the PDF's password", minLines = 1) }
             val u = uri!!
-            if (busy) {
-                ProcessingCard("Unlocking your PDF...", accent)
-            } else {
-                ActionRow(accent,
-                    {
-                        busy = true
-                        scope.launch {
-                            val r = withContext(Dispatchers.Default) { unlockPdf(ctx, u, pw) }
-                            if (r != null) { savePdfToDownloads(ctx, r, "unlocked_${System.currentTimeMillis()}"); msg = "" } else msg = "\u26a0 Wrong password or not encrypted."
-                            busy = false
-                        }
-                    },
-                    {
-                        busy = true
-                        scope.launch {
-                            val r = withContext(Dispatchers.Default) { unlockPdf(ctx, u, pw) }
-                            if (r != null) sharePdf(ctx, r, "unlocked_${System.currentTimeMillis()}") else msg = "\u26a0 Wrong password."
-                            busy = false
-                        }
-                    })
+            if (busy) ProcessingCard("Unlocking your PDF...", accent)
+            else ToolButton("Unlock PDF", accent) {
+                busy = true
+                scope.launch {
+                    val r = withContext(Dispatchers.Default) { unlockPdf(ctx, u, pw) }
+                    if (r != null) {
+                        output = r
+                        outName = "unlocked_${System.currentTimeMillis()}"
+                        msg = ""
+                    } else msg = "\u26a0 Wrong password, or the file is not encrypted."
+                    busy = false
+                }
+            }
+            output?.let { bytes ->
+                ToolResultCard(
+                    fileName = "$outName.pdf",
+                    sizeBytes = bytes.size.toLong(),
+                    accent = accent,
+                    detail = "password removed",
+                    onSave = { savePdfToDownloads(ctx, bytes, outName) },
+                    onShare = { sharePdf(ctx, bytes, outName) }
+                )
             }
             if (msg.isNotEmpty()) Text(msg, color = InkSoft, fontSize = 13.sp)
         }
@@ -276,19 +280,6 @@ private fun PickRow(label: String, accent: Color, onClick: () -> Unit) {
         Spacer(Modifier.width(Space.md)); Text(label, color = accent, fontSize = 15.sp)
     }
 }
-@Composable
-private fun ActionRow(accent: Color, onSave: () -> Unit, onShare: () -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-        Box(Modifier.weight(1f)) { ToolButton("Save PDF", accent) { onSave() } }
-        Box(Modifier.weight(1f)) {
-            Box(Modifier.fillMaxWidth().clip(Shape.field).background(accent.copy(alpha = 0.10f))
-                .clickable { onShare() }.padding(vertical = 15.dp), contentAlignment = Alignment.Center) {
-                Text("Share", color = accent, fontSize = 15.sp)
-            }
-        }
-    }
-}
-
 @androidx.compose.runtime.Composable
 private fun PageDeleter(accent: Color) {
     val ctx = LocalContext.current

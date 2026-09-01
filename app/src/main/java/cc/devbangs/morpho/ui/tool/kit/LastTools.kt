@@ -153,6 +153,10 @@ private fun PdfStamp(id: String, accent: Color) {
     var prefix by remember { mutableStateOf("MORPHO") }
     var start by remember { mutableStateOf("1") }
     var loadError by remember { mutableStateOf("") }
+    var stamping by remember { mutableStateOf(false) }
+    var stampOut by remember { mutableStateOf<ByteArray?>(null) }
+    var stampName by remember { mutableStateOf("") }
+    val stampScope = androidx.compose.runtime.rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u ->
         if (u != null) {
             pages = renderPdf(ctx, u, 900)
@@ -180,13 +184,42 @@ private fun PdfStamp(id: String, accent: Color) {
                         contentScale = ContentScale.Fit)
                 }
             }
-            val startN = start.toIntOrNull() ?: 1
-            val stamped = pages.mapIndexed { i, p ->
-                if (bates) stampBates(p, prefix, startN + i) else stampHeaderFooter(p, header, footer)
+            // stamped used to be computed here, in composition, so every
+            // keystroke in the header field copied and redrew every page of the
+            // document on the main thread for a result usually thrown away.
+            // It is built once, on demand, off the main thread.
+            if (stamping) ProcessingCard("Stamping your pages...", accent)
+            else ToolButton(if (bates) "Add Bates numbers" else "Add header and footer", accent) {
+                stamping = true
+                val startN = start.toIntOrNull() ?: 1
+                val src = pages.toList()
+                val useBates = bates
+                val pfx = prefix; val hdr = header; val ftr = footer
+                stampScope.launch {
+                    val bytes = withContext(Dispatchers.Default) {
+                        val marked = src.mapIndexed { i, p ->
+                            if (useBates) stampBates(p, pfx, startN + i)
+                            else stampHeaderFooter(p, hdr, ftr)
+                        }
+                        pagesToPdf2(marked)
+                    }
+                    if (bytes != null) {
+                        stampOut = bytes
+                        stampName = "stamped_${System.currentTimeMillis()}"
+                    }
+                    stamping = false
+                }
             }
-            ActionRow(accent,
-                { pagesToPdf2(stamped)?.let { savePdfToDownloads(ctx, it, "stamped_${System.currentTimeMillis()}") } },
-                { pagesToPdf2(stamped)?.let { sharePdf(ctx, it, "stamped_${System.currentTimeMillis()}") } })
+            stampOut?.let { bytes ->
+                ToolResultCard(
+                    fileName = "$stampName.pdf",
+                    sizeBytes = bytes.size.toLong(),
+                    accent = accent,
+                    detail = "${pages.size} page(s)",
+                    onSave = { savePdfToDownloads(ctx, bytes, stampName) },
+                    onShare = { sharePdf(ctx, bytes, stampName) }
+                )
+            }
         }
     }
 }
@@ -273,19 +306,6 @@ private fun PickRow(label: String, icon: String, accent: Color, onClick: () -> U
         Text("Tap to select", color = InkFaint, fontSize = 12.sp)
     }
 }
-@Composable
-private fun ActionRow(accent: Color, onSave: () -> Unit, onShare: () -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-        Box(Modifier.weight(1f)) { ToolButton("Save PDF", accent) { onSave() } }
-        Box(Modifier.weight(1f)) {
-            Box(Modifier.fillMaxWidth().clip(Shape.field).background(accent.copy(alpha = 0.10f))
-                .clickable { onShare() }.padding(vertical = 15.dp), contentAlignment = Alignment.Center) {
-                Text("Share", color = accent, fontSize = 15.sp)
-            }
-        }
-    }
-}
-
 @Composable
 private fun SpeechToText(accent: Color) {
     val ctx = LocalContext.current

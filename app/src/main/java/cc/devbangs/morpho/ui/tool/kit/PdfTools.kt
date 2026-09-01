@@ -384,43 +384,6 @@ private fun PickRow(label: String, icon: String, accent: Color, onClick: () -> U
 }
 
 @Composable
-private fun ActionRow(
-    accent: Color, onSave: () -> Unit, onShare: () -> Unit,
-    saveLabel: String = "Save PDF", pdfToJpg: Boolean = false,
-    busy: Boolean = false, onCancel: (() -> Unit)? = null
-) {
-    val ctx = LocalContext.current
-    // Section 29: a button must never look available while its job is running,
-    // and cancellation has to be explicit. While work is in flight the second
-    // slot becomes Cancel rather than adding a control that is dead most of
-    // the time.
-    Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-        Box(Modifier.weight(1f)) {
-            ToolButton(if (busy) "Working\u2026" else saveLabel, accent, enabled = !busy) { onSave() }
-        }
-        when {
-            busy && onCancel != null -> Box(Modifier.weight(1f)) {
-                OutlineBtn("Cancel", accent) { onCancel() }
-            }
-            !pdfToJpg -> Box(Modifier.weight(1f)) {
-                OutlineBtn("Share", accent, enabled = !busy) { onShare() }
-            }
-        }
-    }
-}
-
-@Composable
-private fun OutlineBtn(text: String, accent: Color, enabled: Boolean = true, onClick: () -> Unit) {
-    val guard = rememberTapGuard()
-    Box(Modifier.fillMaxWidth().clip(Shape.field)
-        .background(accent.copy(alpha = if (enabled) 0.10f else 0.04f))
-        .clickable(enabled = enabled) { guard(onClick) }
-        .padding(vertical = 15.dp), contentAlignment = Alignment.Center) {
-        Text(text, color = if (enabled) accent else InkFaint, fontSize = 15.sp)
-    }
-}
-
-@Composable
 private fun StepControl(label: String, value: Int, opts: List<Int>, accent: Color, onChange: (Int) -> Unit) {
     Column {
         FieldLabel("$label: $value")
@@ -581,6 +544,7 @@ private fun ScanToPdf(accent: Color, onOpenTool: (String) -> Unit = {}) {
     val ctx = LocalContext.current
     var pages by remember { mutableStateOf<List<Uri>>(emptyList()) }
     var output by remember { mutableStateOf<ByteArray?>(null) }
+    var scanName by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var pendingUri by remember { mutableStateOf<Uri?>(null) }
     val scope = rememberCoroutineScope()
@@ -619,25 +583,30 @@ private fun ScanToPdf(accent: Color, onOpenTool: (String) -> Unit = {}) {
             if (busy) {
                 ProcessingCard("Building your PDF...", accent)
             } else {
-                ActionRow(accent,
-                    onSave = {
-                        busy = true
-                        scope.launch {
-                            val bytes = withContext(Dispatchers.Default) { buildImagesPdf(ctx, pages) }
-                            if (bytes != null) { output = bytes; savePdfToDownloads(ctx, bytes, "scan_${System.currentTimeMillis()}") }
-                            busy = false
+                ToolButton("Create PDF", accent) {
+                    busy = true
+                    val shots = pages.toList()
+                    scope.launch {
+                        val bytes = withContext(Dispatchers.Default) {
+                            buildImagesPdf(ctx, shots, "A4", false, 90)
                         }
-                    },
-                    onShare = {
-                        busy = true
-                        scope.launch {
-                            val bytes = withContext(Dispatchers.Default) { buildImagesPdf(ctx, pages) }
-                            if (bytes != null) { output = bytes; sharePdf(ctx, bytes, "scan_${System.currentTimeMillis()}") }
-                            busy = false
+                        if (bytes != null) {
+                            output = bytes
+                            scanName = "scan_${System.currentTimeMillis()}"
                         }
-                    })
+                        busy = false
+                    }
+                }
             }
             output?.let { bytes ->
+                ToolResultCard(
+                    fileName = "$scanName.pdf",
+                    sizeBytes = bytes.size.toLong(),
+                    accent = accent,
+                    detail = "${pages.size} page(s)",
+                    onSave = { savePdfToDownloads(ctx, bytes, scanName) },
+                    onShare = { sharePdf(ctx, bytes, scanName) }
+                )
                 NextStepSuggestions(WorkflowGraph.nextSteps("scan-to-pdf")) { step ->
                     WorkflowBus.handOff(bytes, "application/pdf"); onOpenTool(step.toolId)
                 }

@@ -95,6 +95,8 @@ private fun PdfCropTool(accent: Color) {
     val scope = rememberCoroutineScope()
     var margin by remember { mutableStateOf(8) }
     var loadError by remember { mutableStateOf("") }
+    var output by remember { mutableStateOf<ByteArray?>(null) }
+    var outName by remember { mutableStateOf("") }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u ->
         if (u != null) {
             pages = renderPdf(ctx, u, 900)
@@ -122,26 +124,25 @@ private fun PdfCropTool(accent: Color) {
                         contentScale = ContentScale.Fit)
                 }
             }
-            if (busy) {
-                ProcessingCard("Cropping your PDF...", accent)
-            } else {
-                ActionRow(accent,
-                    {
-                        busy = true
-                        scope.launch {
-                            val r = withContext(Dispatchers.Default) { pagesToPdf(cropped) }
-                            r?.let { savePdfToDownloads(ctx, it, "cropped_${System.currentTimeMillis()}") }
-                            busy = false
-                        }
-                    },
-                    {
-                        busy = true
-                        scope.launch {
-                            val r = withContext(Dispatchers.Default) { pagesToPdf(cropped) }
-                            r?.let { sharePdf(ctx, it, "cropped_${System.currentTimeMillis()}") }
-                            busy = false
-                        }
-                    })
+            if (busy) ProcessingCard("Cropping your PDF...", accent)
+            else ToolButton("Crop pages", accent) {
+                busy = true
+                val src = cropped.toList()
+                scope.launch {
+                    val r = withContext(Dispatchers.Default) { pagesToPdf(src) }
+                    if (r != null) { output = r; outName = "cropped_${System.currentTimeMillis()}" }
+                    busy = false
+                }
+            }
+            output?.let { bytes ->
+                ToolResultCard(
+                    fileName = "$outName.pdf",
+                    sizeBytes = bytes.size.toLong(),
+                    accent = accent,
+                    detail = "${cropped.size} page(s)",
+                    onSave = { savePdfToDownloads(ctx, bytes, outName) },
+                    onShare = { sharePdf(ctx, bytes, outName) }
+                )
             }
         }
     }
@@ -156,6 +157,8 @@ private fun PdfReorderTool(accent: Color) {
     val scope = rememberCoroutineScope()
     var order by remember { mutableStateOf("") }
     var loadError by remember { mutableStateOf("") }
+    var reOut by remember { mutableStateOf<ByteArray?>(null) }
+    var reName by remember { mutableStateOf("") }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u ->
         if (u != null) {
             pages = renderPdf(ctx, u, 900)
@@ -186,26 +189,25 @@ private fun PdfReorderTool(accent: Color) {
             Column { FieldLabel("NEW ORDER (e.g. 3,1,2)"); ToolInput(order, { order = it }, "1,2,3", minLines = 1, mono = true) }
             val reordered = order.split(",").mapNotNull { it.trim().toIntOrNull() }
                 .filter { it in 1..pages.size }.map { pages[it-1] }
-            if (busy) {
-                ProcessingCard("Reordering your PDF...", accent)
-            } else {
-                ActionRow(accent,
-                    {
-                        busy = true
-                        scope.launch {
-                            val r = withContext(Dispatchers.Default) { pagesToPdf(reordered) }
-                            r?.let { savePdfToDownloads(ctx, it, "reordered_${System.currentTimeMillis()}") }
-                            busy = false
-                        }
-                    },
-                    {
-                        busy = true
-                        scope.launch {
-                            val r = withContext(Dispatchers.Default) { pagesToPdf(reordered) }
-                            r?.let { sharePdf(ctx, it, "reordered_${System.currentTimeMillis()}") }
-                            busy = false
-                        }
-                    })
+            if (busy) ProcessingCard("Reordering your PDF...", accent)
+            else ToolButton("Apply new order", accent) {
+                busy = true
+                val src = reordered.toList()
+                scope.launch {
+                    val r = withContext(Dispatchers.Default) { pagesToPdf(src) }
+                    if (r != null) { reOut = r; reName = "reordered_${System.currentTimeMillis()}" }
+                    busy = false
+                }
+            }
+            reOut?.let { bytes ->
+                ToolResultCard(
+                    fileName = "$reName.pdf",
+                    sizeBytes = bytes.size.toLong(),
+                    accent = accent,
+                    detail = "${reordered.size} page(s)",
+                    onSave = { savePdfToDownloads(ctx, bytes, reName) },
+                    onShare = { sharePdf(ctx, bytes, reName) }
+                )
             }
         }
     }
@@ -239,19 +241,6 @@ private fun StepControl(label: String, value: Int, opts: List<Int>, accent: Colo
         Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
             opts.forEach { n -> Box(Modifier.weight(1f)) {
                 ToolButton("$n", if (value==n) accent else accent.copy(alpha=0.35f)) { onChange(n) } } }
-        }
-    }
-}
-
-@Composable
-private fun ActionRow(accent: Color, onSave: () -> Unit, onShare: () -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-        Box(Modifier.weight(1f)) { ToolButton("Save PDF", accent) { onSave() } }
-        Box(Modifier.weight(1f)) {
-            Box(Modifier.fillMaxWidth().clip(Shape.field).background(accent.copy(alpha = 0.10f))
-                .clickable { onShare() }.padding(vertical = 15.dp), contentAlignment = Alignment.Center) {
-                Text("Share", color = accent, fontSize = 15.sp)
-            }
         }
     }
 }
