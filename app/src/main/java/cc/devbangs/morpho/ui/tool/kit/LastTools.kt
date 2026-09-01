@@ -19,6 +19,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.runtime.*
 import android.speech.SpeechRecognizer
 import android.speech.RecognizerIntent
@@ -114,6 +117,8 @@ private fun VoiceRecorder(accent: Color) {
 private fun AudioJoiner(accent: Color) {
     val ctx = LocalContext.current
     var uris by remember { mutableStateOf<List<Uri>>(emptyList()) }
+    var joining by remember { mutableStateOf(false) }
+    val joinScope = androidx.compose.runtime.rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenMultipleDocuments()) { uris = it }
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
@@ -122,9 +127,17 @@ private fun AudioJoiner(accent: Color) {
         }
         if (uris.isNotEmpty()) {
             Text("${uris.size} file(s) — joined in order", color = InkSoft, fontSize = 13.sp)
-            ToolButton("Join & save", accent) {
-                val out = joinAudio(ctx, uris)
-                if (out != null) saveMediaToGallery(ctx, out, "joined_${System.currentTimeMillis()}.m4a", false)
+            // Concatenating tracks is not main-thread work, and without this
+            // there was no indication anything was happening at all.
+            if (joining) ProcessingCard("Joining audio\u2026", accent)
+            else ToolButton("Join & save", accent) {
+                joining = true
+                val srcs = uris.toList()
+                joinScope.launch {
+                    val out = withContext(Dispatchers.IO) { joinAudio(ctx, srcs) }
+                    if (out != null) saveMediaToGallery(ctx, out, "joined_${System.currentTimeMillis()}.m4a", false)
+                    joining = false
+                }
             }
         }
     }

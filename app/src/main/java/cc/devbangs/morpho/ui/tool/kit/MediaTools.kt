@@ -64,12 +64,14 @@ private fun TrimTool(id: String, accent: Color) {
     var startMs by remember { mutableStateOf(0L) }
     var endMs by remember { mutableStateOf(0L) }
     var busy by remember { mutableStateOf(false) }
+    var trimError by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
     val onPicked: (Uri?) -> Unit = { u ->
         if (u != null) {
             uri = u; durMs = mediaDurationUs(ctx, u) / 1000
             startMs = 0; endMs = durMs
+            trimError = ""
         }
     }
     // video uses the visual-media picker; audio uses a document picker filtered to audio/*
@@ -93,6 +95,11 @@ private fun TrimTool(id: String, accent: Color) {
                 Text("Extracts the audio track (AAC/.m4a) — lossless, no re-encode.",
                     color = InkSoft, fontSize = 13.sp)
             }
+            if (trimError.isNotEmpty()) ToolErrorCard(
+                title = if (extractAudio) "Couldn't extract that audio" else "Couldn't trim that file",
+                body = trimError,
+                accent = accent
+            )
             if (busy) {
                 ProcessingCard(if (extractAudio) "Extracting audio..." else "Processing your clip...", accent)
             } else {
@@ -103,9 +110,22 @@ private fun TrimTool(id: String, accent: Color) {
                     val u = uri!!
                     val ext = if (isVideo && !extractAudio) "mp4" else "m4a"
                     scope.launch {
-                        val file = withContext(Dispatchers.Default) { trimMedia(ctx, u, ms0, ms1, ext) }
-                        if (file != null)
-                            saveMediaToGallery(ctx, file, "morpho_${System.currentTimeMillis()}.$ext", isVideo && !extractAudio)
+                        val result = withContext(Dispatchers.Default) {
+                            trimMedia(ctx, u, ms0, ms1, ext)
+                        }
+                        when (result) {
+                            is TrimOutcome.Success -> {
+                                saveMediaToGallery(
+                                    ctx, result.file,
+                                    "morpho_${System.currentTimeMillis()}.$ext",
+                                    isVideo && !extractAudio
+                                )
+                                trimError = ""
+                            }
+                            // Previously this branch did not exist, so a failed
+                            // trim looked exactly like nothing happening.
+                            is TrimOutcome.Failure -> trimError = result.reason
+                        }
                         busy = false
                     }
                 }

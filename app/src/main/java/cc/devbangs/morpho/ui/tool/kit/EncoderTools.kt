@@ -69,6 +69,7 @@ private fun WavConverter(accent: Color) {
     var uri by remember { mutableStateOf<Uri?>(null) }
     var busy by remember { mutableStateOf(false) }
     var msg by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u -> uri = u; msg = "" }
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
         PickRow(if (uri == null) "Choose audio" else "Audio selected ✓", "cat-audio", accent) {
@@ -76,12 +77,19 @@ private fun WavConverter(accent: Color) {
         }
         if (uri != null) {
             Text("Decodes to uncompressed WAV (PCM 16-bit).", color = InkFaint, fontSize = 12.sp)
-            ToolButton(if (busy) "Converting…" else "Convert to WAV", accent, enabled = !busy) {
-                busy = true
-                val wav = decodeToWav(ctx, uri!!)
-                if (wav != null) { saveMediaToGallery(ctx, wav, "morpho_${System.currentTimeMillis()}.wav", false) }
-                else msg = "⚠ Could not decode this file."
-                busy = false
+            // decodeToWav runs a full MediaCodec decode. On the main thread that
+            // froze the app long enough to be killed, and the busy flag was set
+            // and cleared inside one frame so "Converting" never appeared.
+            if (busy) ProcessingCard("Decoding audio\u2026", accent)
+            else ToolButton("Convert to WAV", accent) {
+                busy = true; msg = ""
+                val u = uri!!
+                scope.launch {
+                    val wav = withContext(Dispatchers.IO) { decodeToWav(ctx, u) }
+                    if (wav != null) saveMediaToGallery(ctx, wav, "morpho_${System.currentTimeMillis()}.wav", false)
+                    else msg = "⚠ Could not decode this file."
+                    busy = false
+                }
             }
             if (msg.isNotEmpty()) Text(msg, color = InkSoft, fontSize = 13.sp)
         }
@@ -95,6 +103,7 @@ private fun GifMaker(accent: Color) {
     var uris by remember { mutableStateOf<List<Uri>>(emptyList()) }
     var speed by remember { mutableStateOf(300) }
     var busy by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia(30)) { uris = it }
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
@@ -103,12 +112,19 @@ private fun GifMaker(accent: Color) {
         }
         if (uris.isNotEmpty()) {
             StepControl("FRAME DELAY (ms)", speed, listOf(150,300,500,800), accent) { speed = it }
-            ToolButton(if (busy) "Encoding…" else "Create GIF", accent, enabled = !busy) {
+            // Up to 30 bitmaps decoded and encoded; far too much for the main thread.
+            if (busy) ProcessingCard("Encoding GIF\u2026", accent)
+            else ToolButton("Create GIF", accent) {
                 busy = true
-                val bmps = uris.mapNotNull { decodeBitmap(ctx, it, 720) }
-                val gif = encodeGif(ctx, bmps, speed)
-                if (gif != null) saveGifToGallery(ctx, gif)
-                busy = false
+                val srcs = uris.toList()
+                scope.launch {
+                    val gif = withContext(Dispatchers.Default) {
+                        val bmps = srcs.mapNotNull { decodeBitmap(ctx, it, 720) }
+                        encodeGif(ctx, bmps, speed)
+                    }
+                    if (gif != null) saveGifToGallery(ctx, gif)
+                    busy = false
+                }
             }
         }
     }
@@ -121,6 +137,7 @@ private fun VideoToGif(accent: Color) {
     var uri by remember { mutableStateOf<Uri?>(null) }
     var fps by remember { mutableStateOf(6) }
     var busy by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { u -> uri = u }
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
         PickRow(if (uri == null) "Choose a video" else "Video selected ✓", "cat-video", accent) {
@@ -129,12 +146,21 @@ private fun VideoToGif(accent: Color) {
         if (uri != null) {
             Text("Grabs frames from the first ~5s.", color = InkFaint, fontSize = 12.sp)
             StepControl("FRAMES/SEC", fps, listOf(4,6,8,10), accent) { fps = it }
-            ToolButton(if (busy) "Encoding…" else "Create GIF", accent, enabled = !busy) {
+            // Frame extraction plus GIF encoding: the heaviest operation in the
+            // app, and it was running on the main thread holding every frame in
+            // memory at once.
+            if (busy) ProcessingCard("Extracting frames\u2026", accent)
+            else ToolButton("Create GIF", accent) {
                 busy = true
-                val frames = extractFrames(ctx, uri!!, fps, 5)
-                val gif = encodeGif(ctx, frames, 1000 / fps)
-                if (gif != null) saveGifToGallery(ctx, gif)
-                busy = false
+                val u = uri!!
+                val rate = fps
+                scope.launch {
+                    val gif = withContext(Dispatchers.Default) {
+                        encodeGif(ctx, extractFrames(ctx, u, rate, 5), 1000 / rate)
+                    }
+                    if (gif != null) saveGifToGallery(ctx, gif)
+                    busy = false
+                }
             }
         }
     }
