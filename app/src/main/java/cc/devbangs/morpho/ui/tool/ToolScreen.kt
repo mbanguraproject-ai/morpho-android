@@ -36,6 +36,8 @@ import cc.devbangs.morpho.ui.tool.kit.TextDevTool
 import cc.devbangs.morpho.ui.tool.kit.hasGeneratorTool
 import cc.devbangs.morpho.ui.tool.kit.GeneratorTool
 import cc.devbangs.morpho.ui.tool.kit.BackgroundRemoverTool
+import cc.devbangs.morpho.ui.tool.kit.PdfMarkupTool
+import cc.devbangs.morpho.ui.tool.kit.hasMarkupTool
 import cc.devbangs.morpho.ui.tool.kit.hasImageTool
 import cc.devbangs.morpho.ui.tool.kit.ImageTool
 import cc.devbangs.morpho.ui.tool.kit.hasPdfTool
@@ -137,7 +139,7 @@ fun ToolScreen(
         ) {
             Text(tool.short, style = MaterialTheme.typography.bodyLarge, color = InkSoft)
             Spacer(Modifier.height(Space.lg))
-            HowItWorks(tool.category.accent)
+            HowItWorks(tool, tool.category.accent)
             Spacer(Modifier.height(Space.lg))
             // Real tool UIs mount here via dispatch.
             ToolHost(tool = tool, onOpenTool = onOpenTool, onOpenPlus = onOpenPlus)
@@ -146,17 +148,19 @@ fun ToolScreen(
 }
 
 @Composable
-private fun HowItWorks(accent: Color) {
+private fun HowItWorks(tool: Tool, accent: Color) {
+    // Derived per tool rather than the same three words on all 132 of them.
+    val (one, two, three) = cc.devbangs.morpho.data.ToolSearch.steps(tool)
     Row(
         Modifier.fillMaxWidth().clip(Shape.card).background(accent.copy(alpha = 0.06f))
             .padding(horizontal = Space.lg, vertical = Space.md),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        StepDot("1", "Choose", accent)
+        StepDot("1", one, accent)
         StepConnector(accent)
-        StepDot("2", "Adjust", accent)
+        StepDot("2", two, accent)
         StepConnector(accent)
-        StepDot("3", "Save", accent)
+        StepDot("3", three, accent)
     }
 }
 
@@ -198,7 +202,7 @@ private fun StatusLabel(tool: Tool) {
 @Composable
 private fun ToolHost(tool: Tool, onOpenTool: (String) -> Unit, onOpenPlus: () -> Unit) {
     // Plus gate: server tools require an active Plus subscription
-    if (!tool.offline && !cc.devbangs.morpho.ads.AdState.isPlus.value) {
+    if (tool.plus && !cc.devbangs.morpho.ads.AdState.isPlus.value) {
         PlusGate(tool, onOpenPlus)
         return
     }
@@ -217,6 +221,7 @@ private fun ToolHost(tool: Tool, onOpenTool: (String) -> Unit, onOpenPlus: () ->
         tool.id == "invoice-generator" -> InvoiceTool(tool.category.accent, DocType.INVOICE)
         tool.id == "receipt-generator" -> InvoiceTool(tool.category.accent, DocType.RECEIPT)
         tool.id == "quotation-generator" -> InvoiceTool(tool.category.accent, DocType.QUOTE)
+        hasMarkupTool(tool.id) -> PdfMarkupTool(tool.id, tool.category.accent)
         tool.id == "background-remover" -> BackgroundRemoverTool(tool.category.accent)
         tool.id == "pdf-signer" -> PdfSignerTool(tool.category.accent)
         tool.id == "resume-builder" -> ResumeTool(tool.category.accent)

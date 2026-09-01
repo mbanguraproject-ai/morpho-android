@@ -200,10 +200,14 @@ private fun WorkspaceCard(t: Tool, onClick: () -> Unit, modifier: Modifier) {
             .cornerPetal(accent)
             .padding(15.dp)
     ) {
-        Box(
-            Modifier.size(42.dp).clip(Shape.chip).background(accent),
-            contentAlignment = Alignment.Center
-        ) { MorphoIcon(t.iconKey, tint = Paper, size = 22.dp) }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+            Box(
+                Modifier.size(42.dp).clip(Shape.chip).background(accent),
+                contentAlignment = Alignment.Center
+            ) { MorphoIcon(t.iconKey, tint = Paper, size = 22.dp) }
+            Spacer(Modifier.weight(1f))
+            if (t.plus) PlusCrown()
+        }
         Spacer(Modifier.height(16.dp))
         Text(t.name, style = MaterialTheme.typography.titleMedium, color = Ink,
             maxLines = 2, overflow = TextOverflow.Ellipsis,
@@ -267,6 +271,18 @@ private fun ToolsBanner(onClick: () -> Unit) {
 }
 
 /** Dashed slot that sits in the workspace grid as its final cell. */
+/** Marks a tool that needs Plus, so it is clear before it is opened. */
+@Composable
+private fun PlusCrown() {
+    Box(
+        Modifier.size(24.dp).clip(Shape.pill).background(CobaltWash),
+        contentAlignment = Alignment.Center
+    ) {
+        MorphoIcon("crown", tint = Cobalt, size = 13.dp,
+            contentDescription = "Plus tool")
+    }
+}
+
 @Composable
 private fun AddToolsCell(onClick: () -> Unit, modifier: Modifier) {
     Column(

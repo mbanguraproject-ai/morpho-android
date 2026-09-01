@@ -134,10 +134,19 @@ private fun ToolCardTall(t: Tool, onClick: () -> Unit, modifier: Modifier) {
                 contentAlignment = Alignment.Center
             ) { MorphoIcon(t.iconKey, tint = Paper, size = 22.dp) }
             Spacer(Modifier.weight(1f))
-            if (t.offline) Box(
+            // One badge, not two: needing Plus matters more to know up front
+            // than working offline, so the crown takes the slot when both apply.
+            if (t.plus) Box(
+                Modifier.size(22.dp).clip(Shape.pill).background(CobaltWash),
+                contentAlignment = Alignment.Center
+            ) {
+                MorphoIcon("crown", tint = Cobalt, size = 13.dp,
+                    contentDescription = "Plus tool")
+            } else if (t.offline) Box(
                 Modifier.size(22.dp).clip(Shape.pill).background(accent.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center
-            ) { MorphoIcon("check", tint = accent, size = 13.dp) }
+            ) { MorphoIcon("check", tint = accent, size = 13.dp,
+                contentDescription = "Works offline") }
         }
         Spacer(Modifier.height(14.dp))
         Text(t.name, style = MaterialTheme.typography.titleMedium, color = Ink,
