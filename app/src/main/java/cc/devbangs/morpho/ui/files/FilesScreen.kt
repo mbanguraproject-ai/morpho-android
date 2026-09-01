@@ -5,7 +5,9 @@ import android.os.Build
 import android.util.Size
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -21,7 +23,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -53,12 +57,17 @@ import java.util.Calendar
  * they just compressed, not a file manager.
  */
 @Composable
-fun FilesScreen(contentPadding: PaddingValues, onOpenFile: (MorphoFile) -> Unit) {
+fun FilesScreen(
+    contentPadding: PaddingValues,
+    onOpenFile: (MorphoFile) -> Unit,
+    onUseTool: (MorphoFile) -> Unit
+) {
     val ctx = LocalContext.current
     val hazeState = remember { HazeState() }
     var query by remember { mutableStateOf("") }
     var filter by remember { mutableStateOf<FileKind?>(null) }
     var grid by remember { mutableStateOf(false) }
+    var menuFor by remember { mutableStateOf<MorphoFile?>(null) }
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) { FileStore.refresh(ctx) }
@@ -174,13 +183,17 @@ fun FilesScreen(contentPadding: PaddingValues, onOpenFile: (MorphoFile) -> Unit)
                                 horizontalArrangement = Arrangement.spacedBy(Space.sm)
                             ) {
                                 row.forEach { f ->
-                                    Box(Modifier.weight(1f)) { GridCell(f) { open(f) } }
+                                    Box(Modifier.weight(1f)) {
+                                        GridCell(f, onClick = { open(f) }, onMenu = { menuFor = f })
+                                    }
                                 }
                                 repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
                             }
                         }
                     } else {
-                        items(list, key = { it.uri.toString() }) { f -> FileRow(f) { open(f) } }
+                        items(list, key = { it.uri.toString() }) { f ->
+                            FileRow(f, onClick = { open(f) }, onMenu = { menuFor = f })
+                        }
                     }
                 }
             }
@@ -202,6 +215,16 @@ fun FilesScreen(contentPadding: PaddingValues, onOpenFile: (MorphoFile) -> Unit)
                     style = MaterialTheme.typography.bodySmall, color = InkFaint, fontSize = 11.sp
                 )
             }
+        }
+
+        menuFor?.let { target ->
+            FileActionsSheet(
+                file = target,
+                onDismiss = { menuFor = null },
+                onOpen = { menuFor = null; onOpenFile(target) },
+                onUseTool = { menuFor = null; onUseTool(target) },
+                onChanged = { menuFor = null }
+            )
         }
     }
 }
@@ -253,14 +276,23 @@ private fun KindChip(label: String, count: Int, selected: Boolean, onClick: () -
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun FileRow(f: MorphoFile, onClick: () -> Unit) {
+private fun FileRow(f: MorphoFile, onClick: () -> Unit, onMenu: () -> Unit) {
+    val haptics = LocalHapticFeedback.current
     Row(
         Modifier.fillMaxWidth().padding(horizontal = Space.gutter)
             .clip(Shape.tile)
-            .clickable(
+            // The dots button is the visible affordance; long press is the
+            // shortcut, so the same gesture works in both views.
+            .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
-                indication = null, onClick = onClick
+                indication = null,
+                onLongClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onMenu()
+                },
+                onClick = onClick
             )
             .padding(vertical = Space.sm, horizontal = 2.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -275,17 +307,40 @@ private fun FileRow(f: MorphoFile, onClick: () -> Unit) {
                 style = MaterialTheme.typography.bodyMedium, color = InkSoft, maxLines = 1
             )
         }
-        MorphoIcon("chevron-right", tint = InkFaint, size = 15.dp)
+        // Section 39 minimum, and far enough from the row's own tap target
+        // that opening and acting on a file do not get confused.
+        Box(
+            Modifier.size(48.dp).clip(Shape.pill)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    role = androidx.compose.ui.semantics.Role.Button,
+                    onClick = onMenu
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            MorphoIcon("dots", tint = InkFaint, size = 18.dp,
+                contentDescription = "Actions for " + f.name)
+        }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun GridCell(f: MorphoFile, onClick: () -> Unit) {
+private fun GridCell(f: MorphoFile, onClick: () -> Unit, onMenu: () -> Unit) {
+    val haptics = LocalHapticFeedback.current
     Column(
         Modifier.clip(Shape.card).background(PaperSunk)
-            .clickable(
+            // A dots button on an 80dp thumbnail would be cramped and a poor
+            // target; long press is what people already do on a tile.
+            .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
-                indication = null, onClick = onClick
+                indication = null,
+                onLongClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onMenu()
+                },
+                onClick = onClick
             )
             .padding(Space.sm)
     ) {

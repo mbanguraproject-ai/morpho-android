@@ -87,6 +87,7 @@ import com.adamglin.phosphoricons.bold.ShareNetwork
 import com.adamglin.phosphoricons.bold.Signature
 import com.adamglin.phosphoricons.bold.Smiley
 import com.adamglin.phosphoricons.bold.Sparkle
+import com.adamglin.phosphoricons.bold.Trash
 import com.adamglin.phosphoricons.bold.SquaresFour
 import com.adamglin.phosphoricons.bold.StackSimple
 import com.adamglin.phosphoricons.bold.Star
@@ -222,6 +223,9 @@ object ToolIcons {
         "clock" to PhosphorIcons.Bold.Clock,
         "info" to PhosphorIcons.Bold.Info,
         "crown" to PhosphorIcons.Bold.Crown,
+        "drag" to PhosphorIcons.Bold.Rows,
+        "pencil" to PhosphorIcons.Bold.PencilSimple,
+        "trash" to PhosphorIcons.Bold.Trash,
         "moon" to PhosphorIcons.Bold.Moon,
         "bell" to PhosphorIcons.Bold.Bell,
         "shield" to PhosphorIcons.Bold.Shield,

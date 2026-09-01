@@ -107,7 +107,8 @@ fun MorphoApp() {
             composable(Dest.Files.route) {
                 FilesScreen(
                     contentPadding = bottomBarPadding(true),
-                    onOpenFile = { viewing = it }
+                    onOpenFile = { viewing = it },
+                    onUseTool = { masterFile = it; showMaster = true }
                 )
             }
             composable(Dest.Categories.route) {
