@@ -124,7 +124,7 @@ private fun RowScope.MasterSlot(onClick: () -> Unit) {
             Image(
                 painter = painterResource(cc.devbangs.morpho.R.drawable.ic_launcher_foreground),
                 contentDescription = null,
-                modifier = Modifier.size(40.dp)
+                modifier = Modifier.size(46.dp)
             )
         }
     }
@@ -152,7 +152,7 @@ private fun RowScope.TabItem(tab: BottomTab, selected: Boolean, onClick: () -> U
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        MorphoIcon(tab.glyph, tint = tint, size = 22.dp)
+        MorphoIcon(tab.glyph, tint = tint, size = 25.dp)
         Spacer(Modifier.height(3.dp))
         Text(
             tab.label,

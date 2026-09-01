@@ -140,6 +140,17 @@ fun ToolScreen(
             Text(tool.short, style = MaterialTheme.typography.bodyLarge, color = InkSoft)
             Spacer(Modifier.height(Space.lg))
             HowItWorks(tool, tool.category.accent)
+            if (!tool.offline) {
+                Spacer(Modifier.height(Space.md))
+                // Said before the file is chosen, not after. Someone who cares
+                // where their documents go should not have to find this out by
+                // watching a progress bar.
+                Text(
+                    "This tool sends your file to Morpho's converter over the " +
+                        "internet. Every other tool in Morpho works on your device.",
+                    style = MaterialTheme.typography.bodyMedium, color = InkFaint
+                )
+            }
             Spacer(Modifier.height(Space.lg))
             // Real tool UIs mount here via dispatch.
             ToolHost(tool = tool, onOpenTool = onOpenTool, onOpenPlus = onOpenPlus)
@@ -189,8 +200,10 @@ private fun RowScope.StepConnector(accent: Color) {
 
 @Composable
 private fun StatusLabel(tool: Tool) {
+    // This used to read "Morpho Plus" for anything not offline, which answers a
+    // different question and never told the user their file leaves the device.
     val (txt, c) = if (tool.offline) "Works offline" to tool.category.accent
-                   else "Morpho Plus" to tool.category.accent
+                   else "Needs internet" to tool.category.accent
     Row(verticalAlignment = Alignment.CenterVertically) {
         MorphoIcon(if (tool.offline) "check" else "clock", tint = c, size = 13.dp)
         Spacer(Modifier.width(5.dp))

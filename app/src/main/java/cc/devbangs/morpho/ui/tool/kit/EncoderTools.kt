@@ -222,6 +222,55 @@ private fun extractFrames(ctx: Context, uri: Uri, fps: Int, maxSec: Int): List<B
     return out
 }
 
+
+/**
+ * Apply gain to 16-bit little-endian PCM in place.
+ *
+ * The previous version multiplied and then clamped every sample to full scale.
+ * Clamping is not clipping protection, it is clipping: each peak past the
+ * ceiling becomes a flat top, which is exactly what audible distortion is. At
+ * 150% every sample above two thirds of full scale was being squared off.
+ *
+ * Instead: measure the peak first. If the requested gain fits in the available
+ * headroom, apply it straight - mathematically clean, and this is the common
+ * case for a quiet recording. If it does not fit, leave everything below the
+ * knee linear and bend only what is above it, so loud passages compress rather
+ * than break.
+ */
+private fun applyGain(pcm: ByteArray, gain: Float) {
+    val sb = java.nio.ByteBuffer.wrap(pcm)
+        .order(java.nio.ByteOrder.LITTLE_ENDIAN).asShortBuffer()
+    val n = sb.limit()
+    if (n == 0) return
+
+    var peak = 0
+    for (i in 0 until n) {
+        val v = kotlin.math.abs(sb.get(i).toInt())
+        if (v > peak) peak = v
+    }
+    if (peak == 0) return
+
+    val ceiling = 32767f
+    val headroom = ceiling / peak
+    if (gain <= headroom) {
+        for (i in 0 until n) {
+            sb.put(i, (sb.get(i) * gain).toInt().coerceIn(-32768, 32767).toShort())
+        }
+        return
+    }
+
+    // Above the knee the curve approaches the ceiling instead of hitting it.
+    val knee = 0.70f
+    for (i in 0 until n) {
+        val x = sb.get(i) / ceiling * gain
+        val mag = kotlin.math.abs(x)
+        val shaped = if (mag <= knee) mag
+        else knee + (1f - knee) * kotlin.math.tanh(((mag - knee) / (1f - knee)).toDouble()).toFloat()
+        val out = if (x < 0) -shaped else shaped
+        sb.put(i, (out * ceiling).toInt().coerceIn(-32768, 32767).toShort())
+    }
+}
+
 private fun decodeToWav(ctx: Context, uri: Uri): File? {
     val extractor = MediaExtractor()
     return try {
@@ -467,7 +516,9 @@ private fun VolumeBooster(accent: Color) {
                     Box(Modifier.weight(1f)) { ToolButton("${g}%", if (gain==g) accent else accent.copy(alpha=0.35f)) { gain = g } }
                 }
             }
-            Text("Amplifies volume with clipping protection. Outputs AAC (.m4a).", color = InkFaint, fontSize = 12.sp)
+            Text("Uses all available headroom first, then limits peaks smoothly " +
+                "rather than cutting them flat. Outputs AAC (.m4a).",
+                color = InkFaint, fontSize = 12.sp)
             if (busy) ProcessingCard("Boosting volume...", accent)
             else {
                 ToolButton("Boost volume", accent) {
@@ -476,13 +527,7 @@ private fun VolumeBooster(accent: Color) {
                         val result = withContext(Dispatchers.Default) {
                             val a = decodePcm(ctx, u) ?: return@withContext null
                             val pcm = a.pcm
-                            val bb = java.nio.ByteBuffer.wrap(pcm).order(java.nio.ByteOrder.LITTLE_ENDIAN)
-                            val sb = bb.asShortBuffer()
-                            var i = 0
-                            while (i < sb.limit()) {
-                                val boosted = (sb.get(i) * g).toInt().coerceIn(-32768, 32767)
-                                sb.put(i, boosted.toShort()); i++
-                            }
+                            applyGain(pcm, g)
                             encodeAac(ctx, pcm, a.sampleRate, a.channels, 160000)
                         }
                         if (result != null) saveMediaToGallery(ctx, result, "morpho_${System.currentTimeMillis()}.m4a", false)

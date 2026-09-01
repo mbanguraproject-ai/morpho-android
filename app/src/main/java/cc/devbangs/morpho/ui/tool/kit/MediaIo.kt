@@ -203,9 +203,30 @@ fun stripVideoMetadata(ctx: Context, uri: Uri): File? {
 }
 
 /** Save a cache media file to the gallery (Movies or Music). */
+/**
+ * Mime for a name, so the declared type matches the bytes.
+ *
+ * Every audio save used to be declared audio/mp4 regardless of what it was.
+ * MediaStore trusts the mime over the name and appends the matching extension,
+ * so a WAV saved as "clip.wav" landed as "clip.wav.m4a" - and was mislabelled
+ * as MP4 besides, which is why players could stumble on it.
+ */
+private fun mimeForName(displayName: String, isVideo: Boolean): String =
+    when (displayName.substringAfterLast('.', "").lowercase()) {
+        "wav" -> "audio/x-wav"
+        "mp3" -> "audio/mpeg"
+        "m4a", "aac" -> "audio/mp4"
+        "ogg" -> "audio/ogg"
+        "flac" -> "audio/flac"
+        "mp4", "m4v" -> "video/mp4"
+        "webm" -> "video/webm"
+        "3gp" -> "video/3gpp"
+        else -> if (isVideo) "video/mp4" else "audio/mp4"
+    }
+
 fun saveMediaToGallery(ctx: Context, file: File, displayName: String, isVideo: Boolean): Boolean {
     val ok = try {
-        val mime = if (isVideo) "video/mp4" else "audio/mp4"
+        val mime = mimeForName(displayName, isVideo)
         val collection = if (isVideo) MediaStore.Video.Media.EXTERNAL_CONTENT_URI
                          else MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
         val values = ContentValues().apply {

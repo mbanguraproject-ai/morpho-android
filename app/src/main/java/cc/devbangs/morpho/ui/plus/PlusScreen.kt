@@ -23,11 +23,19 @@ import cc.devbangs.morpho.billing.BillingManager
 import androidx.compose.ui.platform.LocalContext
 import cc.devbangs.morpho.ui.components.IconButtonMorpho
 import cc.devbangs.morpho.ui.icon.MorphoIcon
+import cc.devbangs.morpho.data.ToolRegistry
 import cc.devbangs.morpho.ui.theme.*
 
 private val PlusBlue = Color(0xFF1A46E5)
 private val PlusViolet = Color(0xFF6A4BD6)
 private val Green = Color(0xFF16A34A)
+
+
+/** Marked Plus in the registry but not built yet, so not counted or advertised. */
+private val COMING_SOON = setOf(
+    "ai-text-rewriter", "ai-image-upscaler", "grammar-checker",
+    "essay-writer", "paragraph-generator"
+)
 
 @Composable
 fun PlusScreen(
@@ -75,7 +83,8 @@ fun PlusScreen(
                 Text("Unlock everything.\nRemove all ads.", color = Color.White,
                     style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, lineHeight = 30.sp)
                 Spacer(Modifier.height(8.dp))
-                Text("14 premium cloud tools plus an ad-free experience.",
+                Text("${ToolRegistry.all.count { it.plus && it.id !in COMING_SOON }} " +
+                    "premium tools plus an ad-free experience.",
                     color = Color.White.copy(alpha = 0.9f), fontSize = 13.sp)
             }
 
@@ -92,7 +101,8 @@ fun PlusScreen(
                     }
                 }
                 Spacer(Modifier.height(10.dp))
-                FreeLine("67 tools, offline, forever")
+                FreeLine("${ToolRegistry.all.count { it.offline }} tools, offline, forever")
+                FreeLine("Your files never leave your device")
                 FreeLine("PDF, image, audio, video & more")
                 Row(Modifier.padding(top = 4.dp)) {
                     Text("•  ", color = InkFaint, fontSize = 13.sp)
@@ -107,11 +117,14 @@ fun PlusScreen(
             ) {
                 Text("Morpho Plus", color = Ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(10.dp))
+                // Only what Plus actually unlocks today. The AI tools and the
+                // image upscaler are not built yet, and PDF Editor, Annotator
+                // and Signer are free - all five were listed here as paid.
                 PlusLine("No ads, anywhere")
-                PlusLine("AI writing suite — rewrite, essay, grammar, paragraphs")
+                PlusLine("PDF ↔ Word, Excel and PowerPoint")
+                PlusLine("PDF → HTML  ·  SVG → PNG")
+                PlusLine("Video compressor  ·  MP3 converter")
                 PlusLine("Background remover")
-                PlusLine("PDF ↔ Word, PDF editor, signer, annotator")
-                PlusLine("Image upscaler · video compressor · SVG→PNG")
             }
 
             // pricing toggle

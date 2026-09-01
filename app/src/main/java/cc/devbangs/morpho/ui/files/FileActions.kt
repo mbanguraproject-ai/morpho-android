@@ -79,6 +79,27 @@ fun FileActionsSheet(
         pending = null
     }
 
+    // Everything here already lives on the device, in Downloads/Morpho or
+    // Pictures/Morpho. What was missing is putting a copy somewhere the user
+    // chooses, which is what "download" means for a file the app filed away.
+    val saveCopy = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument(file.mime.ifBlank { "*/*" })
+    ) { dest ->
+        if (dest != null) scope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                runCatching {
+                    val input = ctx.contentResolver.openInputStream(file.uri)
+                        ?: return@runCatching false
+                    val out = ctx.contentResolver.openOutputStream(dest)
+                        ?: return@runCatching false
+                    input.use { i -> out.use { o -> i.copyTo(o) } }
+                    true
+                }.getOrDefault(false)
+            }
+            if (ok) onDismiss() else error = "Morpho couldn't save a copy there."
+        }
+    }
+
     fun runGuarded(sender: IntentSender?, retry: () -> Unit) {
         if (sender == null) return
         pending = retry
@@ -165,6 +186,7 @@ fun FileActionsSheet(
                         )
                     }
                 }
+                SheetAction("download", "Save a copy\u2026", Ink) { saveCopy.launch(file.name) }
                 SheetAction("pencil", "Rename", Ink) { newName = file.name; renaming = true }
                 SheetAction(
                     "trash",

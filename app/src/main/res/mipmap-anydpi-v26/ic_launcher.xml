@@ -1,5 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@drawable/ic_launcher_background"/>
-    <foreground android:drawable="@drawable/ic_launcher_foreground"/>
+    <!--
+        Inset here rather than scaling the drawable: the same vector draws the
+        mark inside the app, in the header and on the centre button, and scaling
+        it for the launcher shrank those too. 7% pulls the wing tips inside the
+        masks that were clipping them - Samsung's especially - and leaves the
+        in-app marks at full size.
+    -->
+    <foreground>
+        <inset android:drawable="@drawable/ic_launcher_foreground"
+            android:inset="7%" />
+    </foreground>
 </adaptive-icon>
