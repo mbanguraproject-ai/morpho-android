@@ -137,6 +137,101 @@ object ToolSearch {
         }.sortedByDescending { if (it.popular) 1 else 0 }
     }
 
+    // ---- file-first matching -------------------------------------------------
+
+    private val IMAGE_FORMATS =
+        setOf("image", "jpg", "jpeg", "png", "webp", "heic", "bmp", "gif", "svg", "ico")
+    private val VIDEO_FORMATS = setOf("video", "mp4", "mov", "mkv", "avi", "webm")
+    private val AUDIO_FORMATS = setOf("audio", "mp3", "wav", "m4a", "aac", "ogg", "flac")
+    private val TEXT_FORMATS = setOf("text", "txt", "md", "markdown", "csv", "json", "xml", "html")
+
+    /** Collapse a format token to the family it belongs to, so png reaches a jpg tool. */
+    private fun family(token: String): String = when (token) {
+        in IMAGE_FORMATS -> "image"
+        in VIDEO_FORMATS -> "video"
+        in AUDIO_FORMATS -> "audio"
+        in TEXT_FORMATS -> "text"
+        "doc", "docx", "word" -> "word"
+        "xls", "xlsx", "excel" -> "excel"
+        "ppt", "pptx", "powerpoint" -> "powerpoint"
+        else -> token
+    }
+
+    /** Input is captured or typed here, so an existing file is not the entry point. */
+    private val NO_FILE_INPUT = setOf("voice-recorder", "scan-to-pdf")
+
+    /**
+     * What a tool takes in.
+     *
+     * An id of the form "x-to-y" states its own input, which is more reliable
+     * than guessing from the category - word-to-pdf sits in the PDF category
+     * but does not accept a PDF.
+     */
+    private fun inputFamilies(t: Tool): Set<String> {
+        if (t.id in NO_FILE_INPUT) return emptySet()
+
+        val marker = t.id.indexOf("-to-")
+        if (marker > 0) return setOf(family(t.id.substring(0, marker)))
+
+        // The id names its subject more precisely than the category does:
+        // every Privacy tool sits in one category but each takes a different
+        // kind of file.
+        val prefix = t.id.substringBefore('-')
+        when (prefix) {
+            "pdf" -> return setOf("pdf")
+            "image", "exif", "jpg", "png" -> return setOf("image")
+            "video" -> return setOf("video")
+            "audio" -> return setOf("audio")
+            "text" -> return setOf("text")
+        }
+        return when (t.category) {
+            ToolCategory.PDF -> setOf("pdf")
+            ToolCategory.IMAGE -> setOf("image")
+            ToolCategory.VIDEO -> setOf("video")
+            ToolCategory.AUDIO -> setOf("audio")
+            ToolCategory.TEXT -> setOf("text")
+            // Generators and developer tools take typed input, not a file.
+            else -> emptySet()
+        }
+    }
+
+    /** Format families implied by a picked file's mime type and name. */
+    private fun fileFamilies(mime: String, fileName: String): Set<String> {
+        val ext = fileName.substringAfterLast('.', "").lowercase()
+        val m = mime.lowercase()
+        return when {
+            m == "application/pdf" || ext == "pdf" -> setOf("pdf")
+            m.startsWith("image/") -> setOf("image")
+            m.startsWith("video/") -> setOf("video")
+            m.startsWith("audio/") -> setOf("audio")
+            m.startsWith("text/") -> setOf("text")
+            "wordprocessing" in m || "msword" in m -> setOf("word")
+            "spreadsheet" in m || "ms-excel" in m -> setOf("excel")
+            "presentation" in m || "ms-powerpoint" in m -> setOf("powerpoint")
+            ext.isNotBlank() -> setOf(family(ext))
+            else -> emptySet()
+        }
+    }
+
+    /**
+     * Blueprint sections 14 and 17 - the file is the job description.
+     *
+     * Given what the user picked, the tools that can actually act on it,
+     * grouped the same way search results are so the list stays readable.
+     */
+    fun forFile(mime: String, fileName: String): List<Pair<Group, List<Tool>>> {
+        val families = fileFamilies(mime, fileName)
+        if (families.isEmpty()) return emptyList()
+        val hits = ToolRegistry.all
+            .filter { inputFamilies(it).any { f -> f in families } }
+            .sortedByDescending { (if (it.popular) 2 else 0) + (if (it.offline) 1 else 0) }
+        if (hits.isEmpty()) return emptyList()
+        val buckets = hits.groupBy { group(it) }
+        return Group.entries.mapNotNull { g ->
+            buckets[g]?.takeIf { it.isNotEmpty() }?.let { g to it }
+        }
+    }
+
     /** Which intent bucket a tool belongs to. Derived from id and name. */
     fun group(t: Tool): Group {
         val id = t.id
