@@ -16,6 +16,9 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -152,14 +155,35 @@ fun CopyChip(accent: Color, onClick: () -> Unit) {
 /** Primary action button (solid accent). */
 @Composable
 fun ToolButton(text: String, accent: Color, enabled: Boolean = true, onClick: () -> Unit) {
+    val guard = rememberTapGuard()
     Box(
         Modifier.fillMaxWidth().clip(Shape.field)
             .background(if (enabled) accent else PaperLine)
-            .clickable(enabled = enabled, onClick = onClick)
+            .clickable(enabled = enabled) { guard(onClick) }
             .padding(vertical = 15.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(text, color = Paper, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+/**
+ * Blueprint section 29 - a rapid repeated tap must not create a duplicate job.
+ *
+ * Returns a wrapper that swallows taps arriving within [windowMs] of the last
+ * accepted one. This covers the accidental double-tap everywhere at once;
+ * work that runs longer than the window still needs its own busy state, since
+ * a queued tap delivered after a slow operation finishes is outside it.
+ */
+@Composable
+fun rememberTapGuard(windowMs: Long = 600L): (() -> Unit) -> Unit {
+    var last by remember { mutableStateOf(0L) }
+    return { action ->
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (now - last >= windowMs) {
+            last = now
+            action()
+        }
     }
 }
 

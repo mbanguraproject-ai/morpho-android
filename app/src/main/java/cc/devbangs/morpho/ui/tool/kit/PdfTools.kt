@@ -159,6 +159,8 @@ private fun PdfFromSingle(id: String, accent: Color, onOpenTool: (String) -> Uni
     var wm by remember { mutableStateOf("DRAFT") }
     var range by remember { mutableStateOf("1") }
     var loadError by remember { mutableStateOf("") }
+    var working by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -205,12 +207,41 @@ private fun PdfFromSingle(id: String, accent: Color, onOpenTool: (String) -> Uni
             }
             val u = uri!!
             ActionRow(accent,
-                onSave = { buildSingle(ctx, id, u, pages, rotation, wm, range)?.let {
-                    savePdfToDownloads(ctx, it, "morpho_${System.currentTimeMillis()}") } },
-                onShare = { buildSingle(ctx, id, u, pages, rotation, wm, range)?.let {
-                    sharePdf(ctx, it, "morpho_${System.currentTimeMillis()}") } },
+                // buildSingle walks every page, so it runs off the main thread
+                // and the busy flag survives across frames - which is what
+                // actually stops a queued second tap producing a second file.
+                onSave = {
+                    if (!working) {
+                        working = true
+                        scope.launch {
+                            val bytes = withContext(Dispatchers.Default) {
+                                buildSingle(ctx, id, u, pages, rotation, wm, range)
+                            }
+                            // pdf-to-jpg saves pages itself and returns no PDF;
+                            // writing the empty result produced a 0-byte file in
+                            // Downloads that then reported success.
+                            if (bytes != null && bytes.isNotEmpty())
+                                savePdfToDownloads(ctx, bytes, "morpho_${System.currentTimeMillis()}")
+                            working = false
+                        }
+                    }
+                },
+                onShare = {
+                    if (!working) {
+                        working = true
+                        scope.launch {
+                            val bytes = withContext(Dispatchers.Default) {
+                                buildSingle(ctx, id, u, pages, rotation, wm, range)
+                            }
+                            if (bytes != null && bytes.isNotEmpty())
+                                sharePdf(ctx, bytes, "morpho_${System.currentTimeMillis()}")
+                            working = false
+                        }
+                    }
+                },
                 saveLabel = if (id == "pdf-to-jpg") "Save pages to gallery" else "Save PDF",
-                pdfToJpg = id == "pdf-to-jpg")
+                pdfToJpg = id == "pdf-to-jpg",
+                busy = working)
             val steps = WorkflowGraph.nextSteps(id)
             if (steps.isNotEmpty() && id != "pdf-to-jpg") {
                 NextStepSuggestions(steps) { step ->
@@ -247,20 +278,29 @@ private fun PickRow(label: String, icon: String, accent: Color, onClick: () -> U
 @Composable
 private fun ActionRow(
     accent: Color, onSave: () -> Unit, onShare: () -> Unit,
-    saveLabel: String = "Save PDF", pdfToJpg: Boolean = false
+    saveLabel: String = "Save PDF", pdfToJpg: Boolean = false,
+    busy: Boolean = false
 ) {
     val ctx = LocalContext.current
+    // Section 29: a button must never look available while its job is running.
     Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-        Box(Modifier.weight(1f)) { ToolButton(saveLabel, accent) { onSave() } }
-        if (!pdfToJpg) Box(Modifier.weight(1f)) { OutlineBtn("Share", accent) { onShare() } }
+        Box(Modifier.weight(1f)) {
+            ToolButton(if (busy) "Working\u2026" else saveLabel, accent, enabled = !busy) { onSave() }
+        }
+        if (!pdfToJpg) Box(Modifier.weight(1f)) {
+            OutlineBtn("Share", accent, enabled = !busy) { onShare() }
+        }
     }
 }
 
 @Composable
-private fun OutlineBtn(text: String, accent: Color, onClick: () -> Unit) {
-    Box(Modifier.fillMaxWidth().clip(Shape.field).background(accent.copy(alpha = 0.10f))
-        .clickable(onClick = onClick).padding(vertical = 15.dp), contentAlignment = Alignment.Center) {
-        Text(text, color = accent, fontSize = 15.sp)
+private fun OutlineBtn(text: String, accent: Color, enabled: Boolean = true, onClick: () -> Unit) {
+    val guard = rememberTapGuard()
+    Box(Modifier.fillMaxWidth().clip(Shape.field)
+        .background(accent.copy(alpha = if (enabled) 0.10f else 0.04f))
+        .clickable(enabled = enabled) { guard(onClick) }
+        .padding(vertical = 15.dp), contentAlignment = Alignment.Center) {
+        Text(text, color = if (enabled) accent else InkFaint, fontSize = 15.sp)
     }
 }
 
