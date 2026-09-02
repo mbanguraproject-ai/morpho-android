@@ -183,6 +183,9 @@ private fun ImageConvert(id: String, accent: Color) {
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia()
     ) { u -> if (u != null) src = decodeBitmap(ctx, u) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        cc.devbangs.morpho.workflow.WorkflowBus.consume()?.let { src = decodeBitmapBytes(it.bytes) }
+    }
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
         ImagePickPreview(
             bitmap = src,

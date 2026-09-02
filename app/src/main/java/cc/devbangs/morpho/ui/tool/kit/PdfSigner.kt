@@ -56,13 +56,17 @@ fun PdfSignerTool(accent: Color) {
     var placeNorm by remember { mutableStateOf<Offset?>(null) }
     var previewSize by remember { mutableStateOf(IntSize.Zero) }
 
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u ->
+    fun load(u: Uri) {
         uri = u; msg = ""; strokes.clear(); placeNorm = null; pageBitmap = null
-        if (u != null) {
-            // preview the LAST page (where signatures usually go)
-            val pages = renderPdf(ctx, u, 1000)
-            pageBitmap = pages.lastOrNull()
-        }
+        // preview the LAST page (where signatures usually go)
+        pageBitmap = renderPdf(ctx, u, 1000).lastOrNull()
+    }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u ->
+        if (u != null) load(u)
+    }
+    // Arriving from the master sheet or the viewer with a file already chosen.
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        cc.devbangs.morpho.workflow.WorkflowBus.consume()?.let { load(bytesToTempUri(ctx, it.bytes, it.mime)) }
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {

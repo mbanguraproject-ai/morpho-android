@@ -74,6 +74,11 @@ private fun TrimTool(id: String, accent: Color) {
             trimError = ""
         }
     }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        // onPicked already does everything a fresh pick does, so the hand-off
+        // just goes through the same door.
+        cc.devbangs.morpho.workflow.WorkflowBus.consume()?.let { onPicked(bytesToTempUri(ctx, it.bytes, it.mime)) }
+    }
     // video uses the visual-media picker; audio uses a document picker filtered to audio/*
     val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { onPicked(it) }
     val audioPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { onPicked(it) }

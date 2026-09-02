@@ -146,6 +146,9 @@ private fun Unlock(accent: Color) {
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u -> uri = u; msg = "" }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        cc.devbangs.morpho.workflow.WorkflowBus.consume()?.let { uri = bytesToTempUri(ctx, it.bytes, it.mime) }
+    }
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
         PickRow(if (uri == null) "Choose a locked PDF" else "PDF selected ✓", accent) { picker.launch(arrayOf("application/pdf")) }
         if (uri != null) {
@@ -522,6 +525,9 @@ private fun MetadataRemover(accent: Color) {
     var msg by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u -> uri = u; msg = "" }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        cc.devbangs.morpho.workflow.WorkflowBus.consume()?.let { uri = bytesToTempUri(ctx, it.bytes, it.mime) }
+    }
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
         PickRow(if (uri == null) "Choose a PDF" else "PDF selected \u2713", accent) { picker.launch(arrayOf("application/pdf")) }
         if (uri != null) {

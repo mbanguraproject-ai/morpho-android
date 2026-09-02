@@ -71,6 +71,9 @@ private fun WavConverter(accent: Color) {
     var msg by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u -> uri = u; msg = "" }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        cc.devbangs.morpho.workflow.WorkflowBus.consume()?.let { uri = bytesToTempUri(ctx, it.bytes, it.mime) }
+    }
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
         PickRow(if (uri == null) "Choose audio" else "Audio selected ✓", "cat-audio", accent) {
             picker.launch(arrayOf("audio/*"))
@@ -106,6 +109,10 @@ private fun GifMaker(accent: Color) {
     val scope = rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia(30)) { uris = it }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        // A handed image becomes the first frame; more can be added on top.
+        cc.devbangs.morpho.workflow.WorkflowBus.consume()?.let { uris = listOf(bytesToTempUri(ctx, it.bytes, it.mime)) }
+    }
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
         PickRow(if (uris.isEmpty()) "Choose images" else "${uris.size} images ✓", "image-add", accent) {
             picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
@@ -139,6 +146,9 @@ private fun VideoToGif(accent: Color) {
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { u -> uri = u }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        cc.devbangs.morpho.workflow.WorkflowBus.consume()?.let { uri = bytesToTempUri(ctx, it.bytes, it.mime) }
+    }
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
         PickRow(if (uri == null) "Choose a video" else "Video selected ✓", "cat-video", accent) {
             picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly))
@@ -468,6 +478,9 @@ private fun AudioCompressor(accent: Color) {
     var bitrate by remember { mutableStateOf(96000) }
     val scope = rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u -> uri = u; msg = "" }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        cc.devbangs.morpho.workflow.WorkflowBus.consume()?.let { uri = bytesToTempUri(ctx, it.bytes, it.mime) }
+    }
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
         PickRow(if (uri == null) "Choose audio" else "Audio selected \u2713", "cat-audio", accent) { picker.launch(arrayOf("audio/*")) }
         if (uri != null) {
@@ -507,6 +520,9 @@ private fun VolumeBooster(accent: Color) {
     var gain by remember { mutableStateOf(150) }
     val scope = rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u -> uri = u; msg = "" }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        cc.devbangs.morpho.workflow.WorkflowBus.consume()?.let { uri = bytesToTempUri(ctx, it.bytes, it.mime) }
+    }
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
         PickRow(if (uri == null) "Choose audio" else "Audio selected \u2713", "cat-audio", accent) { picker.launch(arrayOf("audio/*")) }
         if (uri != null) {

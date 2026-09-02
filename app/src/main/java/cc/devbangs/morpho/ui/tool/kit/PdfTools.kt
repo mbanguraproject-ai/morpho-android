@@ -196,6 +196,10 @@ private fun MergePdf(accent: Color, onOpenTool: (String) -> Unit = {}) {
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenMultipleDocuments()
     ) { uris = it; output = null; failed = false }
+    LaunchedEffect(Unit) {
+        // "Merge this with something else" - the handed file is the first one.
+        WorkflowBus.consume()?.let { uris = listOf(bytesToTempUri(ctx, it.bytes, it.mime)) }
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
         PickRow("Choose PDF files", "file-add", accent) { picker.launch(arrayOf("application/pdf")) }

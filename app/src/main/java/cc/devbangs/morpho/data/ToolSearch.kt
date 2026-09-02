@@ -229,13 +229,28 @@ object ToolSearch {
         "pdf-splitter", "pdf-page-extractor", "pdf-page-numbering",
         // PDFBox family
         "pdf-password-protector", "pdf-compressor",
-        // markup
-        "pdf-editor", "pdf-annotator",
+        // markup and signing
+        "pdf-editor", "pdf-annotator", "pdf-signer",
+        // page-level editing
+        "pdf-crop", "pdf-reorder-pages",
         // image family
         "image-compressor", "image-resizer", "image-cropper", "image-rotator",
         "image-blur", "sharpen-image", "watermark-image", "exif-remover",
         "image-metadata-viewer", "batch-image-converter", "thumbnail-creator",
-        "background-remover"
+        "background-remover", "favicon-generator",
+        // TrimTool is one screen shared by these three; the other media tools
+        // have their own composables and have not been wired.
+        "video-trimmer", "audio-trimmer", "mp4-to-mp3",
+        // audio and gif encoders
+        "wav-converter", "audio-compressor", "volume-booster",
+        "gif-maker", "video-to-gif",
+        // more PDFBox tools
+        "pdf-unlocker", "pdf-image-extractor",
+        // image format converters share one screen
+        "png-to-webp", "jpg-to-webp", "jpg-to-png", "png-to-jpg",
+        "webp-to-png", "heic-to-jpg",
+        // multi-file tools seed their list with the handed file
+        "merge-pdf"
     )
 
     /**

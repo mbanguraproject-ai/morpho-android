@@ -55,6 +55,9 @@ private fun FaviconTool(accent: Color) {
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { u ->
         if (u != null) src = decodeBitmap(ctx, u, 1024)
     }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        cc.devbangs.morpho.workflow.WorkflowBus.consume()?.let { src = decodeBitmapBytes(it.bytes, 1024) }
+    }
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
         ImagePickPreview(
             bitmap = src,
@@ -97,11 +100,15 @@ private fun PdfCropTool(accent: Color) {
     var loadError by remember { mutableStateOf("") }
     var output by remember { mutableStateOf<ByteArray?>(null) }
     var outName by remember { mutableStateOf("") }
+    fun load(u: Uri) {
+        pages = renderPdf(ctx, u, 900)
+        loadError = if (pages.isEmpty()) pdfFailureReason(ctx, u) else ""
+    }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u ->
-        if (u != null) {
-            pages = renderPdf(ctx, u, 900)
-            loadError = if (pages.isEmpty()) pdfFailureReason(ctx, u) else ""
-        }
+        if (u != null) load(u)
+    }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        cc.devbangs.morpho.workflow.WorkflowBus.consume()?.let { load(bytesToTempUri(ctx, it.bytes, it.mime)) }
     }
     val cropped = remember(pages, margin) {
         pages.map { p ->
@@ -159,12 +166,16 @@ private fun PdfReorderTool(accent: Color) {
     var loadError by remember { mutableStateOf("") }
     var reOut by remember { mutableStateOf<ByteArray?>(null) }
     var reName by remember { mutableStateOf("") }
+    fun load(u: Uri) {
+        pages = renderPdf(ctx, u, 900)
+        order = (1..pages.size).joinToString(",")
+        loadError = if (pages.isEmpty()) pdfFailureReason(ctx, u) else ""
+    }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u ->
-        if (u != null) {
-            pages = renderPdf(ctx, u, 900)
-            order = (1..pages.size).joinToString(",")
-            loadError = if (pages.isEmpty()) pdfFailureReason(ctx, u) else ""
-        }
+        if (u != null) load(u)
+    }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        cc.devbangs.morpho.workflow.WorkflowBus.consume()?.let { load(bytesToTempUri(ctx, it.bytes, it.mime)) }
     }
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
         PickRow("Choose a PDF", "file-add", accent) { picker.launch(arrayOf("application/pdf")) }
