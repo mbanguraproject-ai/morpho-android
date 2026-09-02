@@ -214,6 +214,31 @@ object ToolSearch {
     }
 
     /**
+     * Tools that pick up a file handed over by the master sheet or the viewer,
+     * rather than asking for it again.
+     *
+     * Most tools still ask, which is fine - but the ones that do not should come
+     * first, because "pick a file, tap a tool, start work" is the whole point of
+     * arriving from a file. Kept as a list rather than inferred because it
+     * depends on each tool having wired the hand-off, which is not visible from
+     * the registry.
+     */
+    private val ACCEPTS_HANDOFF = setOf(
+        // single-PDF family
+        "pdf-to-jpg", "pdf-page-rotator", "pdf-watermark",
+        "pdf-splitter", "pdf-page-extractor", "pdf-page-numbering",
+        // PDFBox family
+        "pdf-password-protector", "pdf-compressor",
+        // markup
+        "pdf-editor", "pdf-annotator",
+        // image family
+        "image-compressor", "image-resizer", "image-cropper", "image-rotator",
+        "image-blur", "sharpen-image", "watermark-image", "exif-remover",
+        "image-metadata-viewer", "batch-image-converter", "thumbnail-creator",
+        "background-remover"
+    )
+
+    /**
      * Blueprint sections 14 and 17 - the file is the job description.
      *
      * Given what the user picked, the tools that can actually act on it,
@@ -224,7 +249,10 @@ object ToolSearch {
         if (families.isEmpty()) return emptyList()
         val hits = ToolRegistry.all
             .filter { inputFamilies(it).any { f -> f in families } }
-            .sortedByDescending { (if (it.popular) 2 else 0) + (if (it.offline) 1 else 0) }
+            .sortedByDescending {
+                (if (it.id in ACCEPTS_HANDOFF) 8 else 0) +
+                    (if (it.popular) 2 else 0) + (if (it.offline) 1 else 0)
+            }
         if (hits.isEmpty()) return emptyList()
         val buckets = hits.groupBy { group(it) }
         return Group.entries.mapNotNull { g ->

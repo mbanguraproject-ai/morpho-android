@@ -1,9 +1,6 @@
 package cc.devbangs.morpho.ui.tool.kit
 
 import android.graphics.Bitmap
-import android.graphics.Canvas as AndroidCanvas
-import android.graphics.Paint as AndroidPaint
-import android.graphics.pdf.PdfDocument
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -40,6 +37,10 @@ import cc.devbangs.morpho.core.Shape
 import cc.devbangs.morpho.core.Space
 import cc.devbangs.morpho.ui.icon.MorphoIcon
 import cc.devbangs.morpho.ui.theme.*
+import com.tom_roush.pdfbox.pdmodel.PDDocument
+import com.tom_roush.pdfbox.pdmodel.PDPageContentStream
+import com.tom_roush.pdfbox.pdmodel.font.PDType1Font
+import com.tom_roush.pdfbox.pdmodel.graphics.state.PDExtendedGraphicsState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -74,10 +75,10 @@ private val HIGHLIGHT_SWATCHES = listOf(
  * different emphasis, so this is one tool that opens on the mode each id
  * implies. Building them separately would mean two of nearly the same screen.
  *
- * Marks are held per page in normalised coordinates and composited at export
- * resolution, so what is drawn on a preview lands in the same place on a
- * full-size page. The approach follows PdfSigner: render, draw onto a mutable
- * copy, write the pages back out through PdfDocument.
+ * Marks are held per page as fractions of the page, so the same numbers drive
+ * the preview and the output. Pages are rasterised for the preview only; the
+ * export appends real vector content to the original document, which keeps its
+ * text selectable and its size unchanged.
  */
 @Composable
 fun PdfMarkupTool(id: String, accent: Color) {
@@ -102,15 +103,25 @@ fun PdfMarkupTool(id: String, accent: Color) {
     var live by remember { mutableStateOf<List<Offset>>(emptyList()) }
     var previewSize by remember { mutableStateOf(IntSize.Zero) }
 
-    val picker = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
-    ) { u ->
-        if (u == null) return@rememberLauncherForActivityResult
+    // One path in, whether the file was picked here or handed over by the
+    // master sheet. Previously only the picker loaded anything, so arriving
+    // with a file meant choosing it a second time.
+    fun load(u: Uri) {
         uri = u
         msg = ""
         strokes.clear(); texts.clear(); live = emptyList(); page = 0
         pages = renderPdf(ctx, u, 1000)
         loadError = if (pages.isEmpty()) pdfFailureReason(ctx, u) else ""
+    }
+
+    val picker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { u -> if (u != null) load(u) }
+
+    LaunchedEffect(Unit) {
+        cc.devbangs.morpho.workflow.WorkflowBus.consume()?.let { handed ->
+            load(bytesToTempUri(ctx, handed.bytes, handed.mime))
+        }
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
@@ -366,60 +377,104 @@ private fun PageStep(glyph: String, enabled: Boolean, label: String, onClick: ()
     }
 }
 
-/** Composite the marks onto full-resolution pages and write a new document. */
+/**
+ * Draw the marks onto the real PDF rather than rebuilding it from images.
+ *
+ * The first version rendered every page to a bitmap, drew on that, and wrote a
+ * new document from the pictures. It worked, but the output lost all selectable
+ * text, could not be searched, and grew several times larger than the original.
+ *
+ * PDFBox can append to a page's existing content stream, so the document keeps
+ * its text, its fonts and its size, and the marks sit on top as real vector
+ * content. Positions are stored as fractions of the page, so the same numbers
+ * drive the preview and the output.
+ */
 private fun markupPdf(
     ctx: android.content.Context,
     uri: Uri,
     strokes: List<InkStroke>,
     texts: List<TextMark>
 ): ByteArray? = try {
-    val pages = renderPdf(ctx, uri, 1240)
-    if (pages.isEmpty()) null else {
-        val doc = PdfDocument()
-        pages.forEachIndexed { index, source ->
-            val out = source.copy(Bitmap.Config.ARGB_8888, true)
-            val canvas = AndroidCanvas(out)
+    ctx.contentResolver.openInputStream(uri)?.use { input ->
+        PDDocument.load(input).use { doc ->
+            for (index in 0 until doc.numberOfPages) {
+                val pageStrokes = strokes.filter { it.page == index }
+                val pageTexts = texts.filter { it.page == index }
+                if (pageStrokes.isEmpty() && pageTexts.isEmpty()) continue
 
-            strokes.filter { it.page == index }.forEach { s ->
-                val paint = AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
-                    color = s.argb
-                    alpha = s.alpha
-                    style = AndroidPaint.Style.STROKE
-                    strokeWidth = s.widthFrac * out.width
-                    strokeCap = AndroidPaint.Cap.ROUND
-                    strokeJoin = AndroidPaint.Join.ROUND
-                }
-                if (s.pts.size > 1) {
-                    val path = android.graphics.Path()
-                    s.pts.forEachIndexed { i, p ->
-                        val x = p.x * out.width
-                        val y = p.y * out.height
-                        if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                val page = doc.getPage(index)
+                val box = page.mediaBox
+                val w = box.width
+                val h = box.height
+                val x0 = box.lowerLeftX
+                val y0 = box.lowerLeftY
+
+                // PDF space starts at the bottom left; the marks are stored from
+                // the top left, as the preview measures them.
+                fun px(fx: Float) = x0 + fx * w
+                fun py(fy: Float) = y0 + h - fy * h
+
+                PDPageContentStream(
+                    doc, page, PDPageContentStream.AppendMode.APPEND, true, true
+                ).use { cs ->
+                    pageStrokes.forEach { s ->
+                        if (s.pts.size < 2) return@forEach
+                        val gs = PDExtendedGraphicsState().apply {
+                            strokingAlphaConstant = s.alpha / 255f
+                            nonStrokingAlphaConstant = s.alpha / 255f
+                        }
+                        cs.setGraphicsStateParameters(gs)
+                        // Float overload: the int one is deprecated in PDFBox.
+                        cs.setStrokingColor(
+                            android.graphics.Color.red(s.argb) / 255f,
+                            android.graphics.Color.green(s.argb) / 255f,
+                            android.graphics.Color.blue(s.argb) / 255f
+                        )
+                        cs.setLineWidth(s.widthFrac * w)
+                        cs.setLineCapStyle(1)
+                        cs.setLineJoinStyle(1)
+                        cs.moveTo(px(s.pts[0].x), py(s.pts[0].y))
+                        s.pts.drop(1).forEach { cs.lineTo(px(it.x), py(it.y)) }
+                        cs.stroke()
                     }
-                    canvas.drawPath(path, paint)
+
+                    if (pageTexts.isNotEmpty()) {
+                        val gs = PDExtendedGraphicsState().apply {
+                            nonStrokingAlphaConstant = 1f
+                        }
+                        cs.setGraphicsStateParameters(gs)
+                    }
+                    pageTexts.forEach { t ->
+                        val safe = winAnsi(t.text)
+                        if (safe.isEmpty()) return@forEach
+                        cs.beginText()
+                        cs.setFont(PDType1Font.HELVETICA_BOLD, w * 0.028f)
+                        // Float overload: the int one is deprecated in PDFBox.
+                        cs.setNonStrokingColor(
+                            android.graphics.Color.red(t.argb) / 255f,
+                            android.graphics.Color.green(t.argb) / 255f,
+                            android.graphics.Color.blue(t.argb) / 255f
+                        )
+                        cs.newLineAtOffset(px(t.at.x), py(t.at.y))
+                        cs.showText(safe)
+                        cs.endText()
+                    }
                 }
             }
-
-            texts.filter { it.page == index }.forEach { t ->
-                val paint = AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
-                    color = t.argb
-                    textSize = out.width * 0.028f
-                    isFakeBoldText = true
-                }
-                canvas.drawText(t.text, t.at.x * out.width, t.at.y * out.height, paint)
-            }
-
-            val info = PdfDocument.PageInfo
-                .Builder(out.width, out.height, doc.pages.size + 1).create()
-            val p = doc.startPage(info)
-            p.canvas.drawBitmap(out, 0f, 0f, null)
-            doc.finishPage(p)
+            val out = ByteArrayOutputStream()
+            doc.save(out)
+            out.toByteArray()
         }
-        val bos = ByteArrayOutputStream()
-        doc.writeTo(bos)
-        doc.close()
-        bos.toByteArray()
     }
 } catch (e: Exception) {
     null
 }
+
+/**
+ * Helvetica in a PDF is WinAnsi encoded, and showText throws on anything it
+ * cannot represent - an emoji or non-Latin script would have failed the whole
+ * save. Unsupported characters are dropped rather than taking the document
+ * down with them.
+ */
+private fun winAnsi(text: String): String =
+    text.filter { it.code in 32..126 || it.code in 160..255 }

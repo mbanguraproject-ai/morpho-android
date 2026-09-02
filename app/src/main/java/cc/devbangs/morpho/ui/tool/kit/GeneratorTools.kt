@@ -151,15 +151,68 @@ private fun BarcodeTool(accent: Color) {
 private fun FakeDataTool(accent: Color) {
     var seed by remember { mutableStateOf(0) }
     var count by remember { mutableStateOf(5) }
-    val out = remember(seed, count) { (1..count).joinToString("\n\n") { fakePerson() } }
-    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-            listOf(1,5,10,20).forEach { n ->
-                Box(Modifier.weight(1f)) { ToolButton("$n", if (count==n) accent else accent.copy(alpha=0.35f)) { count = n } }
+    var region by remember { mutableStateOf("Global") }
+    var format by remember { mutableStateOf("Lines") }
+
+    val out = remember(seed, count, region, format) {
+        val people = (1..count).map { fakePerson(region) }
+        when (format) {
+            "CSV" -> "name,email,phone,city,company\n" +
+                people.joinToString("\n") { p ->
+                    listOf(p.name, p.email, p.phone, p.city, p.company)
+                        .joinToString(",") { if (it.contains(',')) "\"$it\"" else it }
+                }
+            "JSON" -> people.joinToString(",\n", "[\n", "\n]") { p ->
+                """  {"name": "${p.name}", "email": "${p.email}", """ +
+                    """"phone": "${p.phone}", "city": "${p.city}", "company": "${p.company}"}"""
+            }
+            else -> people.joinToString("\n\n") {
+                "Name     ${it.name}\nEmail    ${it.email}\n" +
+                    "Phone    ${it.phone}\nCity     ${it.city}\nCompany  ${it.company}"
             }
         }
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+        FieldLabel("REGION")
+        ChipRow(listOf("Global", "Africa", "Europe", "Americas", "Asia"), region, accent) {
+            region = it
+        }
+        FieldLabel("FORMAT")
+        ChipRow(listOf("Lines", "CSV", "JSON"), format, accent) { format = it }
+        FieldLabel("HOW MANY")
+        ChipRow(listOf("1", "5", "10", "20"), "$count", accent) { count = it.toInt() }
         ToolButton("Regenerate", accent) { seed++ }
-        ToolResult(out, accent, mono = false, label = "RECORDS")
+        ToolResult(out, accent, mono = format != "Lines", label = "RECORDS")
+        Text(
+            "Invented for testing. Any resemblance to a real person is coincidence, " +
+                "and these are not safe to use as real contact details.",
+            color = InkFaint, fontSize = 12.sp
+        )
+    }
+}
+
+/** Small labelled chips for a fixed set of choices. */
+@androidx.compose.runtime.Composable
+private fun ChipRow(
+    options: List<String>,
+    selected: String,
+    accent: Color,
+    onSelect: (String) -> Unit
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+        options.forEach { o ->
+            val on = o == selected
+            Box(
+                Modifier.weight(1f).clip(Shape.field)
+                    .background(if (on) accent else PaperSunk)
+                    .clickable { onSelect(o) }
+                    .padding(vertical = 10.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(o, color = if (on) Paper else InkSoft, fontSize = 13.sp)
+            }
+        }
     }
 }
 
@@ -182,14 +235,87 @@ private fun barcodeBitmap(text: String, w: Int, h: Int): Bitmap {
     return bmp
 }
 
-private val firsts = listOf("Aminata","Mohamed","Fatmata","Ibrahim","Isatu","Abu","Mariama","Sorie","Kadiatu","Alhaji")
-private val lasts = listOf("Kamara","Bangura","Sesay","Koroma","Turay","Conteh","Jalloh","Mansaray","Fofanah","Bah")
-private val domains = listOf("gmail.com","outlook.com","yahoo.com","proton.me")
-private fun fakePerson(): String {
-    val f = firsts.random(); val l = lasts.random()
-    val email = "${f.lowercase()}.${l.lowercase()}${Random.nextInt(10,99)}@${domains.random()}"
-    val phone = "+232 ${Random.nextInt(70,99)} ${Random.nextInt(100,999)} ${Random.nextInt(100,999)}"
-    return "Name   $f $l\nEmail  $email\nPhone  $phone"
+/**
+ * Test data, by region.
+ *
+ * The first version drew every name from one small Sierra Leonean pool and gave
+ * every record a +232 number, in an app that ships to 177 countries. It also
+ * meant a two-name pool could produce the developer's own name against a
+ * fabricated phone number, which is not a good look for a tool whose whole job
+ * is to invent people.
+ *
+ * The pools are wide enough that any pairing is plainly generic, and the region
+ * is the user's choice rather than an assumption.
+ */
+private class Person(
+    val name: String, val email: String, val phone: String,
+    val city: String, val company: String
+)
+
+private val NAMES: Map<String, Pair<List<String>, List<String>>> = mapOf(
+    "Africa" to Pair(
+        listOf("Aminata", "Kwame", "Chidi", "Fatoumata", "Ibrahim", "Ngozi",
+            "Sekou", "Adaeze", "Mamadou", "Thandiwe", "Yaw", "Halima"),
+        listOf("Kamara", "Okafor", "Diallo", "Mensah", "Traore", "Adeyemi",
+            "Sesay", "Boateng", "Cisse", "Nwosu", "Dlamini", "Abebe")
+    ),
+    "Europe" to Pair(
+        listOf("Sofia", "Lukas", "Emma", "Mateo", "Ines", "Jonas",
+            "Elena", "Anders", "Chiara", "Piotr", "Maja", "Liam"),
+        listOf("Muller", "Rossi", "Dubois", "Novak", "Andersson", "Garcia",
+            "Kowalski", "Silva", "Jansen", "Murphy", "Virtanen", "Horvat")
+    ),
+    "Americas" to Pair(
+        listOf("Olivia", "Diego", "Ava", "Santiago", "Emily", "Mateo",
+            "Noah", "Camila", "Ethan", "Valentina", "Mia", "Lucas"),
+        listOf("Smith", "Rodriguez", "Johnson", "Silva", "Brown", "Martinez",
+            "Wilson", "Costa", "Davis", "Ramirez", "Taylor", "Reyes")
+    ),
+    "Asia" to Pair(
+        listOf("Wei", "Priya", "Haruto", "Ji-woo", "Anjali", "Kenji",
+            "Mei", "Arjun", "Sakura", "Min-jun", "Aarav", "Linh"),
+        listOf("Chen", "Sharma", "Tanaka", "Kim", "Patel", "Suzuki",
+            "Wang", "Singh", "Nakamura", "Park", "Nguyen", "Rahman")
+    )
+)
+
+private val CITIES: Map<String, List<String>> = mapOf(
+    "Africa" to listOf("Freetown", "Accra", "Lagos", "Nairobi", "Dakar", "Kigali"),
+    "Europe" to listOf("Lisbon", "Krakow", "Dublin", "Turin", "Utrecht", "Malmo"),
+    "Americas" to listOf("Portland", "Medellin", "Toronto", "Recife", "Austin", "Puebla"),
+    "Asia" to listOf("Osaka", "Pune", "Da Nang", "Busan", "Chiang Mai", "Surabaya")
+)
+
+private val DIALS: Map<String, List<String>> = mapOf(
+    "Africa" to listOf("+232", "+233", "+234", "+254"),
+    "Europe" to listOf("+44", "+49", "+33", "+39"),
+    "Americas" to listOf("+1", "+55", "+52"),
+    "Asia" to listOf("+81", "+91", "+86", "+82")
+)
+
+private val COMPANIES = listOf(
+    "Larkfield Group", "Blue Harbor", "Nimbus Labs", "Meridian Works",
+    "Copperline", "Fernbank", "Alder & Vale", "Stonecrest", "Halcyon Supply"
+)
+private val domains = listOf("example.com", "example.org", "example.net")
+
+private fun fakePerson(region: String): Person {
+    val key = if (region == "Global") NAMES.keys.random() else region
+    val (firsts, lasts) = NAMES[key] ?: NAMES.values.first()
+    val f = firsts.random()
+    val l = lasts.random()
+    // example.com and friends are reserved for exactly this, so nothing
+    // generated here can reach a real inbox.
+    val email = "${f.lowercase()}.${l.lowercase()}${Random.nextInt(10, 99)}@${domains.random()}"
+    val dial = (DIALS[key] ?: DIALS.values.first()).random()
+    val phone = "$dial ${Random.nextInt(70, 99)} ${Random.nextInt(100, 999)} ${Random.nextInt(1000, 9999)}"
+    return Person(
+        name = "$f $l",
+        email = email,
+        phone = phone,
+        city = (CITIES[key] ?: CITIES.values.first()).random(),
+        company = COMPANIES.random()
+    )
 }
 
 @androidx.compose.runtime.Composable
@@ -273,18 +399,126 @@ private fun CssGenTool(accent: Color) {
 }
 
 @androidx.compose.runtime.Composable
+/**
+ * Cover letter.
+ *
+ * The first version had one hardcoded template with three blanks, so every
+ * person who used it sent the same letter, padded with lines like "with my
+ * background and passion for this field" that say nothing. A hiring manager
+ * recognises that immediately.
+ *
+ * This asks for the things a letter actually needs - what you have done, what
+ * you are good at, why this employer - and writes around them. It is still a
+ * draft to edit rather than something to send unread, and it says so.
+ */
 private fun CoverLetterTool(accent: Color) {
     var name by remember { mutableStateOf("") }
     var role by remember { mutableStateOf("") }
     var company by remember { mutableStateOf("") }
-    val letter = if (name.isBlank() || role.isBlank() || company.isBlank()) "" else
-        "Dear Hiring Manager,\n\nI am writing to express my strong interest in the $role position at $company. With my background and passion for this field, I am confident I would be a valuable addition to your team.\n\nThroughout my career I have developed the skills needed to excel in this role, and I am excited about the opportunity to contribute to $company's continued success.\n\nThank you for considering my application. I look forward to discussing how I can contribute.\n\nSincerely,\n$name"
+    var years by remember { mutableStateOf("") }
+    var strengths by remember { mutableStateOf("") }
+    var why by remember { mutableStateOf("") }
+    var tone by remember { mutableStateOf("Warm") }
+
+    val ready = name.isNotBlank() && role.isNotBlank() && company.isNotBlank()
+    val letter = remember(name, role, company, years, strengths, why, tone) {
+        if (!ready) "" else buildCoverLetter(name, role, company, years, strengths, why, tone)
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
         Column { FieldLabel("YOUR NAME"); ToolInput(name, { name = it }, "Jane Doe", minLines = 1) }
         Column { FieldLabel("ROLE"); ToolInput(role, { role = it }, "Software Engineer", minLines = 1) }
         Column { FieldLabel("COMPANY"); ToolInput(company, { company = it }, "Acme Inc", minLines = 1) }
-        if (letter.isNotEmpty()) ToolResult(letter, accent, mono = false, label = "COVER LETTER")
+        Column {
+            FieldLabel("YEARS IN THIS KIND OF WORK")
+            ToolInput(years, { years = it }, "4", minLines = 1)
+        }
+        Column {
+            FieldLabel("WHAT YOU ARE GOOD AT")
+            ToolInput(strengths, { strengths = it },
+                "Kotlin, shipping on small teams, working with designers", minLines = 2)
+        }
+        Column {
+            FieldLabel("WHY THIS EMPLOYER")
+            ToolInput(why, { why = it },
+                "You build tools people rely on every day", minLines = 2)
+        }
+        FieldLabel("TONE")
+        ChipRow(listOf("Warm", "Direct", "Formal"), tone, accent) { tone = it }
+
+        if (letter.isNotEmpty()) {
+            ToolResult(letter, accent, mono = false, label = "DRAFT")
+            Text(
+                "A starting point, not a finished letter. Replace anything that " +
+                    "does not sound like you before you send it.",
+                color = InkFaint, fontSize = 12.sp
+            )
+        } else {
+            Text("Fill in your name, the role and the company to see a draft.",
+                color = InkFaint, fontSize = 13.sp)
+        }
     }
+}
+
+private fun buildCoverLetter(
+    name: String, role: String, company: String,
+    years: String, strengths: String, why: String, tone: String
+): String {
+    val n = name.trim(); val r = role.trim(); val c = company.trim()
+    val skills = strengths.split(",", "\n")
+        .map { it.trim() }.filter { it.isNotEmpty() }
+
+    val opening = when (tone) {
+        "Direct" -> "I am applying for the $r role at $c."
+        "Formal" -> "I wish to be considered for the position of $r at $c."
+        else -> "I would like to be considered for the $r role at $c."
+    }
+
+    val experience = years.trim().toIntOrNull()?.let { y ->
+        val span = if (y == 1) "a year" else "$y years"
+        when (tone) {
+            "Direct" -> "I have spent $span doing this kind of work."
+            "Formal" -> "I have $span of experience in this field."
+            else -> "I have been doing this kind of work for $span."
+        }
+    }
+
+    val strengthLine = when {
+        skills.isEmpty() -> null
+        skills.size == 1 -> "The part I am strongest on is ${skills[0]}."
+        else -> {
+            val list = skills.dropLast(1).joinToString(", ") + " and " + skills.last()
+            when (tone) {
+                "Formal" -> "My principal strengths are $list."
+                else -> "Where I am strongest: $list."
+            }
+        }
+    }
+
+    val whyLine = why.trim().takeIf { it.isNotEmpty() }?.let {
+        val body = it.trimEnd('.', ' ')
+        when (tone) {
+            "Direct" -> "I want to work at $c because $body."
+            "Formal" -> "I am drawn to $c in particular because $body."
+            else -> "What draws me to $c is that $body."
+        }
+    }
+
+    val closing = when (tone) {
+        "Direct" -> "I would be glad to talk it through. Thank you for your time."
+        "Formal" -> "I would welcome the opportunity to discuss my application further. " +
+            "Thank you for your consideration."
+        else -> "I would love the chance to talk about it. Thank you for reading."
+    }
+
+    val body = listOfNotNull(
+        listOfNotNull(opening, experience).joinToString(" "),
+        listOfNotNull(strengthLine, whyLine).joinToString(" ").takeIf { it.isNotBlank() },
+        closing
+    ).joinToString("\n\n")
+
+    val signOff = if (tone == "Formal") "Yours sincerely," else "Best regards,"
+    return "Dear Hiring Manager,\n\n$body\n\n$signOff\n$n"
 }
 
 @androidx.compose.runtime.Composable
