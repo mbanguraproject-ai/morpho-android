@@ -31,11 +31,9 @@ private val PlusViolet = Color(0xFF6A4BD6)
 private val Green = Color(0xFF16A34A)
 
 
-/** Marked Plus in the registry but not built yet, so not counted or advertised. */
-private val COMING_SOON = setOf(
-    "ai-text-rewriter", "ai-image-upscaler", "grammar-checker",
-    "essay-writer", "paragraph-generator"
-)
+/** Was for tools marked Plus but not built. All of them work now; kept so the
+ *  count has one obvious place to exclude from if that changes again. */
+private val COMING_SOON = emptySet<String>()
 
 @Composable
 fun PlusScreen(
@@ -125,6 +123,7 @@ fun PlusScreen(
                 PlusLine("PDF → HTML  ·  SVG → PNG")
                 PlusLine("Video compressor  ·  MP3 converter")
                 PlusLine("Background remover")
+                PlusLine("Audio to text  \u00b7  AI writing tools")
             }
 
             // pricing toggle

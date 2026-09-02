@@ -12,7 +12,9 @@ import java.net.UnknownHostException
 
 /** Base URL of the Morpho conversion Worker. */
 private const val CONVERT_BASE = "https://morpho-convert.secretsafe-cc.workers.dev"
-private const val SHARED_SECRET = "ZQP2uWmHhajJzjUKm358h-ot1D4_INu9bHU7Q-kPKbI"
+// internal, not private: the AI client sends the same header, and a second
+// copy of a secret is a second place to forget to rotate it.
+internal const val SHARED_SECRET = "ZQP2uWmHhajJzjUKm358h-ot1D4_INu9bHU7Q-kPKbI"
 
 /**
  * Outcome of a Worker conversion.

@@ -34,6 +34,11 @@ object ToolSearch {
 
     /** Word the user is likely to type -> words that appear in tool metadata. */
     private val SYNONYMS: Map<String, List<String>> = mapOf(
+        "transcribe" to listOf("audio-transcriber"),
+        "transcription" to listOf("audio-transcriber"),
+        "speech" to listOf("audio-transcriber"),
+        "dictation" to listOf("audio-transcriber"),
+        "subtitles" to listOf("audio-transcriber", "subtitle-converter"),
         "smaller" to listOf("compress"), "shrink" to listOf("compress"),
         "reduce" to listOf("compress"), "compressed" to listOf("compress"),
         "size" to listOf("compress", "resize"), "lighter" to listOf("compress"),
@@ -240,7 +245,7 @@ object ToolSearch {
         "background-remover", "favicon-generator",
         // TrimTool is one screen shared by these three; the other media tools
         // have their own composables and have not been wired.
-        "video-trimmer", "audio-trimmer", "mp4-to-mp3",
+        "video-trimmer", "audio-trimmer", "mp4-to-mp3", "audio-transcriber",
         // audio and gif encoders
         "wav-converter", "audio-compressor", "volume-booster",
         "gif-maker", "video-to-gif",

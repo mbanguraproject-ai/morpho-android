@@ -41,6 +41,8 @@ import cc.devbangs.morpho.ui.tool.kit.TextDevTool
 import cc.devbangs.morpho.ui.tool.kit.hasGeneratorTool
 import cc.devbangs.morpho.ui.tool.kit.GeneratorTool
 import cc.devbangs.morpho.ui.tool.kit.BackgroundRemoverTool
+import cc.devbangs.morpho.ui.tool.kit.AiTool
+import cc.devbangs.morpho.ui.tool.kit.hasAiTool
 import cc.devbangs.morpho.ui.tool.kit.PdfMarkupTool
 import cc.devbangs.morpho.ui.tool.kit.hasMarkupTool
 import cc.devbangs.morpho.ui.tool.kit.hasImageTool
@@ -267,6 +269,7 @@ private fun ToolHost(tool: Tool, onOpenTool: (String) -> Unit, onOpenPlus: () ->
         tool.id == "invoice-generator" -> InvoiceTool(tool.category.accent, DocType.INVOICE)
         tool.id == "receipt-generator" -> InvoiceTool(tool.category.accent, DocType.RECEIPT)
         tool.id == "quotation-generator" -> InvoiceTool(tool.category.accent, DocType.QUOTE)
+        hasAiTool(tool.id) -> AiTool(tool.id, tool.category.accent)
         hasMarkupTool(tool.id) -> PdfMarkupTool(tool.id, tool.category.accent)
         tool.id == "background-remover" -> BackgroundRemoverTool(tool.category.accent)
         tool.id == "pdf-signer" -> PdfSignerTool(tool.category.accent)

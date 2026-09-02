@@ -223,6 +223,7 @@ object ToolIcons {
         "clock" to PhosphorIcons.Bold.Clock,
         "info" to PhosphorIcons.Bold.Info,
         "crown" to PhosphorIcons.Bold.Crown,
+        "audio-transcriber" to PhosphorIcons.Bold.TextT,
         "drag" to PhosphorIcons.Bold.Rows,
         "pencil" to PhosphorIcons.Bold.PencilSimple,
         "trash" to PhosphorIcons.Bold.Trash,
