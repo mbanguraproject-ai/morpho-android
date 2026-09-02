@@ -189,6 +189,7 @@ private fun Compress(accent: Color, onOpenTool: (String) -> Unit = {}) {
     var origSize by remember { mutableStateOf(0L) }
     var output by remember { mutableStateOf<ByteArray?>(null) }
     var outName by remember { mutableStateOf("") }
+    var level by remember { mutableStateOf("Balanced") }
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u ->
@@ -207,11 +208,24 @@ private fun Compress(accent: Color, onOpenTool: (String) -> Unit = {}) {
             Text("Original: ${bytesHuman(origSize)}", color = InkSoft, fontSize = 13.sp)
             Text("Re-renders pages at reduced resolution to shrink size.", color = InkFaint, fontSize = 12.sp)
             val u = uri!!
+            FieldLabel("HOW HARD")
+            LevelRow(listOf("Light", "Balanced", "Strong"), level, accent) {
+                level = it; output = null
+            }
+            Text(
+                when (level) {
+                    "Light" -> "Barely visible change. Good when the text still has to be sharp."
+                    "Strong" -> "Smallest file. Fine for reading, soft if you zoom in."
+                    else -> "A good middle for sharing and email."
+                },
+                color = InkFaint, fontSize = 12.sp
+            )
+
             if (busy) ProcessingCard("Compressing your PDF...", accent)
             else ToolButton("Compress PDF", accent) {
                 busy = true
                 scope.launch {
-                    val r = withContext(Dispatchers.Default) { compressPdf(ctx, u) }
+                    val r = withContext(Dispatchers.Default) { compressPdf(ctx, u, level) }
                     if (r != null) {
                         output = r
                         outName = "compressed_${System.currentTimeMillis()}"
@@ -264,9 +278,21 @@ private fun unlockPdf(ctx: Context, uri: Uri, password: String): ByteArray? = tr
     }
 } catch (e: Exception) { null }
 
-private fun compressPdf(ctx: Context, uri: Uri): ByteArray? =
-    // reuse the native renderer at lower res, rebuild — genuine size reduction
-    renderPdf(ctx, uri, 800).takeIf { it.isNotEmpty() }?.let { pages ->
+/**
+ * Compression level as a render width.
+ *
+ * This used to be a single hardcoded 800px, which flattens a document whether
+ * or not that is what the person wanted. Competing apps all offer a choice and
+ * so should this: the trade is size against how the text holds up when zoomed.
+ */
+private fun widthForLevel(level: String): Int = when (level) {
+    "Light" -> 1400
+    "Strong" -> 700
+    else -> 1000     // Balanced
+}
+
+private fun compressPdf(ctx: Context, uri: Uri, level: String = "Balanced"): ByteArray? =
+    renderPdf(ctx, uri, widthForLevel(level)).takeIf { it.isNotEmpty() }?.let { pages ->
         val doc = android.graphics.pdf.PdfDocument()
         pages.forEach { bmp ->
             val info = android.graphics.pdf.PdfDocument.PageInfo.Builder(bmp.width, bmp.height, doc.pages.size + 1).create()
@@ -274,6 +300,29 @@ private fun compressPdf(ctx: Context, uri: Uri): ByteArray? =
         }
         val s = ByteArrayOutputStream(); doc.writeTo(s); doc.close(); s.toByteArray()
     }
+
+
+/** Named choices as chips. */
+@Composable
+private fun LevelRow(
+    options: List<String>,
+    selected: String,
+    accent: Color,
+    onSelect: (String) -> Unit
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+        options.forEach { o ->
+            val on = o == selected
+            Box(
+                Modifier.weight(1f).clip(Shape.field)
+                    .background(if (on) accent else PaperSunk)
+                    .clickable { onSelect(o) }
+                    .padding(vertical = 10.dp),
+                contentAlignment = Alignment.Center
+            ) { Text(o, color = if (on) Paper else InkSoft, fontSize = 13.sp) }
+        }
+    }
+}
 
 @Composable
 private fun PickRow(label: String, accent: Color, onClick: () -> Unit) {

@@ -254,6 +254,10 @@ private fun PdfFromSingle(id: String, accent: Color, onOpenTool: (String) -> Uni
     var pages by remember { mutableStateOf<List<Bitmap>>(emptyList()) }
     var rotation by remember { mutableStateOf(90) }
     var wm by remember { mutableStateOf("DRAFT") }
+    var wmColor by remember { mutableStateOf(AColor.rgb(200, 0, 0)) }
+    var wmOpacity by remember { mutableStateOf(24) }
+    var wmSize by remember { mutableStateOf(12) }
+    var wmTile by remember { mutableStateOf(false) }
     var range by remember { mutableStateOf("1") }
     var loadError by remember { mutableStateOf("") }
     var working by remember { mutableStateOf(false) }
@@ -303,7 +307,53 @@ private fun PdfFromSingle(id: String, accent: Color, onOpenTool: (String) -> Uni
             }
             when (id) {
                 "pdf-page-rotator" -> StepControl("ROTATE°", rotation, listOf(90,180,270), accent) { rotation = it }
-                "pdf-watermark" -> Column { FieldLabel("WATERMARK"); ToolInput(wm, { wm = it }, "DRAFT", minLines = 1) }
+                "pdf-watermark" -> Column(
+                    verticalArrangement = Arrangement.spacedBy(Space.md)
+                ) {
+                    Column { FieldLabel("WATERMARK"); ToolInput(wm, { wm = it }, "DRAFT", minLines = 1) }
+                    FieldLabel("COLOUR")
+                    Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+                        listOf(
+                            AColor.rgb(200, 0, 0), AColor.rgb(40, 40, 48),
+                            AColor.rgb(26, 70, 229), AColor.rgb(214, 138, 15),
+                            AColor.rgb(21, 128, 61)
+                        ).forEach { swatch ->
+                            Box(
+                                Modifier.size(38.dp).clip(Shape.chip)
+                                    .background(Color(swatch))
+                                    .border(
+                                        if (swatch == wmColor) 3.dp else 1.dp,
+                                        if (swatch == wmColor) accent else PaperLine,
+                                        Shape.chip
+                                    )
+                                    .clickable { wmColor = swatch; output = null }
+                            )
+                        }
+                    }
+                    StepControl("OPACITY %", wmOpacity, listOf(15, 25, 40, 60), accent) {
+                        wmOpacity = it; output = null
+                    }
+                    StepControl("SIZE %", wmSize, listOf(6, 12, 18, 25), accent) {
+                        wmSize = it; output = null
+                    }
+                    Row(
+                        Modifier.fillMaxWidth().clip(Shape.field)
+                            .background(if (wmTile) accent.copy(alpha = 0.12f) else PaperSunk)
+                            .clickable { wmTile = !wmTile; output = null }
+                            .padding(horizontal = Space.md, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        MorphoIcon(
+                            if (wmTile) "check" else "tab-grid",
+                            tint = if (wmTile) accent else InkFaint, size = 17.dp
+                        )
+                        Spacer(Modifier.width(Space.sm))
+                        Text(
+                            "Repeat across the page",
+                            color = if (wmTile) accent else InkSoft, fontSize = 14.sp
+                        )
+                    }
+                }
                 "pdf-splitter","pdf-page-extractor" -> Column { FieldLabel("PAGES (e.g. 1,3,5)"); ToolInput(range, { range = it }, "1,2", minLines = 1) }
             }
             val u = uri!!
@@ -332,7 +382,7 @@ private fun PdfFromSingle(id: String, accent: Color, onOpenTool: (String) -> Uni
                     // Built once. Save and Share then reuse the same bytes
                     // instead of re-rendering every page for the second action.
                     val bytes = withContext(Dispatchers.Default) {
-                        buildSingle(ctx, id, u, pages, rotation, wm, range)
+                        buildSingle(ctx, id, u, pages, rotation, wm, range, wmColor, wmOpacity, wmSize, wmTile)
                     }
                     // pdf-to-jpg writes its pages to the gallery itself and
                     // returns nothing, so there is no document to offer.
@@ -357,7 +407,7 @@ private fun PdfFromSingle(id: String, accent: Color, onOpenTool: (String) -> Uni
             val steps = WorkflowGraph.nextSteps(id)
             if (steps.isNotEmpty() && id != "pdf-to-jpg") {
                 NextStepSuggestions(steps) { step ->
-                    buildSingle(ctx, id, u, pages, rotation, wm, range)?.let { bytes ->
+                    buildSingle(ctx, id, u, pages, rotation, wm, range, wmColor, wmOpacity, wmSize, wmTile)?.let { bytes ->
                         WorkflowBus.handOff(bytes, "application/pdf"); onOpenTool(step.toolId)
                     }
                 }
@@ -486,7 +536,11 @@ private fun parseRange(s: String, max: Int): List<Int> =
 
 private fun buildSingle(
     ctx: android.content.Context, id: String, uri: Uri, pages: List<Bitmap>,
-    rotation: Int, wm: String, range: String
+    rotation: Int, wm: String, range: String,
+    wmColor: Int = AColor.rgb(200, 0, 0),
+    wmOpacity: Int = 24,
+    wmSize: Int = 12,
+    wmTile: Boolean = false
 ): ByteArray? {
     val doc = PdfDocument()
     when (id) {
@@ -494,15 +548,40 @@ private fun buildSingle(
             val m = android.graphics.Matrix().apply { postRotate(rotation.toFloat()) }
             bitmapToPdfPage(doc, Bitmap.createBitmap(p, 0, 0, p.width, p.height, m, true))
         }
+        // Colour, opacity, size and tiling were all hardcoded: one red, one
+        // size, one angle, one position. A watermark is the kind of thing
+        // people need to match to their document, so it is now theirs to set.
         "pdf-watermark" -> pages.forEach { p ->
             val out = p.copy(Bitmap.Config.ARGB_8888, true)
             val c = Canvas(out)
             val paint = Paint().apply {
-                color = AColor.argb(60, 200, 0, 0); isAntiAlias = true
-                textSize = out.width / 8f
+                color = AColor.argb(
+                    (wmOpacity * 255 / 100).coerceIn(10, 255),
+                    AColor.red(wmColor), AColor.green(wmColor), AColor.blue(wmColor)
+                )
+                isAntiAlias = true
+                textSize = out.width * (wmSize / 100f)
             }
-            c.save(); c.rotate(-30f, out.width/2f, out.height/2f)
-            c.drawText(wm, out.width*0.15f, out.height*0.55f, paint); c.restore()
+            c.save()
+            c.rotate(-30f, out.width / 2f, out.height / 2f)
+            if (wmTile) {
+                // Repeat across the page so it cannot be cropped off.
+                val stepX = paint.measureText(wm) * 1.6f
+                val stepY = paint.textSize * 3f
+                if (stepX > 1f && stepY > 1f) {
+                    var y = -out.height * 0.5f
+                    while (y < out.height * 1.5f) {
+                        var x = -out.width * 0.5f
+                        while (x < out.width * 1.5f) {
+                            c.drawText(wm, x, y, paint); x += stepX
+                        }
+                        y += stepY
+                    }
+                }
+            } else {
+                c.drawText(wm, out.width * 0.15f, out.height * 0.55f, paint)
+            }
+            c.restore()
             bitmapToPdfPage(doc, out)
         }
         "pdf-page-numbering" -> pages.forEachIndexed { i, p ->
