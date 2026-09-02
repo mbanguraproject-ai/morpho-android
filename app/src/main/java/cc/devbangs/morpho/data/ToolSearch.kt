@@ -34,6 +34,12 @@ object ToolSearch {
 
     /** Word the user is likely to type -> words that appear in tool metadata. */
     private val SYNONYMS: Map<String, List<String>> = mapOf(
+        // People search for "pdf editor" meaning several different things.
+        // Offer what Morpho actually has rather than nothing.
+        "editor" to listOf("pdf-editor", "pdf-annotator", "pdf-signer"),
+        "annotate" to listOf("pdf-annotator", "pdf-editor"),
+        "highlight" to listOf("pdf-annotator"),
+        "markup" to listOf("pdf-annotator", "pdf-editor"),
         "transcribe" to listOf("audio-transcriber"),
         "transcription" to listOf("audio-transcriber"),
         "speech" to listOf("audio-transcriber"),

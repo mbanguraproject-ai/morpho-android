@@ -5,7 +5,7 @@ object ToolRegistry {
     val all: List<Tool> = listOf(
         Tool("pdf-unlocker", "PDF Unlocker", "Remove PDF password and restrictions", ToolCategory.PDF, "pdf-unlocker", offline = true, popular = false),
         Tool("pdf-signer", "PDF Signer", "Draw and add your signature to a PDF", ToolCategory.PDF, "pdf-signer", offline = true, popular = false),
-        Tool("pdf-editor", "PDF Editor", "Add text and annotations to PDFs", ToolCategory.PDF, "pdf-editor", offline = true, popular = false),
+        Tool("pdf-editor", "Add Text to PDF", "Place your own text on the pages. The document's own text is not changed", ToolCategory.PDF, "pdf-editor", offline = true, popular = false),
         Tool("pdf-to-word", "PDF to Word Converter", "Convert PDF files to editable Word documents", ToolCategory.PDF, "pdf-to-word", offline = false, popular = true, plus = true),
         Tool("pdf-to-excel", "PDF to Excel Converter", "Convert PDF tables to editable Excel", ToolCategory.PDF, "pdf-to-excel", offline = false, popular = true, plus = true),
         Tool("excel-to-pdf", "Excel to PDF Converter", "Convert Excel spreadsheets to PDF", ToolCategory.PDF, "excel-to-pdf", offline = false, popular = false, plus = true),
@@ -132,7 +132,7 @@ object ToolRegistry {
         Tool("pdf-header-footer", "PDF Header & Footer", "Add headers and footers to PDF pages", ToolCategory.PDF, "pdf-header-footer", offline = true, popular = false),
         Tool("pdf-crop", "PDF Crop", "Trim margins off PDF pages", ToolCategory.PDF, "pdf-crop", offline = true, popular = false),
         Tool("pdf-bates-numbering", "PDF Bates Numbering", "Bates stamp PDFs for legal discovery", ToolCategory.PDF, "pdf-bates-numbering", offline = true, popular = false),
-        Tool("pdf-annotator", "PDF Annotator", "Highlight, note, and draw on PDFs", ToolCategory.PDF, "pdf-annotator", offline = true, popular = false),
+        Tool("pdf-annotator", "Highlight & Draw on PDF", "Mark up pages with a highlighter or a pen", ToolCategory.PDF, "pdf-annotator", offline = true, popular = false),
         Tool("pdf-password-protector", "PDF Password Protector", "Add password protection to PDFs", ToolCategory.PDF, "pdf-password-protector", offline = true, popular = false),
         Tool("pdf-reorder-pages", "PDF Reorder Pages", "Drag-and-drop to reorder PDF pages", ToolCategory.PDF, "pdf-reorder-pages", offline = true, popular = false),
     )
