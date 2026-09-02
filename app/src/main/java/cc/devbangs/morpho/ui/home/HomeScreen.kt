@@ -38,6 +38,7 @@ import cc.devbangs.morpho.core.Motion
 import cc.devbangs.morpho.core.Shape
 import cc.devbangs.morpho.core.Space
 import cc.devbangs.morpho.data.Tool
+import cc.devbangs.morpho.data.Recommender
 import cc.devbangs.morpho.data.ToolRegistry
 import cc.devbangs.morpho.data.Workspace
 import cc.devbangs.morpho.ui.components.Eyebrow
@@ -68,6 +69,9 @@ fun HomeScreen(
 ) {
     val hazeState = remember { HazeState() }
     val workspace = Workspace.tools
+    // Computed here, not inside the list: a LazyListScope block is not a
+    // composable context, so remember cannot be called from it.
+    val starters = if (workspace.isEmpty()) Recommender.forWorkspace(6) else emptyList()
     val recent = Workspace.recent
 
     Box(Modifier.fillMaxSize().background(Paper)) {
@@ -92,6 +96,27 @@ fun HomeScreen(
 
             if (workspace.isEmpty()) {
                 item { EmptyWorkspace(onOpenAddTools) }
+                // Someone who skipped onboarding used to get two cards and a
+                // screenful of nothing. Offering real tools they can open now is
+                // more useful than an invitation to go and find some.
+                if (starters.isNotEmpty()) {
+                    item { Eyebrow("POPULAR RIGHT NOW") }
+                    itemsIndexed(starters.chunked(2)) { idx, row ->
+                        Row(
+                            Modifier.fillMaxWidth()
+                                .padding(horizontal = Space.gutter, vertical = 5.dp)
+                                .height(IntrinsicSize.Min)
+                                .reveal(idx),
+                            horizontalArrangement = Arrangement.spacedBy(Space.md)
+                        ) {
+                            row.forEach { s ->
+                                WorkspaceCard(s.tool, { onOpenTool(s.tool.id) },
+                                    Modifier.weight(1f).fillMaxHeight())
+                            }
+                            if (row.size == 1) Spacer(Modifier.weight(1f))
+                        }
+                    }
+                }
             } else {
                 item { Eyebrow("YOUR WORKSPACE", action = "Manage", onAction = onArrange) }
                 // The add cell is the last slot in the grid rather than a link
@@ -169,8 +194,11 @@ private fun EmptyWorkspace(onAdd: () -> Unit) {
     ) {
         Text("Build your workspace", style = MaterialTheme.typography.headlineSmall, color = Ink)
         Spacer(Modifier.height(6.dp))
-        Text("Choose the tools you use most.", style = MaterialTheme.typography.bodyLarge, color = InkSoft)
-        Spacer(Modifier.height(Space.xl))
+        Text(
+            "Pick the tools you use most, or just start with one below.",
+            style = MaterialTheme.typography.bodyLarge, color = InkSoft
+        )
+        Spacer(Modifier.height(Space.lg))
         Row(
             Modifier.fillMaxWidth()
                 .morphLift(Shape.card, elevation = 10.dp, pressed = pressed, accent = Cobalt)
