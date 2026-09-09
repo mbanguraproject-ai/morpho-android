@@ -38,6 +38,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import android.graphics.Bitmap
 import cc.devbangs.morpho.ui.theme.*
 
 /**
@@ -74,6 +75,101 @@ fun ToolErrorCard(
             ) {
                 Text(actionLabel, color = Paper, fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold)
+            }
+        }
+    }
+}
+
+/**
+ * Save and Share for a bitmap result, both off the main thread.
+ *
+ * The bitmap tools outside ImageTools - the image converter, the meme maker,
+ * the background remover - each compressed in their own click handler, on the
+ * main thread, which is seconds of frozen UI on a large image and an ANR past
+ * about five seconds. This is the bitmap counterpart to ToolResultCard: one
+ * place for the pattern instead of three copies.
+ *
+ * The write runs with reporting suppressed and reportSave is called after it,
+ * so the encoding happens on IO while the toast, the notification and markUsed
+ * stay on the main thread. The scope belongs to this composable, which is
+ * never swapped out while a write is running.
+ *
+ * [provide] is invoked on the IO thread, so a caller that has to build its
+ * bitmap first does that off the main thread too.
+ */
+@Composable
+fun BitmapResultActions(
+    accent: Color,
+    baseName: String,
+    format: Bitmap.CompressFormat,
+    quality: Int,
+    saveLabel: String = "Save",
+    spacing: androidx.compose.ui.unit.Dp = Space.sm,
+    filledShare: Boolean = false,
+    provide: () -> Bitmap
+) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(false) }
+
+    val doSave = {
+        busy = true
+        scope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                try {
+                    saveToGallery(
+                        ctx, provide(), "${baseName}_${System.currentTimeMillis()}",
+                        format, quality, report = false
+                    )
+                } catch (e: Exception) { false } catch (e: OutOfMemoryError) { false }
+            }
+            reportSave(
+                ctx, ok, "Image ready", "Your image was saved to your gallery.",
+                "Saved to Pictures/Morpho", "Couldn't save the image"
+            )
+            busy = false
+        }
+        Unit
+    }
+
+    val doShare = {
+        busy = true
+        scope.launch {
+            val uri = withContext(Dispatchers.IO) {
+                try {
+                    writeShareFile(
+                        ctx, provide(), "${baseName}_${System.currentTimeMillis()}",
+                        format, quality
+                    )
+                } catch (e: Exception) { null } catch (e: OutOfMemoryError) { null }
+            }
+            if (uri != null) launchShareIntent(ctx, uri, imageMime(format))
+            else android.widget.Toast.makeText(
+                ctx, "Couldn't prepare the image", android.widget.Toast.LENGTH_SHORT
+            ).show()
+            busy = false
+        }
+        Unit
+    }
+
+    Row(horizontalArrangement = Arrangement.spacedBy(spacing)) {
+        Box(Modifier.weight(1f)) {
+            ToolButton(
+                if (busy) "Working\u2026" else saveLabel,
+                accent, enabled = !busy, onClick = doSave
+            )
+        }
+        Box(Modifier.weight(1f)) {
+            if (filledShare) {
+                ToolButton("Share", accent, enabled = !busy, onClick = doShare)
+            } else {
+                Box(
+                    Modifier.fillMaxWidth().clip(Shape.field)
+                        .background(accent.copy(alpha = if (busy) 0.04f else 0.10f))
+                        .clickable(enabled = !busy, onClick = doShare)
+                        .padding(vertical = 15.dp),
+                    contentAlignment = Alignment.Center
+                ) { Text("Share", color = accent, fontSize = 15.sp) }
             }
         }
     }

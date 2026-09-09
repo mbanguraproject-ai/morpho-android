@@ -154,25 +154,11 @@ fun BackgroundRemoverTool(accent: Color) {
                 ),
                 accent
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(Space.md)) {
-                // PNG at quality 100: JPEG would flatten the alpha to black.
-                Box(Modifier.weight(1f)) {
-                    ToolButton("Save PNG", accent) {
-                        saveToGallery(
-                            ctx, result, "morpho_nobg_${System.currentTimeMillis()}",
-                            Bitmap.CompressFormat.PNG, 100
-                        )
-                    }
-                }
-                Box(Modifier.weight(1f)) {
-                    ToolButton("Share", accent) {
-                        shareBitmap(
-                            ctx, result, "morpho_nobg_${System.currentTimeMillis()}",
-                            Bitmap.CompressFormat.PNG, 100
-                        )
-                    }
-                }
-            }
+            // PNG at quality 100: JPEG would flatten the alpha to black.
+            BitmapResultActions(
+                accent, "morpho_nobg", Bitmap.CompressFormat.PNG, 100,
+                saveLabel = "Save PNG", spacing = Space.md, filledShare = true
+            ) { result }
         }
     }
 }

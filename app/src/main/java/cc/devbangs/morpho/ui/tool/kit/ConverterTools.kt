@@ -194,16 +194,7 @@ private fun ImageConvert(id: String, accent: Color) {
             onClear = { src = null }
         )
         src?.let { bmp ->
-            Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-                Box(Modifier.weight(1f)) { ToolButton("Save", accent) {
-                    saveToGallery(ctx, bmp, "morpho_${System.currentTimeMillis()}", fmt, 95) } }
-                Box(Modifier.weight(1f)) {
-                    Box(Modifier.fillMaxWidth().clip(Shape.field).background(accent.copy(alpha=0.10f))
-                        .clickable { shareBitmap(ctx, bmp, "morpho_${System.currentTimeMillis()}", fmt, 95) }
-                        .padding(vertical = 15.dp), contentAlignment = Alignment.Center) {
-                        Text("Share", color = accent, fontSize = 15.sp) }
-                }
-            }
+            BitmapResultActions(accent, "morpho", fmt, 95) { bmp }
         }
     }
 }
