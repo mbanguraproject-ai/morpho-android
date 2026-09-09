@@ -245,10 +245,25 @@ private fun TransformBody(id: String, src: Bitmap, accent: Color) {
         }
     }
 
+    // Every other tool file in the app shows ProcessingCard while it works;
+    // this one never did, which is why the image tools had no working state
+    // and never registered with ToolWork, whose busy flag gates the
+    // leave-confirmation in ToolScreen.
+    //
+    // Most taps finish well under a second, and flashing the card for those
+    // would be worse than nothing, so it appears only once work has run long
+    // enough to be worth reporting - which is also when the confirmation
+    // actually matters.
+    var showBusy by remember(src) { mutableStateOf(false) }
+    LaunchedEffect(working) {
+        if (working) { delay(260); showBusy = true } else showBusy = false
+    }
+
     OutputControls(fmtKey, quality, accent, { fmtKey = it }, { quality = it })
 
     // preview
-    Box(
+    if (showBusy) ProcessingCard("Processing image", accent)
+    else Box(
         Modifier.fillMaxWidth().heightIn(min = 180.dp, max = 320.dp)
             .clip(Shape.card).background(PaperSunk),
         contentAlignment = Alignment.Center
@@ -591,6 +606,20 @@ private fun WatermarkBody(src: Bitmap, accent: Color) {
     var out by remember(src) { mutableStateOf(src) }
     var outSize by remember(src) { mutableStateOf(0L) }
     var working by remember(src) { mutableStateOf(false) }
+    // Every other tool file in the app shows ProcessingCard while it works;
+    // this one never did, which is why the image tools had no working state
+    // and never registered with ToolWork, whose busy flag gates the
+    // leave-confirmation in ToolScreen.
+    //
+    // Most taps finish well under a second, and flashing the card for those
+    // would be worse than nothing, so it appears only once work has run long
+    // enough to be worth reporting - which is also when the confirmation
+    // actually matters.
+    var showBusy by remember(src) { mutableStateOf(false) }
+    LaunchedEffect(working) {
+        if (working) { delay(260); showBusy = true } else showBusy = false
+    }
+
 
     // Rendering and measuring both cost a full pass over the bitmap, so they
     // are debounced off the main thread - typing must not re-render per key.
@@ -784,7 +813,8 @@ private fun WatermarkBody(src: Bitmap, accent: Color) {
             )
         }
 
-        Box(
+        if (showBusy) ProcessingCard("Applying watermark", accent)
+        else Box(
             Modifier.fillMaxWidth().heightIn(min = 180.dp, max = 320.dp)
                 .clip(Shape.card).background(PaperSunk),
             contentAlignment = Alignment.Center

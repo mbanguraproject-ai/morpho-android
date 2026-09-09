@@ -254,6 +254,10 @@ fun saveToGallery(
         }
     } catch (e: Exception) {
         false
+    } catch (e: OutOfMemoryError) {
+        // Encoding a large image can exhaust the heap. Report the failure
+        // through the normal path rather than taking the app down.
+        false
     }
 
     if (report) reportSave(
@@ -280,6 +284,8 @@ fun shareBitmap(ctx: Context, bmp: Bitmap, name: String, format: Bitmap.Compress
         ctx.startActivity(Intent.createChooser(intent, "Share image"))
     } catch (e: Exception) {
         Toast.makeText(ctx, "Share failed", Toast.LENGTH_SHORT).show()
+    } catch (e: OutOfMemoryError) {
+        Toast.makeText(ctx, "Image too large to share", Toast.LENGTH_SHORT).show()
     }
 }
 
@@ -289,8 +295,34 @@ fun bytesHuman(n: Long): String = when {
     else -> "$n B"
 }
 
-fun bitmapBytes(bmp: Bitmap, format: Bitmap.CompressFormat, quality: Int): Long {
-    val s = java.io.ByteArrayOutputStream()
-    bmp.compress(format, quality, s)
-    return s.size().toLong()
+/** Counts bytes written and keeps none of them. */
+private class ByteCounter : java.io.OutputStream() {
+    var total = 0L
+        private set
+    override fun write(b: Int) { total++ }
+    override fun write(b: ByteArray) { total += b.size }
+    override fun write(b: ByteArray, off: Int, len: Int) { total += len }
+}
+
+/**
+ * Encoded size in bytes.
+ *
+ * This used to compress into a buffering stream purely to read size(), so it
+ * held the whole encoded file in memory - tens of megabytes for a large PNG,
+ * and more again while the stream doubled its internal buffer. It runs on
+ * every control tap in every image tool, so that landed on top of whatever
+ * buffers the transform itself had already allocated. Counting the bytes keeps
+ * none of them.
+ *
+ * OutOfMemoryError is an Error, not an Exception, so a bare `catch (Exception)`
+ * never caught it and the app died instead of degrading.
+ */
+fun bitmapBytes(bmp: Bitmap, format: Bitmap.CompressFormat, quality: Int): Long = try {
+    val counter = ByteCounter()
+    bmp.compress(format, quality, counter)
+    counter.total
+} catch (e: Exception) {
+    0L
+} catch (e: OutOfMemoryError) {
+    0L
 }
