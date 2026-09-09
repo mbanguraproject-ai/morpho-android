@@ -68,6 +68,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("com.adamglin:phosphor-icon:1.0.0")
     implementation("com.google.zxing:core:3.5.3")
+    implementation("androidx.exifinterface:exifinterface:1.4.2")
     implementation("com.google.mlkit:text-recognition:16.0.1")
     // On-device subject segmentation for Background Remover.
     // Unbundled: ~200KB in the APK, the model arrives via Play services.
