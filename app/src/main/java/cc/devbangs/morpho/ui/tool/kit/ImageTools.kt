@@ -11,10 +11,12 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -24,7 +26,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size as GSize
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -35,6 +42,7 @@ import cc.devbangs.morpho.ui.theme.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import kotlin.math.hypot
 import kotlin.math.roundToInt
 
 fun hasImageTool(id: String): Boolean = id in setOf(
@@ -97,6 +105,7 @@ fun ImageTool(id: String, accent: Color) {
         if (bmp != null) {
             when (id) {
                 "image-metadata-viewer" -> MetadataBody(bmp, picked, accent)
+                "image-cropper" -> CropBody(bmp, accent)
                 else -> TransformBody(id, bmp, accent)
             }
         }
@@ -242,6 +251,275 @@ private fun TransformBody(id: String, src: Bitmap, accent: Color) {
         Box(Modifier.weight(1f)) { ToolButton("Save", accent) { saveToGallery(ctx, out, "morpho_${System.currentTimeMillis()}", fmt, q) } }
         Box(Modifier.weight(1f)) { OutlineButton("Share", accent) { shareBitmap(ctx, out, "morpho_${System.currentTimeMillis()}", fmt, q) } }
     }
+}
+
+/**
+ * Image Cropper.
+ *
+ * This tool was registered, routed and rendered, but had no branch in either
+ * the control block or applyTransform, so it fell through to `else -> src` -
+ * the same no-op branch the compressor takes. That is why cropping and
+ * compressing produced identical output: they were running identical code.
+ *
+ * The crop rect is held in normalised 0..1 coordinates so it survives the
+ * preview being laid out at any size, and is only converted to pixels at the
+ * moment a bitmap is produced. Nothing here is shared with TransformBody, so
+ * the other ten image tools cannot be affected by it.
+ */
+@Composable
+private fun CropBody(src: Bitmap, accent: Color) {
+    val ctx = LocalContext.current
+    val density = LocalDensity.current
+    val ratios = listOf("Free", "1:1", "4:3", "3:2", "16:9", "9:16")
+    var ratio by remember(src) { mutableStateOf("Free") }
+
+    // Crop rect, normalised to the source. Starts as a small inset so the
+    // handles are visible and grabbable rather than pinned to the edges.
+    var cl by remember(src) { mutableStateOf(0.06f) }
+    var ct by remember(src) { mutableStateOf(0.06f) }
+    var cr by remember(src) { mutableStateOf(0.94f) }
+    var cb by remember(src) { mutableStateOf(0.94f) }
+    var active by remember(src) { mutableStateOf(0) }
+
+    val k = aspectK(ratio, src)
+    // Recomposes on every drag frame, so don't rewrap the bitmap each time.
+    val img = remember(src) { src.asImageBitmap() }
+
+    // Snap to the largest centred rect of the chosen ratio.
+    LaunchedEffect(ratio, src) {
+        val kk = aspectK(ratio, src) ?: return@LaunchedEffect
+        var h = 1f
+        var w = kk * h
+        if (w > 1f) { w = 1f; h = w / kk }
+        cl = (1f - w) / 2f; cr = cl + w
+        ct = (1f - h) / 2f; cb = ct + h
+    }
+
+    val outW = ((cr - cl) * src.width).roundToInt().coerceAtLeast(1)
+    val outH = ((cb - ct) * src.height).roundToInt().coerceAtLeast(1)
+
+    // Re-encoding to measure bytes is expensive, so it is debounced and run
+    // off the main thread - a drag must not re-encode per frame.
+    var outSize by remember(src) { mutableStateOf(0L) }
+    var measuring by remember(src) { mutableStateOf(true) }
+    LaunchedEffect(src, cl, ct, cr, cb) {
+        measuring = true
+        delay(260)
+        outSize = withContext(Dispatchers.Default) {
+            try {
+                bitmapBytes(cropOf(src, cl, ct, cr, cb), Bitmap.CompressFormat.JPEG, 92)
+            } catch (e: Exception) { 0L } catch (e: OutOfMemoryError) { 0L }
+        }
+        measuring = false
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+        Column {
+            FieldLabel("ASPECT RATIO")
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                ratios.forEach { name ->
+                    val on = name == ratio
+                    Box(
+                        Modifier.weight(1f).clip(Shape.field)
+                            .background(if (on) accent else accent.copy(alpha = 0.12f))
+                            .clickable { ratio = name }
+                            .padding(vertical = 11.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            name,
+                            color = if (on) Paper else InkSoft,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+        }
+
+        // Preview sized to the image so normalised coords map 1:1 onto it.
+        BoxWithConstraints(
+            Modifier.fillMaxWidth().height(340.dp).clip(Shape.card).background(PaperSunk),
+            contentAlignment = Alignment.Center
+        ) {
+            val maxWpx = constraints.maxWidth.toFloat()
+            val maxHpx = with(density) { 340.dp.toPx() }
+            val fit = minOf(maxWpx / src.width, maxHpx / src.height)
+            val wDp = with(density) { (src.width * fit).toDp() }
+            val hDp = with(density) { (src.height * fit).toDp() }
+
+            Box(Modifier.width(wDp).height(hDp)) {
+                Image(img, null, Modifier.matchParentSize())
+                Canvas(
+                    Modifier.matchParentSize().pointerInput(src, ratio) {
+                        val grab = 30.dp.toPx()
+                        detectDragGestures(
+                            onDragStart = { off ->
+                                val w = size.width.toFloat()
+                                val h = size.height.toFloat()
+                                val xs = floatArrayOf(cl * w, cr * w, cl * w, cr * w)
+                                val ys = floatArrayOf(ct * h, ct * h, cb * h, cb * h)
+                                var best = -1
+                                var bestD = grab
+                                for (i in 0..3) {
+                                    val d = hypot(off.x - xs[i], off.y - ys[i])
+                                    if (d < bestD) { bestD = d; best = i }
+                                }
+                                active = when {
+                                    best >= 0 -> best + 1
+                                    off.x >= cl * w && off.x <= cr * w &&
+                                        off.y >= ct * h && off.y <= cb * h -> 5
+                                    else -> 0
+                                }
+                            },
+                            onDragEnd = { active = 0 },
+                            onDragCancel = { active = 0 }
+                        ) { change, drag ->
+                            change.consume()
+                            val dx = drag.x / size.width.toFloat()
+                            val dy = drag.y / size.height.toFloat()
+                            val minS = 0.06f
+                            when (active) {
+                                1 -> if (k == null) {
+                                    cl = (cl + dx).coerceIn(0f, cr - minS)
+                                    ct = (ct + dy).coerceIn(0f, cb - minS)
+                                } else {
+                                    var w = (cr - (cl + dx)).coerceIn(minS, cr)
+                                    var h = w / k
+                                    if (h > cb) { h = cb; w = h * k }
+                                    cl = cr - w; ct = cb - h
+                                }
+                                2 -> if (k == null) {
+                                    cr = (cr + dx).coerceIn(cl + minS, 1f)
+                                    ct = (ct + dy).coerceIn(0f, cb - minS)
+                                } else {
+                                    var w = ((cr + dx) - cl).coerceIn(minS, 1f - cl)
+                                    var h = w / k
+                                    if (h > cb) { h = cb; w = h * k }
+                                    cr = cl + w; ct = cb - h
+                                }
+                                3 -> if (k == null) {
+                                    cl = (cl + dx).coerceIn(0f, cr - minS)
+                                    cb = (cb + dy).coerceIn(ct + minS, 1f)
+                                } else {
+                                    var w = (cr - (cl + dx)).coerceIn(minS, cr)
+                                    var h = w / k
+                                    if (ct + h > 1f) { h = 1f - ct; w = h * k }
+                                    cl = cr - w; cb = ct + h
+                                }
+                                4 -> if (k == null) {
+                                    cr = (cr + dx).coerceIn(cl + minS, 1f)
+                                    cb = (cb + dy).coerceIn(ct + minS, 1f)
+                                } else {
+                                    var w = ((cr + dx) - cl).coerceIn(minS, 1f - cl)
+                                    var h = w / k
+                                    if (ct + h > 1f) { h = 1f - ct; w = h * k }
+                                    cr = cl + w; cb = ct + h
+                                }
+                                5 -> {
+                                    val mx = dx.coerceIn(-cl, 1f - cr)
+                                    val my = dy.coerceIn(-ct, 1f - cb)
+                                    cl += mx; cr += mx; ct += my; cb += my
+                                }
+                            }
+                        }
+                    }
+                ) {
+                    val w = size.width
+                    val h = size.height
+                    val rl = cl * w; val rt = ct * h
+                    val rr = cr * w; val rb = cb * h
+                    val scrim = Color.Black.copy(alpha = 0.46f)
+                    drawRect(scrim, size = GSize(w, rt))
+                    drawRect(scrim, topLeft = Offset(0f, rb), size = GSize(w, h - rb))
+                    drawRect(scrim, topLeft = Offset(0f, rt), size = GSize(rl, rb - rt))
+                    drawRect(scrim, topLeft = Offset(rr, rt), size = GSize(w - rr, rb - rt))
+
+                    // Rule-of-thirds guides, the standard framing aid.
+                    for (i in 1..2) {
+                        val gx = rl + (rr - rl) * i / 3f
+                        val gy = rt + (rb - rt) * i / 3f
+                        drawLine(Color.White.copy(alpha = 0.34f), Offset(gx, rt), Offset(gx, rb), 1f)
+                        drawLine(Color.White.copy(alpha = 0.34f), Offset(rl, gy), Offset(rr, gy), 1f)
+                    }
+                    drawRect(
+                        Color.White, topLeft = Offset(rl, rt), size = GSize(rr - rl, rb - rt),
+                        style = Stroke(width = 2f)
+                    )
+                    val armPx = 18f
+                    listOf(
+                        Triple(rl, rt, 1), Triple(rr, rt, 2),
+                        Triple(rl, rb, 3), Triple(rr, rb, 4)
+                    ).forEach { (hx, hy, corner) ->
+                        val sx = if (corner == 1 || corner == 3) 1f else -1f
+                        val sy = if (corner == 1 || corner == 2) 1f else -1f
+                        drawLine(Color.White, Offset(hx, hy), Offset(hx + armPx * sx, hy), 5f)
+                        drawLine(Color.White, Offset(hx, hy), Offset(hx, hy + armPx * sy), 5f)
+                    }
+                }
+            }
+        }
+
+        StatGrid(listOf(
+            "Crop size" to "${outW}\u00d7${outH}",
+            "Output" to if (measuring || outSize <= 0L) "\u2026" else bytesHuman(outSize),
+            "Source" to "${src.width}\u00d7${src.height}",
+            "Ratio" to ratio
+        ), accent)
+
+        Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+            Box(Modifier.weight(1f)) {
+                ToolButton("Save", accent) {
+                    saveToGallery(
+                        ctx, cropOf(src, cl, ct, cr, cb),
+                        "morpho_crop_${System.currentTimeMillis()}",
+                        Bitmap.CompressFormat.JPEG, 92
+                    )
+                }
+            }
+            Box(Modifier.weight(1f)) {
+                OutlineButton("Share", accent) {
+                    shareBitmap(
+                        ctx, cropOf(src, cl, ct, cr, cb),
+                        "morpho_crop_${System.currentTimeMillis()}",
+                        Bitmap.CompressFormat.JPEG, 92
+                    )
+                }
+            }
+        }
+        Box(Modifier.fillMaxWidth()) {
+            OutlineButton("Reset crop", accent) {
+                ratio = "Free"
+                cl = 0.06f; ct = 0.06f; cr = 0.94f; cb = 0.94f
+            }
+        }
+    }
+}
+
+/**
+ * Normalised aspect factor: width = k * height in 0..1 space. The source
+ * aspect has to be folded in, because a 3:2 crop of a portrait photo is not
+ * 3:2 of the normalised square.
+ */
+private fun aspectK(name: String, src: Bitmap): Float? {
+    val a = when (name) {
+        "1:1" -> 1f
+        "4:3" -> 4f / 3f
+        "3:2" -> 3f / 2f
+        "16:9" -> 16f / 9f
+        "9:16" -> 9f / 16f
+        else -> return null
+    }
+    return a * src.height / src.width
+}
+
+/** Normalised rect to real pixels, clamped so it can never leave the source. */
+private fun cropOf(src: Bitmap, l: Float, t: Float, r: Float, b: Float): Bitmap {
+    val x = (l * src.width).roundToInt().coerceIn(0, src.width - 1)
+    val y = (t * src.height).roundToInt().coerceIn(0, src.height - 1)
+    val w = ((r - l) * src.width).roundToInt().coerceIn(1, src.width - x)
+    val h = ((b - t) * src.height).roundToInt().coerceIn(1, src.height - y)
+    return Bitmap.createBitmap(src, x, y, w, h)
 }
 
 @Composable
