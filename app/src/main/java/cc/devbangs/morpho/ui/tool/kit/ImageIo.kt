@@ -204,6 +204,27 @@ private fun orientToUpright(b: Bitmap, orientation: Int): Bitmap {
  * a null output stream or a failed compress returned true, leaving a zero-byte
  * entry in the user's gallery.
  */
+/**
+ * Extension and MIME for a compress format.
+ *
+ * These were a binary PNG-or-JPEG check inlined in both save and share, which
+ * meant anything that was not PNG got written as .jpg with image/jpeg - fine
+ * while those were the only two formats, wrong the moment WebP exists. The
+ * WebP branch is `else` on purpose: WEBP_LOSSY and WEBP_LOSSLESS are API 30
+ * constants, and naming them in a `when` would fault on older devices.
+ */
+fun imageExt(format: Bitmap.CompressFormat): String = when (format) {
+    Bitmap.CompressFormat.PNG -> "png"
+    Bitmap.CompressFormat.JPEG -> "jpg"
+    else -> "webp"
+}
+
+fun imageMime(format: Bitmap.CompressFormat): String = when (format) {
+    Bitmap.CompressFormat.PNG -> "image/png"
+    Bitmap.CompressFormat.JPEG -> "image/jpeg"
+    else -> "image/webp"
+}
+
 fun saveToGallery(
     ctx: Context,
     bmp: Bitmap,
@@ -214,8 +235,8 @@ fun saveToGallery(
     report: Boolean = true
 ): Boolean {
     val ok = try {
-        val ext = if (format == Bitmap.CompressFormat.PNG) "png" else "jpg"
-        val mime = if (format == Bitmap.CompressFormat.PNG) "image/png" else "image/jpeg"
+        val ext = imageExt(format)
+        val mime = imageMime(format)
         val values = ContentValues().apply {
             put(MediaStore.Images.Media.DISPLAY_NAME, "$name.$ext")
             put(MediaStore.Images.Media.MIME_TYPE, mime)
@@ -245,8 +266,8 @@ fun saveToGallery(
 /** Share a bitmap via the system share sheet (through FileProvider cache). */
 fun shareBitmap(ctx: Context, bmp: Bitmap, name: String, format: Bitmap.CompressFormat, quality: Int) {
     try {
-        val ext = if (format == Bitmap.CompressFormat.PNG) "png" else "jpg"
-        val mime = if (format == Bitmap.CompressFormat.PNG) "image/png" else "image/jpeg"
+        val ext = imageExt(format)
+        val mime = imageMime(format)
         val dir = File(ctx.cacheDir, "shared").apply { mkdirs() }
         val file = File(dir, "$name.$ext")
         FileOutputStream(file).use { bmp.compress(format, quality, it) }

@@ -6,6 +6,7 @@ import android.graphics.Color as AColor
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.net.Uri
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -180,15 +181,22 @@ internal fun ImagePickPreview(
 private fun TransformBody(id: String, src: Bitmap, accent: Color) {
     val ctx = LocalContext.current
     // per-tool parameters
-    var quality by remember { mutableStateOf(80) }
+    // Shrinking is the compressor's whole job, so it starts lower; the rest
+    // should not quietly degrade an image the user only asked to rotate.
+    var quality by remember(id) { mutableStateOf(if (id == "image-compressor") 80 else 95) }
     var scalePct by remember { mutableStateOf(100) }
     var rotation by remember { mutableStateOf(0) }
     var strength by remember { mutableStateOf(50) }
     var sharpRadius by remember { mutableStateOf(2) }
 
-    val isPng = id in setOf("exif-remover")
-    val fmt = if (isPng) Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG
-    val q = if (id == "image-compressor") quality else 92
+    // Output format and quality are the user's choice now. Every tool but the
+    // compressor hard-coded JPEG 92, so a PNG fed to the resizer came back
+    // lossy with no way to say otherwise; and exif-remover forced PNG, turning
+    // a 2 MB photo into a far larger file just to strip a few bytes of
+    // metadata. Both are defaults here, not rules.
+    var fmtKey by remember(id) { mutableStateOf(if (id == "exif-remover") "PNG" else "JPEG") }
+    val fmt = compressFormatOf(fmtKey)
+    val q = if (fmtKey == "PNG") 100 else quality
 
     // Both the transform and the size readout are expensive on a large photo:
     // the readout is a full re-encode. Running them in composition meant every
@@ -227,7 +235,6 @@ private fun TransformBody(id: String, src: Bitmap, accent: Color) {
 
     // controls
     when (id) {
-        "image-compressor" -> StepControl("QUALITY", quality, listOf(40,60,80,95), accent) { quality = it }
         "image-resizer" -> StepControl("SCALE %", scalePct, listOf(25,50,75,100), accent) { scalePct = it }
         "thumbnail-creator" -> StepControl("SIZE %", scalePct, listOf(10,25,40,60), accent) { scalePct = it }
         "image-rotator" -> StepControl("ROTATE°", rotation, listOf(0,90,180,270), accent) { rotation = it }
@@ -237,6 +244,8 @@ private fun TransformBody(id: String, src: Bitmap, accent: Color) {
             StepControl("RADIUS PX", sharpRadius, listOf(1,2,4,8), accent) { sharpRadius = it }
         }
     }
+
+    OutputControls(fmtKey, quality, accent, { fmtKey = it }, { quality = it })
 
     // preview
     Box(
@@ -290,6 +299,10 @@ private fun CropBody(src: Bitmap, accent: Color) {
     var cr by remember(src) { mutableStateOf(0.94f) }
     var cb by remember(src) { mutableStateOf(0.94f) }
     var active by remember(src) { mutableStateOf(0) }
+    var fmtKey by remember(src) { mutableStateOf("JPEG") }
+    var quality by remember(src) { mutableStateOf(95) }
+    val fmt = compressFormatOf(fmtKey)
+    val q = if (fmtKey == "PNG") 100 else quality
 
     val k = aspectK(ratio, src)
     // Recomposes on every drag frame, so don't rewrap the bitmap each time.
@@ -312,12 +325,12 @@ private fun CropBody(src: Bitmap, accent: Color) {
     // off the main thread - a drag must not re-encode per frame.
     var outSize by remember(src) { mutableStateOf(0L) }
     var measuring by remember(src) { mutableStateOf(true) }
-    LaunchedEffect(src, cl, ct, cr, cb) {
+    LaunchedEffect(src, cl, ct, cr, cb, fmt, q) {
         measuring = true
         delay(260)
         outSize = withContext(Dispatchers.Default) {
             try {
-                bitmapBytes(cropOf(src, cl, ct, cr, cb), Bitmap.CompressFormat.JPEG, 92)
+                bitmapBytes(cropOf(src, cl, ct, cr, cb), fmt, q)
             } catch (e: Exception) { 0L } catch (e: OutOfMemoryError) { 0L }
         }
         measuring = false
@@ -470,6 +483,8 @@ private fun CropBody(src: Bitmap, accent: Color) {
             }
         }
 
+        OutputControls(fmtKey, quality, accent, { fmtKey = it }, { quality = it })
+
         StatGrid(listOf(
             "Crop size" to "${outW}\u00d7${outH}",
             "Output" to if (measuring || outSize <= 0L) "\u2026" else bytesHuman(outSize),
@@ -482,8 +497,7 @@ private fun CropBody(src: Bitmap, accent: Color) {
                 ToolButton("Save", accent) {
                     saveToGallery(
                         ctx, cropOf(src, cl, ct, cr, cb),
-                        "morpho_crop_${System.currentTimeMillis()}",
-                        Bitmap.CompressFormat.JPEG, 92
+                        "morpho_crop_${System.currentTimeMillis()}", fmt, q
                     )
                 }
             }
@@ -491,8 +505,7 @@ private fun CropBody(src: Bitmap, accent: Color) {
                 OutlineButton("Share", accent) {
                     shareBitmap(
                         ctx, cropOf(src, cl, ct, cr, cb),
-                        "morpho_crop_${System.currentTimeMillis()}",
-                        Bitmap.CompressFormat.JPEG, 92
+                        "morpho_crop_${System.currentTimeMillis()}", fmt, q
                     )
                 }
             }
@@ -570,6 +583,10 @@ private fun WatermarkBody(src: Bitmap, accent: Color) {
         )
     }
     val ready = if (mode == "Logo") logo != null else text.isNotBlank()
+    var fmtKey by remember(src) { mutableStateOf("JPEG") }
+    var quality by remember(src) { mutableStateOf(95) }
+    val fmt = compressFormatOf(fmtKey)
+    val q = if (fmtKey == "PNG") 100 else quality
 
     var out by remember(src) { mutableStateOf(src) }
     var outSize by remember(src) { mutableStateOf(0L) }
@@ -577,7 +594,10 @@ private fun WatermarkBody(src: Bitmap, accent: Color) {
 
     // Rendering and measuring both cost a full pass over the bitmap, so they
     // are debounced off the main thread - typing must not re-render per key.
-    LaunchedEffect(src, mode, text, wmColor, opacity, sizePct, angle, position, tile, logo, logoScale) {
+    LaunchedEffect(
+        src, mode, text, wmColor, opacity, sizePct, angle, position, tile,
+        logo, logoScale, fmt, q
+    ) {
         working = true
         delay(170)
         val r = withContext(Dispatchers.Default) {
@@ -590,7 +610,7 @@ private fun WatermarkBody(src: Bitmap, accent: Color) {
                     watermarkOf(src, text, wmColor, opacity, sizePct, position, tile, angle.toFloat())
                 }
             } catch (e: Exception) { src } catch (e: OutOfMemoryError) { src }
-            bmp to (try { bitmapBytes(bmp, Bitmap.CompressFormat.JPEG, 92) } catch (e: Exception) { 0L })
+            bmp to (try { bitmapBytes(bmp, fmt, q) } catch (e: Exception) { 0L })
         }
         out = r.first
         outSize = r.second
@@ -772,6 +792,8 @@ private fun WatermarkBody(src: Bitmap, accent: Color) {
             Image(out.asImageBitmap(), null, Modifier.fillMaxWidth(), contentScale = ContentScale.Fit)
         }
 
+        OutputControls(fmtKey, quality, accent, { fmtKey = it }, { quality = it })
+
         StatGrid(listOf(
             "Dimensions" to "${out.width}\u00d7${out.height}",
             "Output" to if (working || outSize <= 0L) "\u2026" else bytesHuman(outSize),
@@ -783,16 +805,14 @@ private fun WatermarkBody(src: Bitmap, accent: Color) {
             Box(Modifier.weight(1f)) {
                 ToolButton("Save", accent, enabled = ready) {
                     saveToGallery(
-                        ctx, out, "morpho_wm_${System.currentTimeMillis()}",
-                        Bitmap.CompressFormat.JPEG, 92
+                        ctx, out, "morpho_wm_${System.currentTimeMillis()}", fmt, q
                     )
                 }
             }
             Box(Modifier.weight(1f)) {
                 OutlineButton("Share", accent) {
                     if (ready) shareBitmap(
-                        ctx, out, "morpho_wm_${System.currentTimeMillis()}",
-                        Bitmap.CompressFormat.JPEG, 92
+                        ctx, out, "morpho_wm_${System.currentTimeMillis()}", fmt, q
                     )
                 }
             }
@@ -872,6 +892,72 @@ private fun logoWatermarkOf(
     c.drawBitmap(scaled, x, y, p)
     c.restore()
     return out
+}
+
+/**
+ * Output format and quality, shared by every image tool that writes a file.
+ *
+ * Fields of work want different things out of the same picture: a store wants
+ * WebP for its site and JPEG for a marketplace, an office wants PNG so text in
+ * a scan stays lossless, a photographer wants JPEG near the top of the range.
+ * Hard-coding one of those serves one of them.
+ */
+@Composable
+private fun OutputControls(
+    fmtKey: String,
+    quality: Int,
+    accent: Color,
+    onFmt: (String) -> Unit,
+    onQuality: (Int) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+        Column {
+            FieldLabel("OUTPUT FORMAT")
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf(
+                    "JPEG" to "Photos",
+                    "PNG" to "Lossless",
+                    "WEBP" to "For web"
+                ).forEach { (key, hint) ->
+                    val on = key == fmtKey
+                    Column(
+                        Modifier.weight(1f).clip(Shape.field)
+                            .background(if (on) accent else accent.copy(alpha = 0.12f))
+                            .clickable { onFmt(key) }
+                            .padding(vertical = 10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            key, color = if (on) Paper else InkSoft,
+                            fontSize = 13.sp, fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            hint, color = if (on) Paper.copy(alpha = 0.82f) else InkFaint,
+                            fontSize = 10.sp
+                        )
+                    }
+                }
+            }
+        }
+        // PNG ignores the quality argument, so showing the control would be a
+        // lie about what it does.
+        if (fmtKey != "PNG") {
+            StepControl("QUALITY", quality, listOf(40, 60, 80, 95), accent, onQuality)
+        }
+    }
+}
+
+/**
+ * WEBP_LOSSY arrived in API 30 and the app supports 24, so the older
+ * WEBP constant is the fallback rather than dropping the format entirely.
+ */
+@Suppress("DEPRECATION")
+private fun compressFormatOf(key: String): Bitmap.CompressFormat = when (key) {
+    "PNG" -> Bitmap.CompressFormat.PNG
+    "WEBP" ->
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) Bitmap.CompressFormat.WEBP_LOSSY
+        else Bitmap.CompressFormat.WEBP
+    else -> Bitmap.CompressFormat.JPEG
 }
 
 private val PLACEMENT_NAMES = listOf(
