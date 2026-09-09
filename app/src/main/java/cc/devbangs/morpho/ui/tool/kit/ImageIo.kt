@@ -268,6 +268,46 @@ fun saveToGallery(
 }
 
 /** Share a bitmap via the system share sheet (through FileProvider cache). */
+/**
+ * Write the file a share will hand over, and return its Uri.
+ *
+ * Split out of [shareBitmap] because compressing a large bitmap takes seconds
+ * and was running in the button's onClick - on the main thread. Past about
+ * five seconds Android puts up "isn't responding", which is an ANR, not a
+ * crash. This half touches no UI, so a caller can run it on Dispatchers.IO and
+ * then call [launchShareIntent] on the main thread.
+ */
+fun writeShareFile(
+    ctx: Context,
+    bmp: Bitmap,
+    name: String,
+    format: Bitmap.CompressFormat,
+    quality: Int
+): Uri? = try {
+    val dir = File(ctx.cacheDir, "shared").apply { mkdirs() }
+    val file = File(dir, "$name.${imageExt(format)}")
+    val ok = FileOutputStream(file).use { bmp.compress(format, quality, it) }
+    if (ok) FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", file) else null
+} catch (e: Exception) {
+    null
+} catch (e: OutOfMemoryError) {
+    null
+}
+
+/** Hand an already-written file to the chooser. Main thread. */
+fun launchShareIntent(ctx: Context, uri: Uri, mime: String) {
+    try {
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = mime
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        ctx.startActivity(Intent.createChooser(intent, "Share image"))
+    } catch (e: Exception) {
+        Toast.makeText(ctx, "Share failed", Toast.LENGTH_SHORT).show()
+    }
+}
+
 fun shareBitmap(ctx: Context, bmp: Bitmap, name: String, format: Bitmap.CompressFormat, quality: Int) {
     try {
         val ext = imageExt(format)

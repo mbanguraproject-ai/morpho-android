@@ -7,6 +7,7 @@ import android.graphics.Matrix
 import android.graphics.Paint
 import android.net.Uri
 import android.os.Build
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -38,7 +39,9 @@ import cc.devbangs.morpho.core.Shape
 import cc.devbangs.morpho.core.Space
 import cc.devbangs.morpho.ui.icon.MorphoIcon
 import cc.devbangs.morpho.ui.theme.*
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlin.math.hypot
@@ -258,11 +261,15 @@ private fun TransformBody(id: String, src: Bitmap, accent: Color) {
     LaunchedEffect(working) {
         if (working) { delay(260); showBusy = true } else showBusy = false
     }
+    var saving by remember(src) { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     OutputControls(fmtKey, quality, accent, { fmtKey = it }, { quality = it })
 
     // preview
-    if (showBusy) ProcessingCard("Processing image", accent)
+    if (showBusy || saving) ProcessingCard(
+        if (saving) "Saving your image" else "Processing image", accent
+    )
     else Box(
         Modifier.fillMaxWidth().heightIn(min = 180.dp, max = 320.dp)
             .clip(Shape.card).background(PaperSunk),
@@ -281,10 +288,11 @@ private fun TransformBody(id: String, src: Bitmap, accent: Color) {
     ), accent)
 
     // actions
-    Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-        Box(Modifier.weight(1f)) { ToolButton("Save", accent) { saveToGallery(ctx, out, "morpho_${System.currentTimeMillis()}", fmt, q) } }
-        Box(Modifier.weight(1f)) { OutlineButton("Share", accent) { shareBitmap(ctx, out, "morpho_${System.currentTimeMillis()}", fmt, q) } }
-    }
+    SaveShareRow(
+        accent, enabled = !working && !saving,
+        onSave = { runSaveAsync(scope, ctx, "morpho", fmt, q, { saving = it }) { out } },
+        onShare = { runShareAsync(scope, ctx, "morpho", fmt, q, { saving = it }) { out } }
+    )
 }
 
 /**
@@ -316,6 +324,8 @@ private fun CropBody(src: Bitmap, accent: Color) {
     var active by remember(src) { mutableStateOf(0) }
     var fmtKey by remember(src) { mutableStateOf("JPEG") }
     var quality by remember(src) { mutableStateOf(95) }
+    var saving by remember(src) { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     val fmt = compressFormatOf(fmtKey)
     val q = if (fmtKey == "PNG") 100 else quality
 
@@ -500,31 +510,29 @@ private fun CropBody(src: Bitmap, accent: Color) {
 
         OutputControls(fmtKey, quality, accent, { fmtKey = it }, { quality = it })
 
-        StatGrid(listOf(
+        if (saving) ProcessingCard("Saving your image", accent)
+        else StatGrid(listOf(
             "Crop size" to "${outW}\u00d7${outH}",
             "Output" to if (measuring || outSize <= 0L) "\u2026" else bytesHuman(outSize),
             "Source" to "${src.width}\u00d7${src.height}",
             "Ratio" to ratio
         ), accent)
 
-        Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-            Box(Modifier.weight(1f)) {
-                ToolButton("Save", accent) {
-                    saveToGallery(
-                        ctx, cropOf(src, cl, ct, cr, cb),
-                        "morpho_crop_${System.currentTimeMillis()}", fmt, q
-                    )
+        // The crop itself now happens on the IO thread too - it was building a
+        // full-size bitmap in the click handler.
+        SaveShareRow(
+            accent, enabled = !saving,
+            onSave = {
+                runSaveAsync(scope, ctx, "morpho_crop", fmt, q, { saving = it }) {
+                    cropOf(src, cl, ct, cr, cb)
+                }
+            },
+            onShare = {
+                runShareAsync(scope, ctx, "morpho_crop", fmt, q, { saving = it }) {
+                    cropOf(src, cl, ct, cr, cb)
                 }
             }
-            Box(Modifier.weight(1f)) {
-                OutlineButton("Share", accent) {
-                    shareBitmap(
-                        ctx, cropOf(src, cl, ct, cr, cb),
-                        "morpho_crop_${System.currentTimeMillis()}", fmt, q
-                    )
-                }
-            }
-        }
+        )
         Box(Modifier.fillMaxWidth()) {
             OutlineButton("Reset crop", accent) {
                 ratio = "Free"
@@ -600,6 +608,8 @@ private fun WatermarkBody(src: Bitmap, accent: Color) {
     val ready = if (mode == "Logo") logo != null else text.isNotBlank()
     var fmtKey by remember(src) { mutableStateOf("JPEG") }
     var quality by remember(src) { mutableStateOf(95) }
+    var saving by remember(src) { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     val fmt = compressFormatOf(fmtKey)
     val q = if (fmtKey == "PNG") 100 else quality
 
@@ -813,7 +823,9 @@ private fun WatermarkBody(src: Bitmap, accent: Color) {
             )
         }
 
-        if (showBusy) ProcessingCard("Applying watermark", accent)
+        if (showBusy || saving) ProcessingCard(
+            if (saving) "Saving your image" else "Applying watermark", accent
+        )
         else Box(
             Modifier.fillMaxWidth().heightIn(min = 180.dp, max = 320.dp)
                 .clip(Shape.card).background(PaperSunk),
@@ -831,22 +843,11 @@ private fun WatermarkBody(src: Bitmap, accent: Color) {
             "Angle" to "$angle\u00b0"
         ), accent)
 
-        Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-            Box(Modifier.weight(1f)) {
-                ToolButton("Save", accent, enabled = ready) {
-                    saveToGallery(
-                        ctx, out, "morpho_wm_${System.currentTimeMillis()}", fmt, q
-                    )
-                }
-            }
-            Box(Modifier.weight(1f)) {
-                OutlineButton("Share", accent) {
-                    if (ready) shareBitmap(
-                        ctx, out, "morpho_wm_${System.currentTimeMillis()}", fmt, q
-                    )
-                }
-            }
-        }
+        SaveShareRow(
+            accent, enabled = ready && !working && !saving,
+            onSave = { runSaveAsync(scope, ctx, "morpho_wm", fmt, q, { saving = it }) { out } },
+            onShare = { runShareAsync(scope, ctx, "morpho_wm", fmt, q, { saving = it }) { out } }
+        )
     }
 }
 
@@ -990,6 +991,89 @@ private fun compressFormatOf(key: String): Bitmap.CompressFormat = when (key) {
     else -> Bitmap.CompressFormat.JPEG
 }
 
+/**
+ * Save, off the main thread.
+ *
+ * saveToGallery compresses the whole bitmap, which takes seconds on a large
+ * photo, and it was being called straight from the button's onClick - on the
+ * main thread. That is what froze the UI and produced the "isn't responding"
+ * dialog: an ANR, not a crash.
+ *
+ * reportSave shows toasts and posts a notification, so it has to stay on the
+ * main thread; saveToGallery's existing report flag gives exactly that split.
+ * markUsed still fires from reportSave, so the completion counter behind the
+ * interstitial is unchanged.
+ *
+ * The scope belongs to the calling composable body, not to the button row, so
+ * a save is not cancelled when the preview swaps to the processing card.
+ */
+private fun runSaveAsync(
+    scope: CoroutineScope,
+    ctx: android.content.Context,
+    baseName: String,
+    fmt: Bitmap.CompressFormat,
+    quality: Int,
+    onBusy: (Boolean) -> Unit,
+    provide: () -> Bitmap
+) {
+    onBusy(true)
+    scope.launch {
+        val ok = withContext(Dispatchers.IO) {
+            try {
+                saveToGallery(
+                    ctx, provide(), "${baseName}_${System.currentTimeMillis()}",
+                    fmt, quality, report = false
+                )
+            } catch (e: Exception) { false } catch (e: OutOfMemoryError) { false }
+        }
+        reportSave(
+            ctx, ok, "Image ready", "Your image was saved to your gallery.",
+            "Saved to Pictures/Morpho", "Couldn't save the image"
+        )
+        onBusy(false)
+    }
+}
+
+/** Share, off the main thread. Only the chooser runs on the main thread. */
+private fun runShareAsync(
+    scope: CoroutineScope,
+    ctx: android.content.Context,
+    baseName: String,
+    fmt: Bitmap.CompressFormat,
+    quality: Int,
+    onBusy: (Boolean) -> Unit,
+    provide: () -> Bitmap
+) {
+    onBusy(true)
+    scope.launch {
+        val uri = withContext(Dispatchers.IO) {
+            try {
+                writeShareFile(
+                    ctx, provide(), "${baseName}_${System.currentTimeMillis()}", fmt, quality
+                )
+            } catch (e: Exception) { null } catch (e: OutOfMemoryError) { null }
+        }
+        if (uri != null) launchShareIntent(ctx, uri, imageMime(fmt))
+        else Toast.makeText(ctx, "Couldn't prepare the image", Toast.LENGTH_SHORT).show()
+        onBusy(false)
+    }
+}
+
+/**
+ * Save and Share, disabled while anything is in flight.
+ *
+ * Both used to stay tappable while the tool was still rendering, so Share
+ * could hand over a stale bitmap and a second Save could start on top of the
+ * first.
+ */
+@Composable
+private fun SaveShareRow(accent: Color, enabled: Boolean, onSave: () -> Unit, onShare: () -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+        Box(Modifier.weight(1f)) { ToolButton("Save", accent, enabled = enabled, onClick = onSave) }
+        Box(Modifier.weight(1f)) { OutlineButton("Share", accent, enabled = enabled, onClick = onShare) }
+    }
+}
+
 private val PLACEMENT_NAMES = listOf(
     "Top left", "Top", "Top right",
     "Left", "Centre", "Right",
@@ -1098,10 +1182,16 @@ private fun StepControl(label: String, value: Int, opts: List<Int>, accent: Colo
 }
 
 @Composable
-private fun OutlineButton(text: String, accent: Color, onClick: () -> Unit) {
+private fun OutlineButton(
+    text: String,
+    accent: Color,
+    enabled: Boolean = true,
+    onClick: () -> Unit
+) {
     Box(
         Modifier.fillMaxWidth().clip(Shape.field)
-            .background(accent.copy(alpha = 0.10f)).clickable(onClick = onClick).padding(vertical = 15.dp),
+            .background(accent.copy(alpha = if (enabled) 0.10f else 0.04f))
+            .clickable(enabled = enabled, onClick = onClick).padding(vertical = 15.dp),
         contentAlignment = Alignment.Center
     ) { Text(text, color = accent, fontSize = 15.sp) }
 }
