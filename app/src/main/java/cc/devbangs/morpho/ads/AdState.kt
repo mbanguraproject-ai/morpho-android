@@ -10,7 +10,9 @@ import android.util.Log
  * - Native "you might like" card shows at the bottom of the tools list.
  */
 object AdState {
-    // Test IDs — swap real ones at launch. These are Google's official test units.
+    // Live units on the DEVBANGS publisher account - NOT test units. Google's
+    // test interstitial is ca-app-pub-3940256099942544/...; these are real and
+    // are what serves revenue. Do not "swap them for the real ones".
     const val INTERSTITIAL_UNIT = "ca-app-pub-9121922395304175/6203443667"
     const val NATIVE_UNIT = "ca-app-pub-9121922395304175/8812315198"
 

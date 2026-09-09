@@ -143,16 +143,34 @@ internal fun reportSave(
     // Section 46: every save in the app funnels through here, so this is the
     // one place completion and failure can be counted without threading a tool
     // id through several dozen call sites.
-    cc.devbangs.morpho.data.Stats.recordOutcome(ok)
-    if (ok) {
-        cc.devbangs.morpho.ads.AdState.markUsed()
-        cc.devbangs.morpho.notify.Notifier.notifyDone(ctx, notifyTitle, notifyBody)
-        // Blank toast means the screen already shows its own result message.
-        if (successToast.isNotEmpty())
-            Toast.makeText(ctx, successToast, Toast.LENGTH_SHORT).show()
-    } else if (failToast.isNotEmpty()) {
-        Toast.makeText(ctx, failToast, Toast.LENGTH_SHORT).show()
+    // Toasts need a Looper and AdState's counters are plain vars with no
+    // volatile or lock, so everything here runs on the main thread whatever
+    // thread the write itself ran on. That keeps AdState single-threaded - a
+    // markUsed() from a background thread could otherwise be invisible to the
+    // main thread reading it in onToolCompleted(), losing an impression.
+    onMain {
+        cc.devbangs.morpho.data.Stats.recordOutcome(ok)
+        if (ok) {
+            cc.devbangs.morpho.ads.AdState.markUsed()
+            cc.devbangs.morpho.notify.Notifier.notifyDone(ctx, notifyTitle, notifyBody)
+            // Blank toast means the screen already shows its own result message.
+            if (successToast.isNotEmpty())
+                Toast.makeText(ctx, successToast, Toast.LENGTH_SHORT).show()
+        } else if (failToast.isNotEmpty()) {
+            Toast.makeText(ctx, failToast, Toast.LENGTH_SHORT).show()
+        }
     }
+}
+
+/**
+ * Run on the main thread: straight through if already there, posted if not.
+ *
+ * Save and share now run off the main thread, but the reporting around them -
+ * toasts, notifications, the ad counter - must not.
+ */
+internal fun onMain(block: () -> Unit) {
+    if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) block()
+    else android.os.Handler(android.os.Looper.getMainLooper()).post(block)
 }
 
 fun sharePdf(ctx: Context, bytes: ByteArray, name: String) {
@@ -166,9 +184,13 @@ fun sharePdf(ctx: Context, bytes: ByteArray, name: String) {
             putExtra(Intent.EXTRA_STREAM, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        ctx.startActivity(Intent.createChooser(intent, "Share PDF"))
+        // The byte write above can run on any thread; launching the chooser
+        // cannot, so this half is marshalled back.
+        onMain { ctx.startActivity(Intent.createChooser(intent, "Share PDF")) }
     } catch (e: Exception) {
-        Toast.makeText(ctx, "Share failed", Toast.LENGTH_SHORT).show()
+        onMain { Toast.makeText(ctx, "Share failed", Toast.LENGTH_SHORT).show() }
+    } catch (e: OutOfMemoryError) {
+        onMain { Toast.makeText(ctx, "File too large to share", Toast.LENGTH_SHORT).show() }
     }
 }
 

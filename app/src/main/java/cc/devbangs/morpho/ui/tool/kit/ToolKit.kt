@@ -34,6 +34,10 @@ import androidx.compose.ui.unit.sp
 import cc.devbangs.morpho.core.Shape
 import cc.devbangs.morpho.core.Space
 import cc.devbangs.morpho.ui.icon.MorphoIcon
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import cc.devbangs.morpho.ui.theme.*
 
 /**
@@ -117,16 +121,38 @@ fun ToolResultCard(
             color = InkSoft, fontSize = 13.sp
         )
         Spacer(Modifier.height(Space.md))
+        // Writing the file was happening in these click handlers, on the main
+        // thread. On a large file that is seconds of frozen UI, and past about
+        // five seconds Android puts up "isn't responding". Every PDF tool
+        // reaches its save through this card, so moving it here covers all of
+        // them. reportSave and sharePdf marshal their own UI work back to the
+        // main thread, so no call site needed changing.
+        val resultScope = rememberCoroutineScope()
+        var resultBusy by remember { mutableStateOf(false) }
         Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-            Box(Modifier.weight(1f)) { ToolButton("Save", accent, onClick = onSave) }
+            Box(Modifier.weight(1f)) {
+                ToolButton("Save", accent, enabled = !resultBusy) {
+                    resultBusy = true
+                    resultScope.launch {
+                        withContext(Dispatchers.IO) { runCatching { onSave() } }
+                        resultBusy = false
+                    }
+                }
+            }
             Box(Modifier.weight(1f)) {
                 Box(
                     Modifier.fillMaxWidth().clip(Shape.field)
-                        .background(accent.copy(alpha = 0.10f))
-                        .clickable(onClick = onShare)
+                        .background(accent.copy(alpha = if (resultBusy) 0.04f else 0.10f))
+                        .clickable(enabled = !resultBusy) {
+                            resultBusy = true
+                            resultScope.launch {
+                                withContext(Dispatchers.IO) { runCatching { onShare() } }
+                                resultBusy = false
+                            }
+                        }
                         .padding(vertical = 15.dp),
                     contentAlignment = Alignment.Center
-                ) { Text("Share", color = accent, fontSize = 15.sp) }
+                ) { Text(if (resultBusy) "Working\u2026" else "Share", color = accent, fontSize = 15.sp) }
             }
         }
     }
