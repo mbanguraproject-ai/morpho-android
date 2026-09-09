@@ -117,6 +117,7 @@ fun ImageTool(id: String, accent: Color) {
                 "image-metadata-viewer" -> MetadataBody(bmp, picked, accent)
                 "image-cropper" -> CropBody(bmp, accent)
                 "image-resizer" -> ResizeBody(bmp, picked, accent)
+                "thumbnail-creator" -> ThumbnailBody(bmp, accent)
                 "watermark-image" -> WatermarkBody(bmp, accent)
                 else -> TransformBody(id, bmp, picked, accent)
             }
@@ -196,7 +197,6 @@ private fun TransformBody(id: String, src: Bitmap, srcUri: Uri?, accent: Color) 
     // Shrinking is the compressor's whole job, so it starts lower; the rest
     // should not quietly degrade an image the user only asked to rotate.
     var quality by remember(id) { mutableStateOf(if (id == "image-compressor") 80 else 95) }
-    var scalePct by remember { mutableStateOf(100) }
     var rotation by remember { mutableStateOf(0) }
     var strength by remember { mutableStateOf(50) }
     var sharpRadius by remember { mutableStateOf(2) }
@@ -226,7 +226,7 @@ private fun TransformBody(id: String, src: Bitmap, srcUri: Uri?, accent: Color) 
     LaunchedEffect(src, srcUri) {
         srcSize = withContext(Dispatchers.IO) { sourceFileSize(ctx, srcUri) }
     }
-    LaunchedEffect(id, src, quality, scalePct, rotation, strength, sharpRadius, fmt, q) {
+    LaunchedEffect(id, src, quality, rotation, strength, sharpRadius, fmt, q) {
         working = true
         delay(140)
         val result = withContext(Dispatchers.Default) {
@@ -234,7 +234,7 @@ private fun TransformBody(id: String, src: Bitmap, srcUri: Uri?, accent: Color) 
             // the app declares no largeHeap, so a big photo can exhaust the
             // heap here. Unguarded, that was an outright crash.
             val bmp = try {
-                applyTransform(id, src, scalePct, rotation, strength, sharpRadius)
+                applyTransform(id, src, rotation, strength, sharpRadius)
             } catch (e: Exception) { src } catch (e: OutOfMemoryError) { src }
             bmp to (
                 try { bitmapBytes(bmp, fmt, q) }
@@ -248,7 +248,6 @@ private fun TransformBody(id: String, src: Bitmap, srcUri: Uri?, accent: Color) 
 
     // controls
     when (id) {
-        "thumbnail-creator" -> StepControl("SIZE %", scalePct, listOf(10,25,40,60), accent) { scalePct = it }
         "image-rotator" -> StepControl("ROTATE°", rotation, listOf(0,90,180,270), accent) { rotation = it }
         "image-blur" -> StepControl("STRENGTH", strength, listOf(25,50,75,100), accent) { strength = it }
         "sharpen-image" -> Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
@@ -1165,6 +1164,176 @@ private fun watermarkOf(
     return out
 }
 
+/** The sizes people actually ask for: app icons, list rows, cards, retina. */
+private val THUMB_SIZES = listOf(128, 256, 512, 1024)
+
+/**
+ * Thumbnail Creator.
+ *
+ * The registry promised "Generate thumbnails in multiple sizes" and the tool
+ * produced exactly one, from a percentage - SIZE % at 10, 25, 40, 60. You
+ * could not ask for 256px, and you could not get a set. Anyone building a
+ * product listing or an app icon set had to run it once per size and guess
+ * which percentage landed near the number they needed.
+ *
+ * Sizes are now picked as a set and written in one run. Square crops through
+ * Fill so every tile matches, which is what a grid needs; keeping the
+ * proportions uses Fit so nothing is cut.
+ *
+ * One reportSave for the run, so a set of four thumbnails is one tool
+ * completion rather than four.
+ */
+@Composable
+private fun ThumbnailBody(src: Bitmap, accent: Color) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var chosen by remember(src) { mutableStateOf(setOf(256)) }
+    var square by remember(src) { mutableStateOf(true) }
+    var fmtKey by remember(src) { mutableStateOf("PNG") }
+    var quality by remember(src) { mutableStateOf(95) }
+    var preview by remember(src) { mutableStateOf<Bitmap?>(null) }
+    var running by remember(src) { mutableStateOf(false) }
+    var doneCount by remember(src) { mutableStateOf(0) }
+    var failCount by remember(src) { mutableStateOf(0) }
+    var finished by remember(src) { mutableStateOf(false) }
+
+    val fmt = compressFormatOf(fmtKey)
+    val q = if (fmtKey == "PNG") 100 else quality
+    val ordered = THUMB_SIZES.filter { it in chosen }
+
+    LaunchedEffect(src, chosen, square) {
+        val biggest = ordered.maxOrNull()
+        if (biggest == null) { preview = null; return@LaunchedEffect }
+        delay(160)
+        preview = withContext(Dispatchers.Default) {
+            try {
+                resizeTo(src, biggest, biggest, if (square) "Fill" else "Fit")
+            } catch (e: Exception) { null } catch (e: OutOfMemoryError) { null }
+        }
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+        Column {
+            FieldLabel("SIZES \u00b7 PICK AS MANY AS YOU NEED")
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                THUMB_SIZES.forEach { size ->
+                    val on = size in chosen
+                    Box(
+                        Modifier.weight(1f).clip(Shape.field)
+                            .background(if (on) accent else accent.copy(alpha = 0.12f))
+                            .clickable(enabled = !running) {
+                                chosen = if (on) chosen - size else chosen + size
+                                finished = false
+                            }
+                            .padding(vertical = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            size.toString(), color = if (on) Paper else InkSoft,
+                            fontSize = 13.sp, fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+        }
+
+        Row(
+            Modifier.fillMaxWidth().clip(Shape.field)
+                .background(if (square) accent.copy(alpha = 0.12f) else PaperSunk)
+                .clickable(enabled = !running) { square = !square; finished = false }
+                .padding(horizontal = 14.dp, vertical = 13.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            MorphoIcon(
+                if (square) "check" else "close",
+                tint = if (square) accent else InkFaint, size = 17.dp
+            )
+            Spacer(Modifier.width(10.dp))
+            Column {
+                Text(
+                    "Square tiles",
+                    color = if (square) accent else InkSoft, fontSize = 14.sp
+                )
+                Text(
+                    if (square) "Crops to fill, so every tile matches"
+                    else "Keeps the proportions, nothing cropped",
+                    color = InkFaint, fontSize = 12.sp
+                )
+            }
+        }
+
+        OutputControls(fmtKey, quality, accent, { fmtKey = it }, { quality = it })
+
+        preview?.let { p ->
+            Box(
+                Modifier.fillMaxWidth().heightIn(min = 140.dp, max = 260.dp)
+                    .clip(Shape.card).background(PaperSunk),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(p.asImageBitmap(), null, Modifier.size(160.dp), contentScale = ContentScale.Fit)
+            }
+        }
+
+        if (running) {
+            ProcessingCard(
+                "Writing " + (doneCount + failCount + 1).coerceAtMost(ordered.size) +
+                    " of " + ordered.size,
+                accent
+            )
+        } else {
+            ToolButton(
+                if (ordered.size == 1) "Create 1 thumbnail"
+                else ("Create " + ordered.size + " thumbnails"),
+                accent,
+                enabled = ordered.isNotEmpty()
+            ) {
+                running = true
+                finished = false
+                doneCount = 0
+                failCount = 0
+                scope.launch {
+                    val list = ordered
+                    var ok = 0
+                    withContext(Dispatchers.IO) {
+                        val stamp = System.currentTimeMillis()
+                        list.forEach { size ->
+                            val b = try {
+                                resizeTo(src, size, size, if (square) "Fill" else "Fit")
+                            } catch (e: Exception) { null } catch (e: OutOfMemoryError) { null }
+                            val saved = if (b == null) false else try {
+                                saveToGallery(
+                                    ctx, b, "morpho_thumb_" + stamp + "_" + size,
+                                    fmt, q, report = false
+                                )
+                            } catch (e: Exception) { false } catch (e: OutOfMemoryError) { false }
+                            if (saved) { ok++; doneCount++ } else { failCount++ }
+                        }
+                    }
+                    reportSave(
+                        ctx, ok > 0, "Thumbnails ready",
+                        ok.toString() + " thumbnails saved to your gallery.",
+                        "", "Couldn't create those thumbnails"
+                    )
+                    running = false
+                    finished = true
+                }
+            }
+        }
+
+        if (finished) {
+            StatGrid(
+                listOf(
+                    "Created" to doneCount.toString(),
+                    "Failed" to failCount.toString(),
+                    "Shape" to if (square) "Square" else "Original",
+                    "Format" to fmtKey
+                ),
+                accent
+            )
+        }
+    }
+}
+
 /** Guard rails on a typed size: 8192 a side, and 30 MP overall. */
 private const val RESIZE_MAX_SIDE = 8192
 private const val RESIZE_MAX_PIXELS = 30_000_000L
@@ -1762,16 +1931,14 @@ private fun OutlineButton(
 private fun applyTransform(
     id: String,
     src: Bitmap,
-    scalePct: Int,
     rotation: Int,
     strength: Int,
     sharpRadius: Int
 ): Bitmap = when (id) {
-    "thumbnail-creator" -> scale(src, scalePct / 100f)
     "image-rotator" -> rotate(src, rotation.toFloat())
     "image-blur" -> boxBlur(src, (strength / 100f * 12).toInt().coerceAtLeast(1))
     "sharpen-image" -> sharpen(src, strength / 100f, sharpRadius)
-    else -> src // compressor, exif-remover, batch-convert: pixels unchanged, output re-encoded
+    else -> src // compressor and exif-remover: pixels unchanged, output re-encoded
 }
 
 private fun sizeLabel(pending: Boolean, bytes: Long): String =
