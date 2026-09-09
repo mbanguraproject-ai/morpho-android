@@ -1471,18 +1471,26 @@ private fun ResizeBody(src: Bitmap, srcUri: Uri?, accent: Color) {
                 // read like a promise the tool then broke.
                 if (valid) {
                     val ex = predictSize(src, tw, th, fitMode)
+                    val loss = cropLoss(src, tw, th)
                     Spacer(Modifier.height(8.dp))
                     Text(
                         "Exports at " + ex.first + "\u00d7" + ex.second,
                         color = accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold
                     )
-                    if (ex.first != tw || ex.second != th) {
-                        Text(
-                            "Fill would give exactly " + tw + "\u00d7" + th +
-                                ", cropping what does not fit.",
-                            color = InkFaint, fontSize = 12.sp
-                        )
+                    // "Crops the overflow" is abstract; a percentage is
+                    // something the user can actually weigh up.
+                    val note = when {
+                        fitMode == "Fill" && loss != null ->
+                            "Crops " + loss.second + "% of the " + loss.first + ", from the centre."
+                        fitMode == "Stretch" && loss != null ->
+                            "Proportions change to reach that exact box."
+                        fitMode == "Fit" && (ex.first != tw || ex.second != th) ->
+                            if (loss == null) "Fill would give exactly " + tw + "\u00d7" + th + "."
+                            else "Fill would give exactly " + tw + "\u00d7" + th +
+                                ", cropping " + loss.second + "% of the " + loss.first + "."
+                        else -> ""
                     }
+                    if (note.isNotEmpty()) Text(note, color = InkFaint, fontSize = 12.sp)
                 }
             }
 
@@ -1508,7 +1516,7 @@ private fun ResizeBody(src: Bitmap, srcUri: Uri?, accent: Color) {
             }
 
             Column {
-                FieldLabel("PRESETS")
+                FieldLabel("PRESETS \u00b7 EXACT SIZE, CENTRE CROPPED")
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf(
                         "Original" to (src.width to src.height),
@@ -1520,7 +1528,17 @@ private fun ResizeBody(src: Bitmap, srcUri: Uri?, accent: Color) {
                             Modifier.weight(1f).clip(Shape.chip)
                                 .background(accent.copy(alpha = 0.12f))
                                 .clickable {
-                                    lockAspect = false
+                                    // Tapping a preset names a destination -
+                                    // a marketplace slot, a social square - so
+                                    // it commits to that exact size. Fit would
+                                    // return something that is not the shape
+                                    // the preset is for, which is useless for
+                                    // the thing the user tapped it to do.
+                                    // Original is a reset, so it goes back to
+                                    // the safe rule.
+                                    val isOriginal = label == "Original"
+                                    lockAspect = isOriginal
+                                    fitMode = if (isOriginal) "Fit" else "Fill"
                                     wText = dims.first.toString()
                                     hText = dims.second.toString()
                                 }
@@ -1600,6 +1618,28 @@ private fun ResizeBody(src: Bitmap, srcUri: Uri?, accent: Color) {
                 onShare = { runShareAsync(scope, ctx, "morpho_resized", fmt, q, { saving = it }) { out } }
             )
         }
+    }
+}
+
+/**
+ * How much Fill would cut away, as a whole percentage of one axis.
+ *
+ * Mirrors the Fill branch of [resizeTo]: scale so the box is covered, then
+ * centre-crop the overflow. Returns null when the shapes already agree and
+ * nothing is lost.
+ */
+private fun cropLoss(src: Bitmap, tw: Int, th: Int): Pair<String, Int>? {
+    val w = tw.coerceIn(1, RESIZE_MAX_SIDE).toFloat()
+    val h = th.coerceIn(1, RESIZE_MAX_SIDE).toFloat()
+    val s = maxOf(w / src.width, h / src.height)
+    val sw = src.width * s
+    val sh = src.height * s
+    val dx = ((sw - w) / sw * 100f).roundToInt()
+    val dy = ((sh - h) / sh * 100f).roundToInt()
+    return when {
+        dx >= 1 -> "width" to dx
+        dy >= 1 -> "height" to dy
+        else -> null
     }
 }
 
