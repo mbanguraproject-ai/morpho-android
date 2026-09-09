@@ -106,6 +106,7 @@ fun ImageTool(id: String, accent: Color) {
             when (id) {
                 "image-metadata-viewer" -> MetadataBody(bmp, picked, accent)
                 "image-cropper" -> CropBody(bmp, accent)
+                "watermark-image" -> WatermarkBody(bmp, accent)
                 else -> TransformBody(id, bmp, accent)
             }
         }
@@ -185,7 +186,6 @@ private fun TransformBody(id: String, src: Bitmap, accent: Color) {
     var scalePct by remember { mutableStateOf(100) }
     var rotation by remember { mutableStateOf(0) }
     var strength by remember { mutableStateOf(50) }
-    var watermarkText by remember { mutableStateOf("Morpho") }
 
     val isPng = id in setOf("exif-remover")
     val fmt = if (isPng) Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG
@@ -206,11 +206,11 @@ private fun TransformBody(id: String, src: Bitmap, accent: Color) {
             bitmapBytes(src, Bitmap.CompressFormat.JPEG, 100)
         }
     }
-    LaunchedEffect(id, src, quality, scalePct, rotation, strength, watermarkText, fmt, q) {
+    LaunchedEffect(id, src, quality, scalePct, rotation, strength, fmt, q) {
         working = true
         delay(140)
         val result = withContext(Dispatchers.Default) {
-            val bmp = applyTransform(id, src, scalePct, rotation, strength, watermarkText)
+            val bmp = applyTransform(id, src, scalePct, rotation, strength)
             bmp to bitmapBytes(bmp, fmt, q)
         }
         out = result.first
@@ -225,7 +225,6 @@ private fun TransformBody(id: String, src: Bitmap, accent: Color) {
         "thumbnail-creator" -> StepControl("SIZE %", scalePct, listOf(10,25,40,60), accent) { scalePct = it }
         "image-rotator" -> StepControl("ROTATE°", rotation, listOf(0,90,180,270), accent) { rotation = it }
         "image-blur","sharpen-image" -> StepControl("STRENGTH", strength, listOf(25,50,75,100), accent) { strength = it }
-        "watermark-image" -> Column { FieldLabel("WATERMARK TEXT"); ToolInput(watermarkText, { watermarkText = it }, "Your text", minLines = 1) }
     }
 
     // preview
@@ -522,6 +521,248 @@ private fun cropOf(src: Bitmap, l: Float, t: Float, r: Float, b: Float): Bitmap 
     return Bitmap.createBitmap(src, x, y, w, h)
 }
 
+/**
+ * Watermark Image.
+ *
+ * The upgrade in ed8c3b5 went to pdf-watermark and never reached this tool,
+ * which kept its single control: the text. Colour, opacity, size, angle and
+ * placement were all hardcoded - white, alpha 150, width/14, bottom-right.
+ *
+ * One placement mode cannot serve everyone. A store or photographer marking
+ * product shots wants a specific corner; a firm or an office marking a scanned
+ * document wants DRAFT or CONFIDENTIAL running diagonally, repeated so it
+ * cannot be cropped off. So placement is a 3x3 grid plus a repeat mode, and
+ * angle is a control rather than an assumption.
+ */
+@Composable
+private fun WatermarkBody(src: Bitmap, accent: Color) {
+    val ctx = LocalContext.current
+    var text by remember(src) { mutableStateOf("") }
+    var wmColor by remember(src) { mutableStateOf(AColor.WHITE) }
+    var opacity by remember(src) { mutableStateOf(50) }
+    var sizePct by remember(src) { mutableStateOf(8) }
+    var angle by remember(src) { mutableStateOf(0) }
+    var position by remember(src) { mutableStateOf(8) }   // bottom-right
+    var tile by remember(src) { mutableStateOf(false) }
+
+    var out by remember(src) { mutableStateOf(src) }
+    var outSize by remember(src) { mutableStateOf(0L) }
+    var working by remember(src) { mutableStateOf(false) }
+
+    // Rendering and measuring both cost a full pass over the bitmap, so they
+    // are debounced off the main thread - typing must not re-render per key.
+    LaunchedEffect(src, text, wmColor, opacity, sizePct, angle, position, tile) {
+        working = true
+        delay(170)
+        val r = withContext(Dispatchers.Default) {
+            val bmp = try {
+                watermarkOf(src, text, wmColor, opacity, sizePct, position, tile, angle.toFloat())
+            } catch (e: Exception) { src } catch (e: OutOfMemoryError) { src }
+            bmp to (try { bitmapBytes(bmp, Bitmap.CompressFormat.JPEG, 92) } catch (e: Exception) { 0L })
+        }
+        out = r.first
+        outSize = r.second
+        working = false
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+        Column {
+            FieldLabel("WATERMARK TEXT")
+            ToolInput(text, { text = it }, "\u00a9 Your name, DRAFT, CONFIDENTIAL\u2026", minLines = 1)
+        }
+
+        Column {
+            FieldLabel("COLOUR")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(
+                    AColor.WHITE, AColor.BLACK, AColor.rgb(200, 0, 0),
+                    AColor.rgb(26, 70, 229), AColor.rgb(214, 138, 15)
+                ).forEach { swatch ->
+                    Box(
+                        Modifier.size(38.dp).clip(Shape.chip).background(Color(swatch))
+                            .border(
+                                if (swatch == wmColor) 3.dp else 1.dp,
+                                if (swatch == wmColor) accent else PaperLine,
+                                Shape.chip
+                            )
+                            .clickable { wmColor = swatch }
+                    )
+                }
+            }
+        }
+
+        StepControl("OPACITY %", opacity, listOf(15, 30, 50, 75), accent) { opacity = it }
+        StepControl("SIZE %", sizePct, listOf(3, 5, 8, 12), accent) { sizePct = it }
+        StepControl("ANGLE\u00b0", angle, listOf(0, 15, 30, 45), accent) { angle = it }
+
+        Column {
+            FieldLabel(if (tile) "PLACEMENT: REPEATING" else "PLACEMENT")
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                for (row in 0..2) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        for (col in 0..2) {
+                            val idx = row * 3 + col
+                            val on = !tile && position == idx
+                            Box(
+                                Modifier.weight(1f).height(34.dp).clip(Shape.chip)
+                                    .background(
+                                        when {
+                                            on -> accent
+                                            tile -> PaperSunk
+                                            else -> accent.copy(alpha = 0.10f)
+                                        }
+                                    )
+                                    .clickable { position = idx; tile = false },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Box(
+                                    Modifier.size(if (on) 9.dp else 6.dp).clip(Shape.pill)
+                                        .background(if (on) Paper else InkFaint)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Row(
+            Modifier.fillMaxWidth().clip(Shape.field)
+                .background(if (tile) accent.copy(alpha = 0.12f) else PaperSunk)
+                .clickable { tile = !tile }
+                .padding(horizontal = 14.dp, vertical = 13.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            MorphoIcon(
+                if (tile) "check" else "tab-grid",
+                tint = if (tile) accent else InkFaint, size = 17.dp
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                "Repeat across the image",
+                color = if (tile) accent else InkSoft, fontSize = 14.sp
+            )
+        }
+
+        Box(
+            Modifier.fillMaxWidth().heightIn(min = 180.dp, max = 320.dp)
+                .clip(Shape.card).background(PaperSunk),
+            contentAlignment = Alignment.Center
+        ) {
+            Image(out.asImageBitmap(), null, Modifier.fillMaxWidth(), contentScale = ContentScale.Fit)
+        }
+
+        StatGrid(listOf(
+            "Dimensions" to "${out.width}\u00d7${out.height}",
+            "Output" to if (working || outSize <= 0L) "\u2026" else bytesHuman(outSize),
+            "Placement" to if (tile) "Repeating" else PLACEMENT_NAMES[position],
+            "Angle" to "$angle\u00b0"
+        ), accent)
+
+        Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+            Box(Modifier.weight(1f)) {
+                ToolButton("Save", accent, enabled = text.isNotBlank()) {
+                    saveToGallery(
+                        ctx, out, "morpho_wm_${System.currentTimeMillis()}",
+                        Bitmap.CompressFormat.JPEG, 92
+                    )
+                }
+            }
+            Box(Modifier.weight(1f)) {
+                OutlineButton("Share", accent) {
+                    if (text.isNotBlank()) shareBitmap(
+                        ctx, out, "morpho_wm_${System.currentTimeMillis()}",
+                        Bitmap.CompressFormat.JPEG, 92
+                    )
+                }
+            }
+        }
+    }
+}
+
+private val PLACEMENT_NAMES = listOf(
+    "Top left", "Top", "Top right",
+    "Left", "Centre", "Right",
+    "Bottom left", "Bottom", "Bottom right"
+)
+
+/**
+ * Draw the watermark. Pure, safe off the main thread.
+ *
+ * The shadow is picked against the mark's own luminance - a light mark gets a
+ * dark halo and a dark mark a light one - because a fixed black shadow leaves
+ * black text unreadable on a dark photo, which is half of what people mark.
+ */
+private fun watermarkOf(
+    b: Bitmap,
+    text: String,
+    colorInt: Int,
+    opacityPct: Int,
+    sizePct: Int,
+    position: Int,
+    tile: Boolean,
+    angle: Float
+): Bitmap {
+    if (text.isBlank()) return b
+    val out = b.copy(Bitmap.Config.ARGB_8888, true) ?: return b
+    val c = Canvas(out)
+    val lum = (0.299f * AColor.red(colorInt) +
+        0.587f * AColor.green(colorInt) +
+        0.114f * AColor.blue(colorInt)) / 255f
+    val p = Paint().apply {
+        color = colorInt
+        isAntiAlias = true
+        textSize = (out.width * sizePct / 100f).coerceAtLeast(8f)
+        alpha = (opacityPct * 255 / 100).coerceIn(8, 255)
+        setShadowLayer(
+            (out.width * sizePct / 100f * 0.09f).coerceAtLeast(2f), 0f, 0f,
+            if (lum > 0.5f) AColor.argb(150, 0, 0, 0) else AColor.argb(150, 255, 255, 255)
+        )
+    }
+    val tw = p.measureText(text)
+    if (tw <= 0f) return out
+    val fm = p.fontMetrics
+    val th = fm.descent - fm.ascent
+
+    if (tile) {
+        val diag = hypot(out.width.toFloat(), out.height.toFloat())
+        val stepX = tw + out.width * 0.10f
+        val stepY = (th * 2.4f).coerceAtLeast(4f)
+        val cx = out.width / 2f
+        val cy = out.height / 2f
+        c.save()
+        c.rotate(angle, cx, cy)
+        var y = cy - diag
+        while (y < cy + diag) {
+            var x = cx - diag
+            while (x < cx + diag) {
+                c.drawText(text, x, y, p)
+                x += stepX
+            }
+            y += stepY
+        }
+        c.restore()
+        return out
+    }
+
+    val margin = minOf(out.width, out.height) * 0.04f
+    val x = when (position % 3) {
+        0 -> margin
+        1 -> (out.width - tw) / 2f
+        else -> out.width - tw - margin
+    }
+    val baseline = when (position / 3) {
+        0 -> margin - fm.ascent
+        1 -> (out.height - th) / 2f - fm.ascent
+        else -> out.height - margin - fm.descent
+    }
+    c.save()
+    c.rotate(angle, x + tw / 2f, baseline + (fm.ascent + fm.descent) / 2f)
+    c.drawText(text, x, baseline, p)
+    c.restore()
+    return out
+}
+
 @Composable
 private fun MetadataBody(bmp: Bitmap, uri: Uri?, accent: Color) {
     val info = "Width    ${bmp.width}px\nHeight   ${bmp.height}px\nRatio    ${"%.2f".format(bmp.width.toFloat()/bmp.height)}\nConfig   ${bmp.config}\nPixels   ${bmp.width*bmp.height}"
@@ -562,14 +803,12 @@ private fun applyTransform(
     src: Bitmap,
     scalePct: Int,
     rotation: Int,
-    strength: Int,
-    watermarkText: String
+    strength: Int
 ): Bitmap = when (id) {
     "image-resizer", "thumbnail-creator" -> scale(src, scalePct / 100f)
     "image-rotator" -> rotate(src, rotation.toFloat())
     "image-blur" -> boxBlur(src, (strength / 100f * 12).toInt().coerceAtLeast(1))
     "sharpen-image" -> sharpen(src, strength / 100f)
-    "watermark-image" -> watermark(src, watermarkText)
     else -> src // compressor, exif-remover, batch-convert: pixels unchanged, output re-encoded
 }
 
@@ -601,18 +840,5 @@ private fun sharpen(b: Bitmap, amt: Float): Bitmap {
     val p = Paint().apply { alpha = (amt * 160).toInt().coerceIn(0,255) }
     c.drawBitmap(blur, 0f, 0f, Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.DST) })
     c.drawBitmap(b, 0f, 0f, p)
-    return out
-}
-private fun watermark(b: Bitmap, text: String): Bitmap {
-    val out = b.copy(Bitmap.Config.ARGB_8888, true)
-    val c = Canvas(out)
-    val p = Paint().apply {
-        color = AColor.WHITE; isAntiAlias = true
-        textSize = out.width / 14f
-        alpha = 150
-        setShadowLayer(4f, 0f, 0f, AColor.BLACK)
-    }
-    val tw = p.measureText(text)
-    c.drawText(text, out.width - tw - out.width*0.04f, out.height - out.height*0.04f, p)
     return out
 }
