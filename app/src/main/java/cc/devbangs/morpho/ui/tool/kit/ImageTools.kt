@@ -1456,13 +1456,32 @@ private fun ResizeBody(src: Bitmap, srcUri: Uri?, accent: Color) {
             StepControl("SCALE %", pct, listOf(25, 50, 75, 100, 150, 200), accent) { pct = it }
         } else {
             Column {
-                FieldLabel("WIDTH \u00d7 HEIGHT (PX)")
+                FieldLabel("TARGET BOX (PX)")
                 Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
                     Box(Modifier.weight(1f)) {
                         ToolInput(wText, { applyWidth(it) }, "Width", minLines = 1, mono = true)
                     }
                     Box(Modifier.weight(1f)) {
                         ToolInput(hText, { applyHeight(it) }, "Height", minLines = 1, mono = true)
+                    }
+                }
+                // Under Fit the box is a limit, not the output: a 1080x1920
+                // photo asked to fit 1080x1080 exports at 608x1080. That was
+                // only discoverable after saving, which made the typed numbers
+                // read like a promise the tool then broke.
+                if (valid) {
+                    val ex = predictSize(src, tw, th, fitMode)
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Exports at " + ex.first + "\u00d7" + ex.second,
+                        color = accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold
+                    )
+                    if (ex.first != tw || ex.second != th) {
+                        Text(
+                            "Fill would give exactly " + tw + "\u00d7" + th +
+                                ", cropping what does not fit.",
+                            color = InkFaint, fontSize = 12.sp
+                        )
                     }
                 }
             }
@@ -1584,11 +1603,31 @@ private fun ResizeBody(src: Bitmap, srcUri: Uri?, accent: Color) {
     }
 }
 
+/**
+ * The size [resizeTo] will produce, without building the bitmap to find out.
+ *
+ * Kept deliberately next to resizeTo: if one changes the other has to, and a
+ * silent disagreement between them is exactly the surprise this exists to
+ * prevent.
+ */
+private fun predictSize(src: Bitmap, tw: Int, th: Int, fit: String): Pair<Int, Int> {
+    val w = tw.coerceIn(1, RESIZE_MAX_SIDE)
+    val h = th.coerceIn(1, RESIZE_MAX_SIDE)
+    return when (fit) {
+        "Stretch", "Fill" -> w to h
+        else -> {
+            val s = minOf(w.toFloat() / src.width, h.toFloat() / src.height)
+            (src.width * s).roundToInt().coerceAtLeast(1) to
+                (src.height * s).roundToInt().coerceAtLeast(1)
+        }
+    }
+}
+
 /** One line saying what the selected rule does, in the label. */
 private fun fitHint(mode: String): String = when (mode) {
-    "Fill" -> "FILLS THE FRAME, CROPS THE REST"
-    "Stretch" -> "EXACT CANVAS, PROPORTIONS CHANGE"
-    else -> "FITS INSIDE, NOTHING LOST"
+    "Fill" -> "EXACTLY THAT SIZE, CROPS THE OVERFLOW"
+    "Stretch" -> "EXACTLY THAT SIZE, PROPORTIONS CHANGE"
+    else -> "FITS INSIDE THE BOX, NOTHING CROPPED"
 }
 
 /**
