@@ -116,6 +116,7 @@ fun ImageTool(id: String, accent: Color) {
             when (id) {
                 "image-metadata-viewer" -> MetadataBody(bmp, picked, accent)
                 "image-cropper" -> CropBody(bmp, accent)
+                "image-resizer" -> ResizeBody(bmp, picked, accent)
                 "watermark-image" -> WatermarkBody(bmp, accent)
                 else -> TransformBody(id, bmp, picked, accent)
             }
@@ -247,7 +248,6 @@ private fun TransformBody(id: String, src: Bitmap, srcUri: Uri?, accent: Color) 
 
     // controls
     when (id) {
-        "image-resizer" -> StepControl("SCALE %", scalePct, listOf(25,50,75,100), accent) { scalePct = it }
         "thumbnail-creator" -> StepControl("SIZE %", scalePct, listOf(10,25,40,60), accent) { scalePct = it }
         "image-rotator" -> StepControl("ROTATE°", rotation, listOf(0,90,180,270), accent) { rotation = it }
         "image-blur" -> StepControl("STRENGTH", strength, listOf(25,50,75,100), accent) { strength = it }
@@ -1165,6 +1165,294 @@ private fun watermarkOf(
     return out
 }
 
+/** Guard rails on a typed size: 8192 a side, and 30 MP overall. */
+private const val RESIZE_MAX_SIDE = 8192
+private const val RESIZE_MAX_PIXELS = 30_000_000L
+
+/**
+ * Image Resizer.
+ *
+ * The registry promised "Resize images to exact dimensions" and the tool had a
+ * single control: SCALE % at 25, 50, 75, 100. No width, no height, no aspect
+ * lock, and since 100 was the maximum it could not enlarge either. A shop told
+ * its product images must be 1000x1000 could not do it; nor could anyone
+ * needing a specific pixel size for print, a document or a web slot.
+ *
+ * Exact width and height are the point of the tool, so that is the default
+ * mode. Percent stays because "half size" is still a real request.
+ *
+ * Fit, Fill and Stretch are three different jobs, not a style choice. A
+ * marketplace thumbnail wants Fill so the frame is filled and the overflow
+ * cropped; a scanned document wants Fit so nothing is lost; Stretch is there
+ * for the rare case where the exact canvas matters more than the proportions.
+ */
+@Composable
+private fun ResizeBody(src: Bitmap, srcUri: Uri?, accent: Color) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var mode by remember(src) { mutableStateOf("Exact") }
+    var pct by remember(src) { mutableStateOf(100) }
+    var wText by remember(src) { mutableStateOf(src.width.toString()) }
+    var hText by remember(src) { mutableStateOf(src.height.toString()) }
+    var lockAspect by remember(src) { mutableStateOf(true) }
+    var fitMode by remember(src) { mutableStateOf("Fit") }
+    var fmtKey by remember(src) { mutableStateOf("JPEG") }
+    var quality by remember(src) { mutableStateOf(95) }
+
+    var out by remember(src) { mutableStateOf(src) }
+    var outSize by remember(src) { mutableStateOf(0L) }
+    var srcSize by remember(src) { mutableStateOf(0L) }
+    var working by remember(src) { mutableStateOf(false) }
+    var saving by remember(src) { mutableStateOf(false) }
+    var showBusy by remember(src) { mutableStateOf(false) }
+
+    val fmt = compressFormatOf(fmtKey)
+    val q = if (fmtKey == "PNG") 100 else quality
+
+    val tw = if (mode == "Percent") (src.width * pct / 100).coerceAtLeast(1)
+        else (wText.toIntOrNull() ?: 0)
+    val th = if (mode == "Percent") (src.height * pct / 100).coerceAtLeast(1)
+        else (hText.toIntOrNull() ?: 0)
+    val valid = tw in 1..RESIZE_MAX_SIDE && th in 1..RESIZE_MAX_SIDE &&
+        tw.toLong() * th <= RESIZE_MAX_PIXELS
+
+    fun applyWidth(v: String) {
+        val digits = v.filter { it.isDigit() }.take(5)
+        wText = digits
+        if (lockAspect) {
+            val w = digits.toIntOrNull()
+            if (w != null && w > 0) {
+                hText = (w.toLong() * src.height / src.width).coerceAtLeast(1L).toString()
+            }
+        }
+    }
+
+    fun applyHeight(v: String) {
+        val digits = v.filter { it.isDigit() }.take(5)
+        hText = digits
+        if (lockAspect) {
+            val h = digits.toIntOrNull()
+            if (h != null && h > 0) {
+                wText = (h.toLong() * src.width / src.height).coerceAtLeast(1L).toString()
+            }
+        }
+    }
+
+    LaunchedEffect(src, srcUri) {
+        srcSize = withContext(Dispatchers.IO) { sourceFileSize(ctx, srcUri) }
+    }
+
+    LaunchedEffect(src, tw, th, fitMode, fmt, q, valid) {
+        if (!valid) { working = false; return@LaunchedEffect }
+        working = true
+        delay(200)
+        val r = withContext(Dispatchers.Default) {
+            val b = try {
+                resizeTo(src, tw, th, fitMode)
+            } catch (e: Exception) { src } catch (e: OutOfMemoryError) { src }
+            b to bitmapBytes(b, fmt, q)
+        }
+        out = r.first
+        outSize = r.second
+        working = false
+    }
+
+    LaunchedEffect(working) {
+        if (working) { delay(260); showBusy = true } else showBusy = false
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+        Column {
+            FieldLabel("SIZE BY")
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+                listOf("Exact", "Percent").forEach { m ->
+                    val on = m == mode
+                    Box(
+                        Modifier.weight(1f).clip(Shape.field)
+                            .background(if (on) accent else accent.copy(alpha = 0.12f))
+                            .clickable { mode = m }
+                            .padding(vertical = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            m, color = if (on) Paper else InkSoft,
+                            fontSize = 14.sp, fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+        }
+
+        if (mode == "Percent") {
+            StepControl("SCALE %", pct, listOf(25, 50, 75, 100, 150, 200), accent) { pct = it }
+        } else {
+            Column {
+                FieldLabel("WIDTH \u00d7 HEIGHT (PX)")
+                Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+                    Box(Modifier.weight(1f)) {
+                        ToolInput(wText, { applyWidth(it) }, "Width", minLines = 1, mono = true)
+                    }
+                    Box(Modifier.weight(1f)) {
+                        ToolInput(hText, { applyHeight(it) }, "Height", minLines = 1, mono = true)
+                    }
+                }
+            }
+
+            Row(
+                Modifier.fillMaxWidth().clip(Shape.field)
+                    .background(if (lockAspect) accent.copy(alpha = 0.12f) else PaperSunk)
+                    .clickable {
+                        lockAspect = !lockAspect
+                        if (lockAspect) applyWidth(wText)
+                    }
+                    .padding(horizontal = 14.dp, vertical = 13.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                MorphoIcon(
+                    if (lockAspect) "check" else "close",
+                    tint = if (lockAspect) accent else InkFaint, size = 17.dp
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    "Keep the original proportions",
+                    color = if (lockAspect) accent else InkSoft, fontSize = 14.sp
+                )
+            }
+
+            Column {
+                FieldLabel("PRESETS")
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(
+                        "Original" to (src.width to src.height),
+                        "1080\u00d71080" to (1080 to 1080),
+                        "1920\u00d71080" to (1920 to 1080),
+                        "1200\u00d7630" to (1200 to 630)
+                    ).forEach { (label, dims) ->
+                        Box(
+                            Modifier.weight(1f).clip(Shape.chip)
+                                .background(accent.copy(alpha = 0.12f))
+                                .clickable {
+                                    lockAspect = false
+                                    wText = dims.first.toString()
+                                    hText = dims.second.toString()
+                                }
+                                .padding(vertical = 9.dp),
+                            contentAlignment = Alignment.Center
+                        ) { Text(label, color = InkSoft, fontSize = 10.sp) }
+                    }
+                }
+            }
+
+            Column {
+                FieldLabel("WHEN THE SHAPE DIFFERS \u00b7 " + fitHint(fitMode))
+                Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+                    listOf("Fit", "Fill", "Stretch").forEach { f ->
+                        val on = f == fitMode
+                        Box(
+                            Modifier.weight(1f).clip(Shape.field)
+                                .background(if (on) accent else accent.copy(alpha = 0.12f))
+                                .clickable { fitMode = f }
+                                .padding(vertical = 11.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                f, color = if (on) Paper else InkSoft,
+                                fontSize = 13.sp, fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        OutputControls(fmtKey, quality, accent, { fmtKey = it }, { quality = it })
+
+        if (!valid) {
+            ToolErrorCard(
+                title = "That size will not work",
+                body = "Give a width and height between 1 and " + RESIZE_MAX_SIDE +
+                    " pixels, and under 30 megapixels in total.",
+                accent = accent,
+                actionLabel = "Back to original",
+                onAction = {
+                    lockAspect = true
+                    wText = src.width.toString()
+                    hText = src.height.toString()
+                }
+            )
+        } else {
+            if (showBusy || saving) ProcessingCard(
+                if (saving) "Saving your image" else "Resizing", accent
+            )
+            else Box(
+                Modifier.fillMaxWidth().heightIn(min = 180.dp, max = 320.dp)
+                    .clip(Shape.card).background(PaperSunk),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    out.asImageBitmap(), null,
+                    Modifier.fillMaxWidth(), contentScale = ContentScale.Fit
+                )
+            }
+
+            val stats = mutableListOf(
+                "New size" to (out.width.toString() + "\u00d7" + out.height),
+                "Was" to (src.width.toString() + "\u00d7" + src.height),
+                "Output" to sizeLabel(working, outSize)
+            )
+            stats.add(
+                if (srcSize > 0L) ("Original" to sizeLabel(false, srcSize))
+                else ("Format" to fmtKey)
+            )
+            StatGrid(stats, accent)
+
+            SaveShareRow(
+                accent, enabled = !working && !saving,
+                onSave = { runSaveAsync(scope, ctx, "morpho_resized", fmt, q, { saving = it }) { out } },
+                onShare = { runShareAsync(scope, ctx, "morpho_resized", fmt, q, { saving = it }) { out } }
+            )
+        }
+    }
+}
+
+/** One line saying what the selected rule does, in the label. */
+private fun fitHint(mode: String): String = when (mode) {
+    "Fill" -> "FILLS THE FRAME, CROPS THE REST"
+    "Stretch" -> "EXACT CANVAS, PROPORTIONS CHANGE"
+    else -> "FITS INSIDE, NOTHING LOST"
+}
+
+/**
+ * Resize to a target box under one of three rules.
+ *
+ * Fit deliberately returns something smaller than the box in one axis rather
+ * than padding it: padding would mean inventing a background colour, and a
+ * caller wanting an exact canvas has Stretch or Fill.
+ */
+private fun resizeTo(src: Bitmap, tw: Int, th: Int, fit: String): Bitmap {
+    val w = tw.coerceIn(1, RESIZE_MAX_SIDE)
+    val h = th.coerceIn(1, RESIZE_MAX_SIDE)
+    return when (fit) {
+        "Stretch" -> Bitmap.createScaledBitmap(src, w, h, true)
+        "Fill" -> {
+            val s = maxOf(w.toFloat() / src.width, h.toFloat() / src.height)
+            val sw = (src.width * s).roundToInt().coerceAtLeast(w)
+            val sh = (src.height * s).roundToInt().coerceAtLeast(h)
+            val scaled = Bitmap.createScaledBitmap(src, sw, sh, true)
+            Bitmap.createBitmap(scaled, ((sw - w) / 2).coerceAtLeast(0), ((sh - h) / 2).coerceAtLeast(0), w, h)
+        }
+        else -> {
+            val s = minOf(w.toFloat() / src.width, h.toFloat() / src.height)
+            Bitmap.createScaledBitmap(
+                src,
+                (src.width * s).roundToInt().coerceAtLeast(1),
+                (src.height * s).roundToInt().coerceAtLeast(1),
+                true
+            )
+        }
+    }
+}
+
 /** Photo picker cap. The system may clamp lower; it will not go higher. */
 private const val BATCH_MAX = 20
 
@@ -1479,7 +1767,7 @@ private fun applyTransform(
     strength: Int,
     sharpRadius: Int
 ): Bitmap = when (id) {
-    "image-resizer", "thumbnail-creator" -> scale(src, scalePct / 100f)
+    "thumbnail-creator" -> scale(src, scalePct / 100f)
     "image-rotator" -> rotate(src, rotation.toFloat())
     "image-blur" -> boxBlur(src, (strength / 100f * 12).toInt().coerceAtLeast(1))
     "sharpen-image" -> sharpen(src, strength / 100f, sharpRadius)
