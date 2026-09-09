@@ -55,6 +55,14 @@ fun hasImageTool(id: String): Boolean = id in setOf(
 
 @Composable
 fun ImageTool(id: String, accent: Color) {
+    // Batch has a different shape from every other image tool: many files in,
+    // no single preview, no per-image controls. It gets its own screen rather
+    // than being bent through the one-file picker, which is what made it a
+    // single-image converter wearing a batch name.
+    if (id == "batch-image-converter") {
+        BatchConvertTool(accent)
+        return
+    }
     val ctx = LocalContext.current
     var src by remember { mutableStateOf<Bitmap?>(null) }
     var picked by remember { mutableStateOf<Uri?>(null) }
@@ -1155,6 +1163,149 @@ private fun watermarkOf(
     c.drawText(text, x, baseline, p)
     c.restore()
     return out
+}
+
+/** Photo picker cap. The system may clamp lower; it will not go higher. */
+private const val BATCH_MAX = 20
+
+/**
+ * Batch Image Converter.
+ *
+ * The registry promised "Convert many images at once, any format" and the tool
+ * did neither: it used the single-image picker and fell through applyTransform
+ * to `else -> src`, so it was a one-file no-op. Format became real in the
+ * output-controls change; this makes "many at once" real too.
+ *
+ * Files are decoded one at a time rather than up front. Twenty photos at
+ * 4096px would be well over a gigabyte held together, and this app declares no
+ * largeHeap - each one is decoded, written and released before the next.
+ *
+ * reportSave fires once for the run, not once per file. A batch is one tool
+ * completion, so markUsed must count it once; saveToGallery's report flag is
+ * there for exactly this.
+ */
+@Composable
+private fun BatchConvertTool(accent: Color) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var uris by remember { mutableStateOf<List<Uri>>(emptyList()) }
+    var fmtKey by remember { mutableStateOf("JPEG") }
+    var quality by remember { mutableStateOf(90) }
+    var scalePct by remember { mutableStateOf(100) }
+    var running by remember { mutableStateOf(false) }
+    var doneCount by remember { mutableStateOf(0) }
+    var failCount by remember { mutableStateOf(0) }
+    var finished by remember { mutableStateOf(false) }
+
+    val fmt = compressFormatOf(fmtKey)
+    val q = if (fmtKey == "PNG") 100 else quality
+
+    val picker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickMultipleVisualMedia(BATCH_MAX)
+    ) { list ->
+        if (list.isNotEmpty()) {
+            uris = list
+            finished = false
+            doneCount = 0
+            failCount = 0
+        }
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+        Row(
+            Modifier.fillMaxWidth().clip(Shape.field)
+                .background(accent.copy(alpha = 0.09f))
+                .border(1.5.dp, accent.copy(alpha = 0.22f), Shape.field)
+                .clickable(enabled = !running) {
+                    picker.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                }
+                .padding(horizontal = 14.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            MorphoIcon("image-add", tint = accent, size = 20.dp)
+            Spacer(Modifier.width(10.dp))
+            Column {
+                Text(
+                    if (uris.isEmpty()) "Choose images"
+                    else (uris.size.toString() + " images selected"),
+                    color = accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    "Up to " + BATCH_MAX + " at a time",
+                    color = InkFaint, fontSize = 12.sp
+                )
+            }
+        }
+
+        if (uris.isNotEmpty()) {
+            StepControl("RESIZE %", scalePct, listOf(25, 50, 75, 100), accent) { scalePct = it }
+            OutputControls(fmtKey, quality, accent, { fmtKey = it }, { quality = it })
+
+            if (running) {
+                ProcessingCard(
+                    "Converting " + (doneCount + failCount + 1).coerceAtMost(uris.size) +
+                        " of " + uris.size,
+                    accent
+                )
+            } else {
+                ToolButton("Convert " + uris.size + " images", accent) {
+                    running = true
+                    finished = false
+                    doneCount = 0
+                    failCount = 0
+                    scope.launch {
+                        val list = uris
+                        var ok = 0
+                        var bad = 0
+                        withContext(Dispatchers.IO) {
+                            val stamp = System.currentTimeMillis()
+                            list.forEachIndexed { i, u ->
+                                val decoded = try {
+                                    decodeBitmap(ctx, u)
+                                } catch (e: Exception) { null } catch (e: OutOfMemoryError) { null }
+                                val outBmp = when {
+                                    decoded == null -> null
+                                    scalePct != 100 -> try {
+                                        scale(decoded, scalePct / 100f)
+                                    } catch (e: Exception) { null } catch (e: OutOfMemoryError) { null }
+                                    else -> decoded
+                                }
+                                val saved = if (outBmp == null) false else try {
+                                    saveToGallery(
+                                        ctx, outBmp,
+                                        "morpho_batch_" + stamp + "_" + (i + 1),
+                                        fmt, q, report = false
+                                    )
+                                } catch (e: Exception) { false } catch (e: OutOfMemoryError) { false }
+                                if (saved) { ok++; doneCount++ } else { bad++; failCount++ }
+                            }
+                        }
+                        reportSave(
+                            ctx, ok > 0, "Batch ready",
+                            ok.toString() + " images converted and saved.",
+                            "", "Couldn't convert those images"
+                        )
+                        running = false
+                        finished = true
+                    }
+                }
+            }
+        }
+
+        if (finished) {
+            StatGrid(
+                listOf(
+                    "Converted" to doneCount.toString(),
+                    "Failed" to failCount.toString(),
+                    "Format" to fmtKey,
+                    "Saved to" to "Pictures/Morpho"
+                ),
+                accent
+            )
+        }
+    }
 }
 
 @Composable
