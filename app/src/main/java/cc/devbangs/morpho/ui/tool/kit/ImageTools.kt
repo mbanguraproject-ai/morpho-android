@@ -6,7 +6,6 @@ import android.graphics.Color as AColor
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.net.Uri
-import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -976,19 +975,6 @@ private fun OutputControls(
             StepControl("QUALITY", quality, listOf(40, 60, 80, 95), accent, onQuality)
         }
     }
-}
-
-/**
- * WEBP_LOSSY arrived in API 30 and the app supports 24, so the older
- * WEBP constant is the fallback rather than dropping the format entirely.
- */
-@Suppress("DEPRECATION")
-private fun compressFormatOf(key: String): Bitmap.CompressFormat = when (key) {
-    "PNG" -> Bitmap.CompressFormat.PNG
-    "WEBP" ->
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) Bitmap.CompressFormat.WEBP_LOSSY
-        else Bitmap.CompressFormat.WEBP
-    else -> Bitmap.CompressFormat.JPEG
 }
 
 /**

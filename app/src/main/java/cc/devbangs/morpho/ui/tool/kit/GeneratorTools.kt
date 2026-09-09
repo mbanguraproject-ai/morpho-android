@@ -20,7 +20,11 @@ import cc.devbangs.morpho.ui.theme.*
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.MultiFormatWriter
+import com.google.zxing.common.BitMatrix
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlin.random.Random
 
 fun hasGeneratorTool(id: String): Boolean = id in setOf(
@@ -117,15 +121,69 @@ private fun Toggle(label: String, on: Boolean, accent: Color, onChange: (Boolean
 @Composable
 private fun QrTool(accent: Color) {
     var t by remember { mutableStateOf("") }
-    val bmp = remember(t) { if (t.isBlank()) null else qrBitmap(t, 640) }
+    var sizeKey by remember { mutableStateOf("1024") }
+    var ecc by remember { mutableStateOf("M") }
+    var quiet by remember { mutableStateOf("4") }
+    var fmtKey by remember { mutableStateOf("PNG") }
+    var bmp by remember { mutableStateOf<Bitmap?>(null) }
+    var failed by remember { mutableStateOf(false) }
+    var working by remember { mutableStateOf(false) }
+    val fmt = compressFormatOf(fmtKey)
+
+    // Encoding at print sizes is millions of pixels, so it is debounced and
+    // run off the main thread. It used to happen inside remember(), during
+    // composition, on the main thread.
+    LaunchedEffect(t, sizeKey, ecc, quiet) {
+        if (t.isBlank()) {
+            bmp = null; failed = false; working = false
+            return@LaunchedEffect
+        }
+        working = true
+        delay(220)
+        val r = withContext(Dispatchers.Default) {
+            try {
+                qrBitmap(t, sizeKey.toInt(), ecc, quiet.toInt())
+            } catch (e: Exception) { null } catch (e: OutOfMemoryError) { null }
+        }
+        bmp = r
+        failed = r == null
+        working = false
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
         Column { FieldLabel("CONTENT"); ToolInput(t, { t = it }, "URL, text, Wi-Fi, anything…", minLines = 3) }
-        if (bmp != null) Box(
-            Modifier.fillMaxWidth().clip(Shape.card).background(Paper).padding(Space.xl),
-            contentAlignment = Alignment.Center
-        ) {
-            Image(bmp.asImageBitmap(), null, Modifier.size(240.dp))
+        Column { FieldLabel("SIZE PX"); ChipRow(listOf("512", "1024", "2048"), sizeKey, accent) { sizeKey = it } }
+        Column {
+            FieldLabel("ERROR CORRECTION " + eccHint(ecc))
+            ChipRow(listOf("L", "M", "Q", "H"), ecc, accent) { ecc = it }
         }
+        Column { FieldLabel("QUIET ZONE"); ChipRow(listOf("1", "2", "4"), quiet, accent) { quiet = it } }
+        Column { FieldLabel("OUTPUT FORMAT"); ChipRow(listOf("PNG", "JPEG", "WEBP"), fmtKey, accent) { fmtKey = it } }
+
+        if (working) ProcessingCard("Generating code", accent)
+        bmp?.let { b ->
+            if (!working) {
+                Box(
+                    Modifier.fillMaxWidth().clip(Shape.card).background(Paper).padding(Space.xl),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Image(b.asImageBitmap(), null, Modifier.size(240.dp))
+                }
+                StatGrid(
+                    listOf(
+                        "Size" to (b.width.toString() + "\u00d7" + b.height),
+                        "Correction" to eccLabel(ecc),
+                        "Quiet zone" to (quiet + " modules"),
+                        "Format" to fmtKey
+                    ),
+                    accent
+                )
+                BitmapResultActions(accent, "morpho_qr", fmt, 100) { b }
+            }
+        }
+        if (failed && !working) Text(
+            "⚠ Could not encode this content.", color = InkSoft, fontSize = 13.sp
+        )
     }
 }
 
@@ -133,16 +191,65 @@ private fun QrTool(accent: Color) {
 @Composable
 private fun BarcodeTool(accent: Color) {
     var t by remember { mutableStateOf("") }
-    val bmp = remember(t) {
-        if (t.isBlank()) null else try { barcodeBitmap(t, 720, 260) } catch (e: Exception) { null }
+    var sym by remember { mutableStateOf("CODE 128") }
+    var widthKey by remember { mutableStateOf("1024") }
+    var fmtKey by remember { mutableStateOf("PNG") }
+    var bmp by remember { mutableStateOf<Bitmap?>(null) }
+    var failed by remember { mutableStateOf(false) }
+    var working by remember { mutableStateOf(false) }
+    val fmt = compressFormatOf(fmtKey)
+
+    LaunchedEffect(t, sym, widthKey) {
+        if (t.isBlank()) {
+            bmp = null; failed = false; working = false
+            return@LaunchedEffect
+        }
+        working = true
+        delay(220)
+        val w = widthKey.toInt()
+        val r = withContext(Dispatchers.Default) {
+            try {
+                barcodeBitmap(t, sym, w, (w * 0.36f).toInt())
+            } catch (e: Exception) { null } catch (e: OutOfMemoryError) { null }
+        }
+        bmp = r
+        failed = r == null
+        working = false
     }
+
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
         Column { FieldLabel("CODE VALUE"); ToolInput(t, { t = it }, "Enter digits/text…", minLines = 1, mono = true) }
-        if (bmp != null) Box(
-            Modifier.fillMaxWidth().clip(Shape.card).background(Paper).padding(Space.lg),
-            contentAlignment = Alignment.Center
-        ) { Image(bmp.asImageBitmap(), null, Modifier.fillMaxWidth().height(120.dp)) }
-        else if (t.isNotBlank()) Text("⚠ Could not encode this value.", color = InkSoft, fontSize = 13.sp)
+        Column {
+            FieldLabel("SYMBOLOGY " + symHint(sym))
+            ChipRow(listOf("CODE 128", "EAN-13", "UPC-A"), sym, accent) { sym = it }
+            Spacer(Modifier.height(6.dp))
+            ChipRow(listOf("CODE 39", "ITF"), sym, accent) { sym = it }
+        }
+        Column { FieldLabel("WIDTH PX"); ChipRow(listOf("512", "1024", "2048"), widthKey, accent) { widthKey = it } }
+        Column { FieldLabel("OUTPUT FORMAT"); ChipRow(listOf("PNG", "JPEG", "WEBP"), fmtKey, accent) { fmtKey = it } }
+
+        if (working) ProcessingCard("Generating code", accent)
+        bmp?.let { b ->
+            if (!working) {
+                Box(
+                    Modifier.fillMaxWidth().clip(Shape.card).background(Paper).padding(Space.lg),
+                    contentAlignment = Alignment.Center
+                ) { Image(b.asImageBitmap(), null, Modifier.fillMaxWidth().height(120.dp)) }
+                StatGrid(
+                    listOf(
+                        "Size" to (b.width.toString() + "\u00d7" + b.height),
+                        "Symbology" to sym,
+                        "Format" to fmtKey,
+                        "Quiet zone" to "10 modules"
+                    ),
+                    accent
+                )
+                BitmapResultActions(accent, "morpho_barcode", fmt, 100) { b }
+            }
+        }
+        if (failed && !working) Text(
+            "⚠ " + symRule(sym), color = InkSoft, fontSize = 13.sp
+        )
     }
 }
 
@@ -217,22 +324,107 @@ private fun ChipRow(
 }
 
 // ---- helpers ----
-private fun qrBitmap(text: String, size: Int): Bitmap {
-    val hints = mapOf(EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.M,
-        EncodeHintType.MARGIN to 1)
-    val m = MultiFormatWriter().encode(text, BarcodeFormat.QR_CODE, size, size, hints)
-    val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.RGB_565)
-    for (x in 0 until size) for (y in 0 until size)
-        bmp.setPixel(x, y, if (m[x, y]) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
-    return bmp
+private const val CODE_BLACK = android.graphics.Color.BLACK
+private const val CODE_WHITE = android.graphics.Color.WHITE
+
+/**
+ * Matrix to bitmap in one allocation.
+ *
+ * setPixel per module meant 409,600 calls at the old fixed 640px, and it ran
+ * during composition on the main thread. At a print-usable 2048px that is 4.2
+ * million calls. setPixels writes the row buffer in one go.
+ *
+ * ARGB_8888 rather than the old 16-bit config: a code is pure black and white,
+ * and 16-bit cannot represent either exactly, so edges pick up a tint that
+ * survives into the saved file.
+ */
+private fun matrixToBitmap(m: BitMatrix): Bitmap {
+    val w = m.width
+    val h = m.height
+    val px = IntArray(w * h)
+    for (y in 0 until h) {
+        val row = y * w
+        for (x in 0 until w) px[row + x] = if (m[x, y]) CODE_BLACK else CODE_WHITE
+    }
+    return Bitmap.createBitmap(px, w, h, Bitmap.Config.ARGB_8888)
 }
 
-private fun barcodeBitmap(text: String, w: Int, h: Int): Bitmap {
-    val m = MultiFormatWriter().encode(text, BarcodeFormat.CODE_128, w, h)
-    val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.RGB_565)
-    for (x in 0 until w) for (y in 0 until h)
-        bmp.setPixel(x, y, if (m[x, y]) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
-    return bmp
+/**
+ * QR encode.
+ *
+ * Two fixes beyond the controls. The quiet zone was 1; the QR specification
+ * calls for 4 modules of clear margin, and below that scanners struggle,
+ * especially where the code sits on a dark background. And without a character
+ * set hint ZXing falls back to ISO-8859-1, so any content outside Latin-1
+ * encoded wrong.
+ */
+private fun qrBitmap(text: String, size: Int, ecc: String, quietZone: Int): Bitmap {
+    val level = when (ecc) {
+        "L" -> ErrorCorrectionLevel.L
+        "Q" -> ErrorCorrectionLevel.Q
+        "H" -> ErrorCorrectionLevel.H
+        else -> ErrorCorrectionLevel.M
+    }
+    val hints = mapOf(
+        EncodeHintType.ERROR_CORRECTION to level,
+        EncodeHintType.MARGIN to quietZone,
+        EncodeHintType.CHARACTER_SET to "UTF-8"
+    )
+    return matrixToBitmap(
+        MultiFormatWriter().encode(text, BarcodeFormat.QR_CODE, size, size, hints)
+    )
+}
+
+/**
+ * Barcode encode.
+ *
+ * CODE 128 alone does not cover the field: a shop or a warehouse needs EAN-13
+ * and UPC-A for retail products and ITF for cartons. Each has its own length
+ * and character rules, so an invalid value throws and the caller reports which
+ * rule was broken rather than a bare failure.
+ */
+private fun barcodeBitmap(text: String, symbology: String, w: Int, h: Int): Bitmap {
+    val f = when (symbology) {
+        "EAN-13" -> BarcodeFormat.EAN_13
+        "UPC-A" -> BarcodeFormat.UPC_A
+        "CODE 39" -> BarcodeFormat.CODE_39
+        "ITF" -> BarcodeFormat.ITF
+        else -> BarcodeFormat.CODE_128
+    }
+    val hints = mapOf<EncodeHintType, Any>(EncodeHintType.MARGIN to 10)
+    return matrixToBitmap(MultiFormatWriter().encode(text, f, w, h, hints))
+}
+
+/** What each correction level buys, in the label. */
+private fun eccHint(ecc: String): String = when (ecc) {
+    "L" -> "(7% recoverable)"
+    "Q" -> "(25% recoverable)"
+    "H" -> "(30% recoverable)"
+    else -> "(15% recoverable)"
+}
+
+private fun eccLabel(ecc: String): String = when (ecc) {
+    "L" -> "L - 7%"
+    "Q" -> "Q - 25%"
+    "H" -> "H - 30%"
+    else -> "M - 15%"
+}
+
+private fun symHint(sym: String): String = when (sym) {
+    "EAN-13" -> "(13 digits)"
+    "UPC-A" -> "(12 digits)"
+    "ITF" -> "(even digit count)"
+    "CODE 39" -> "(A-Z, 0-9, - . $ / + %)"
+    else -> "(any text)"
+}
+
+/** Said back to the user when encoding fails, so the rule is discoverable. */
+private fun symRule(sym: String): String = when (sym) {
+    "EAN-13" -> "EAN-13 needs exactly 13 digits (or 12 and it adds the check digit)."
+    "UPC-A" -> "UPC-A needs exactly 12 digits (or 11 and it adds the check digit)."
+    "ITF" -> "ITF needs digits only, in an even count."
+    "CODE 39" -> "CODE 39 takes A-Z, 0-9 and - . $ / + % only."
+    else -> "Could not encode this value."
 }
 
 /**

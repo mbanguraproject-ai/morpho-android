@@ -213,6 +213,23 @@ private fun orientToUpright(b: Bitmap, orientation: Int): Bitmap {
  * WebP branch is `else` on purpose: WEBP_LOSSY and WEBP_LOSSLESS are API 30
  * constants, and naming them in a `when` would fault on older devices.
  */
+/**
+ * Compress format for a UI format key.
+ *
+ * Lives here rather than in ImageTools because the code generators need it
+ * too. WEBP_LOSSY arrived in API 30 and the app supports 24, so the older
+ * WEBP constant is the fallback rather than dropping the format.
+ */
+@Suppress("DEPRECATION")
+fun compressFormatOf(key: String): Bitmap.CompressFormat = when (key) {
+    "PNG" -> Bitmap.CompressFormat.PNG
+    "WEBP" ->
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R)
+            Bitmap.CompressFormat.WEBP_LOSSY
+        else Bitmap.CompressFormat.WEBP
+    else -> Bitmap.CompressFormat.JPEG
+}
+
 fun imageExt(format: Bitmap.CompressFormat): String = when (format) {
     Bitmap.CompressFormat.PNG -> "png"
     Bitmap.CompressFormat.JPEG -> "jpg"
