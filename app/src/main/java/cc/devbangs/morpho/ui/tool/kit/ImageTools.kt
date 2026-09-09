@@ -5,8 +5,6 @@ import android.graphics.Canvas
 import android.graphics.Color as AColor
 import android.graphics.Matrix
 import android.graphics.Paint
-import android.graphics.PorterDuff
-import android.graphics.PorterDuffXfermode
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -186,6 +184,7 @@ private fun TransformBody(id: String, src: Bitmap, accent: Color) {
     var scalePct by remember { mutableStateOf(100) }
     var rotation by remember { mutableStateOf(0) }
     var strength by remember { mutableStateOf(50) }
+    var sharpRadius by remember { mutableStateOf(2) }
 
     val isPng = id in setOf("exif-remover")
     val fmt = if (isPng) Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG
@@ -206,12 +205,20 @@ private fun TransformBody(id: String, src: Bitmap, accent: Color) {
             bitmapBytes(src, Bitmap.CompressFormat.JPEG, 100)
         }
     }
-    LaunchedEffect(id, src, quality, scalePct, rotation, strength, fmt, q) {
+    LaunchedEffect(id, src, quality, scalePct, rotation, strength, sharpRadius, fmt, q) {
         working = true
         delay(140)
         val result = withContext(Dispatchers.Default) {
-            val bmp = applyTransform(id, src, scalePct, rotation, strength)
-            bmp to bitmapBytes(bmp, fmt, q)
+            // Transforms allocate pixel buffers proportional to the image, and
+            // the app declares no largeHeap, so a big photo can exhaust the
+            // heap here. Unguarded, that was an outright crash.
+            val bmp = try {
+                applyTransform(id, src, scalePct, rotation, strength, sharpRadius)
+            } catch (e: Exception) { src } catch (e: OutOfMemoryError) { src }
+            bmp to (
+                try { bitmapBytes(bmp, fmt, q) }
+                catch (e: Exception) { 0L } catch (e: OutOfMemoryError) { 0L }
+            )
         }
         out = result.first
         outSize = result.second
@@ -224,7 +231,11 @@ private fun TransformBody(id: String, src: Bitmap, accent: Color) {
         "image-resizer" -> StepControl("SCALE %", scalePct, listOf(25,50,75,100), accent) { scalePct = it }
         "thumbnail-creator" -> StepControl("SIZE %", scalePct, listOf(10,25,40,60), accent) { scalePct = it }
         "image-rotator" -> StepControl("ROTATE°", rotation, listOf(0,90,180,270), accent) { rotation = it }
-        "image-blur","sharpen-image" -> StepControl("STRENGTH", strength, listOf(25,50,75,100), accent) { strength = it }
+        "image-blur" -> StepControl("STRENGTH", strength, listOf(25,50,75,100), accent) { strength = it }
+        "sharpen-image" -> Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+            StepControl("AMOUNT", strength, listOf(25,50,75,100), accent) { strength = it }
+            StepControl("RADIUS PX", sharpRadius, listOf(1,2,4,8), accent) { sharpRadius = it }
+        }
     }
 
     // preview
@@ -537,6 +548,7 @@ private fun cropOf(src: Bitmap, l: Float, t: Float, r: Float, b: Float): Bitmap 
 @Composable
 private fun WatermarkBody(src: Bitmap, accent: Color) {
     val ctx = LocalContext.current
+    var mode by remember(src) { mutableStateOf("Text") }
     var text by remember(src) { mutableStateOf("") }
     var wmColor by remember(src) { mutableStateOf(AColor.WHITE) }
     var opacity by remember(src) { mutableStateOf(50) }
@@ -545,18 +557,38 @@ private fun WatermarkBody(src: Bitmap, accent: Color) {
     var position by remember(src) { mutableStateOf(8) }   // bottom-right
     var tile by remember(src) { mutableStateOf(false) }
 
+    // Logo mode. Capped at 1024 on intake because it is scaled down to a
+    // fraction of the base image anyway, and it inherits the orientation fix.
+    var logo by remember(src) { mutableStateOf<Bitmap?>(null) }
+    var logoScale by remember(src) { mutableStateOf(20) }
+    val logoPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
+    ) { uri -> if (uri != null) logo = decodeBitmap(ctx, uri, 1024) }
+    val pickLogo = {
+        logoPicker.launch(
+            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+        )
+    }
+    val ready = if (mode == "Logo") logo != null else text.isNotBlank()
+
     var out by remember(src) { mutableStateOf(src) }
     var outSize by remember(src) { mutableStateOf(0L) }
     var working by remember(src) { mutableStateOf(false) }
 
     // Rendering and measuring both cost a full pass over the bitmap, so they
     // are debounced off the main thread - typing must not re-render per key.
-    LaunchedEffect(src, text, wmColor, opacity, sizePct, angle, position, tile) {
+    LaunchedEffect(src, mode, text, wmColor, opacity, sizePct, angle, position, tile, logo, logoScale) {
         working = true
         delay(170)
         val r = withContext(Dispatchers.Default) {
             val bmp = try {
-                watermarkOf(src, text, wmColor, opacity, sizePct, position, tile, angle.toFloat())
+                val lg = logo
+                if (mode == "Logo") {
+                    if (lg == null) src
+                    else logoWatermarkOf(src, lg, opacity, logoScale, position, tile, angle.toFloat())
+                } else {
+                    watermarkOf(src, text, wmColor, opacity, sizePct, position, tile, angle.toFloat())
+                }
             } catch (e: Exception) { src } catch (e: OutOfMemoryError) { src }
             bmp to (try { bitmapBytes(bmp, Bitmap.CompressFormat.JPEG, 92) } catch (e: Exception) { 0L })
         }
@@ -567,32 +599,120 @@ private fun WatermarkBody(src: Bitmap, accent: Color) {
 
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
         Column {
-            FieldLabel("WATERMARK TEXT")
-            ToolInput(text, { text = it }, "\u00a9 Your name, DRAFT, CONFIDENTIAL\u2026", minLines = 1)
+            FieldLabel("MARK WITH")
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+                listOf("Text", "Logo").forEach { m ->
+                    val on = m == mode
+                    Box(
+                        Modifier.weight(1f).clip(Shape.field)
+                            .background(if (on) accent else accent.copy(alpha = 0.12f))
+                            .clickable { mode = m }
+                            .padding(vertical = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            m, color = if (on) Paper else InkSoft,
+                            fontSize = 14.sp, fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
         }
 
-        Column {
-            FieldLabel("COLOUR")
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(
-                    AColor.WHITE, AColor.BLACK, AColor.rgb(200, 0, 0),
-                    AColor.rgb(26, 70, 229), AColor.rgb(214, 138, 15)
-                ).forEach { swatch ->
-                    Box(
-                        Modifier.size(38.dp).clip(Shape.chip).background(Color(swatch))
-                            .border(
-                                if (swatch == wmColor) 3.dp else 1.dp,
-                                if (swatch == wmColor) accent else PaperLine,
-                                Shape.chip
+        if (mode == "Text") {
+            Column {
+                FieldLabel("WATERMARK TEXT")
+                ToolInput(text, { text = it }, "\u00a9 Your name, DRAFT, CONFIDENTIAL\u2026", minLines = 1)
+            }
+
+            Column {
+                FieldLabel("COLOUR")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(
+                        AColor.WHITE, AColor.BLACK, AColor.rgb(200, 0, 0),
+                        AColor.rgb(26, 70, 229), AColor.rgb(214, 138, 15)
+                    ).forEach { swatch ->
+                        Box(
+                            Modifier.size(38.dp).clip(Shape.chip).background(Color(swatch))
+                                .border(
+                                    if (swatch == wmColor) 3.dp else 1.dp,
+                                    if (swatch == wmColor) accent else PaperLine,
+                                    Shape.chip
+                                )
+                                .clickable { wmColor = swatch }
+                        )
+                    }
+                }
+            }
+        } else {
+            Column {
+                FieldLabel("LOGO")
+                val lg = logo
+                if (lg == null) {
+                    Row(
+                        Modifier.fillMaxWidth().clip(Shape.field)
+                            .background(accent.copy(alpha = 0.09f))
+                            .border(1.5.dp, accent.copy(alpha = 0.22f), Shape.field)
+                            .clickable { pickLogo() }
+                            .padding(horizontal = 14.dp, vertical = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        MorphoIcon("image-add", tint = accent, size = 20.dp)
+                        Spacer(Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                "Choose a logo", color = accent,
+                                fontSize = 14.sp, fontWeight = FontWeight.SemiBold
                             )
-                            .clickable { wmColor = swatch }
-                    )
+                            Text(
+                                "A PNG with a transparent background works best",
+                                color = InkFaint, fontSize = 12.sp
+                            )
+                        }
+                    }
+                } else {
+                    Row(
+                        Modifier.fillMaxWidth().clip(Shape.field).background(PaperSunk)
+                            .padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Image(
+                            lg.asImageBitmap(), null,
+                            Modifier.size(46.dp).clip(Shape.chip),
+                            contentScale = ContentScale.Fit
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            "${lg.width}\u00d7${lg.height}",
+                            color = InkSoft, fontSize = 13.sp, modifier = Modifier.weight(1f)
+                        )
+                        Box(
+                            Modifier.clip(Shape.pill).background(accent)
+                                .clickable { pickLogo() }
+                                .padding(horizontal = 13.dp, vertical = 7.dp)
+                        ) {
+                            Text(
+                                "Change", color = Paper,
+                                fontSize = 12.sp, fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        Spacer(Modifier.width(7.dp))
+                        Box(
+                            Modifier.clip(Shape.pill).background(Ink.copy(alpha = 0.55f))
+                                .clickable { logo = null }
+                                .padding(horizontal = 11.dp, vertical = 7.dp)
+                        ) { MorphoIcon("close", tint = Paper, size = 13.dp) }
+                    }
                 }
             }
         }
 
         StepControl("OPACITY %", opacity, listOf(15, 30, 50, 75), accent) { opacity = it }
-        StepControl("SIZE %", sizePct, listOf(3, 5, 8, 12), accent) { sizePct = it }
+        if (mode == "Text") {
+            StepControl("SIZE %", sizePct, listOf(3, 5, 8, 12), accent) { sizePct = it }
+        } else {
+            StepControl("LOGO WIDTH %", logoScale, listOf(10, 20, 30, 45), accent) { logoScale = it }
+        }
         StepControl("ANGLE\u00b0", angle, listOf(0, 15, 30, 45), accent) { angle = it }
 
         Column {
@@ -661,7 +781,7 @@ private fun WatermarkBody(src: Bitmap, accent: Color) {
 
         Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
             Box(Modifier.weight(1f)) {
-                ToolButton("Save", accent, enabled = text.isNotBlank()) {
+                ToolButton("Save", accent, enabled = ready) {
                     saveToGallery(
                         ctx, out, "morpho_wm_${System.currentTimeMillis()}",
                         Bitmap.CompressFormat.JPEG, 92
@@ -670,7 +790,7 @@ private fun WatermarkBody(src: Bitmap, accent: Color) {
             }
             Box(Modifier.weight(1f)) {
                 OutlineButton("Share", accent) {
-                    if (text.isNotBlank()) shareBitmap(
+                    if (ready) shareBitmap(
                         ctx, out, "morpho_wm_${System.currentTimeMillis()}",
                         Bitmap.CompressFormat.JPEG, 92
                     )
@@ -678,6 +798,80 @@ private fun WatermarkBody(src: Bitmap, accent: Color) {
             }
         }
     }
+}
+
+/**
+ * Draw a logo watermark. Pure, safe off the main thread.
+ *
+ * The logo is scaled once with filtering rather than per tile, so a repeated
+ * mark costs one resample instead of hundreds and keeps its edges clean.
+ * Alpha is applied through the paint, so a transparent PNG composites over
+ * the photo instead of arriving on a white block.
+ */
+private fun logoWatermarkOf(
+    b: Bitmap,
+    logo: Bitmap,
+    opacityPct: Int,
+    scalePct: Int,
+    position: Int,
+    tile: Boolean,
+    angle: Float
+): Bitmap {
+    if (logo.width <= 0 || logo.height <= 0) return b
+    val out = b.copy(Bitmap.Config.ARGB_8888, true) ?: return b
+    val targetW = (out.width * scalePct / 100f).coerceAtLeast(8f)
+    val sw = targetW.roundToInt().coerceAtLeast(1)
+    val sh = (logo.height * (targetW / logo.width)).roundToInt().coerceAtLeast(1)
+    val scaled = try {
+        Bitmap.createScaledBitmap(logo, sw, sh, true)
+    } catch (e: Exception) { return out } catch (e: OutOfMemoryError) { return out }
+
+    val c = Canvas(out)
+    val p = Paint().apply {
+        isAntiAlias = true
+        isFilterBitmap = true
+        alpha = (opacityPct * 255 / 100).coerceIn(8, 255)
+    }
+    val fw = sw.toFloat()
+    val fh = sh.toFloat()
+
+    if (tile) {
+        val diag = hypot(out.width.toFloat(), out.height.toFloat())
+        val stepX = fw + out.width * 0.10f
+        val stepY = fh + out.height * 0.06f
+        val cx = out.width / 2f
+        val cy = out.height / 2f
+        c.save()
+        c.rotate(angle, cx, cy)
+        var y = cy - diag
+        while (y < cy + diag) {
+            var x = cx - diag
+            while (x < cx + diag) {
+                c.drawBitmap(scaled, x, y, p)
+                x += stepX
+            }
+            y += stepY
+        }
+        c.restore()
+        return out
+    }
+
+    val margin = minOf(out.width, out.height) * 0.04f
+    val x = when (position % 3) {
+        0 -> margin
+        1 -> (out.width - fw) / 2f
+        else -> out.width - fw - margin
+    }
+    val y = when (position / 3) {
+        0 -> margin
+        1 -> (out.height - fh) / 2f
+        else -> out.height - fh - margin
+    }
+    c.save()
+    c.rotate(angle, x + fw / 2f, y + fh / 2f)
+    c.drawBitmap(scaled, x, y, p)
+    c.restore()
+    return out
 }
 
 private val PLACEMENT_NAMES = listOf(
@@ -803,12 +997,13 @@ private fun applyTransform(
     src: Bitmap,
     scalePct: Int,
     rotation: Int,
-    strength: Int
+    strength: Int,
+    sharpRadius: Int
 ): Bitmap = when (id) {
     "image-resizer", "thumbnail-creator" -> scale(src, scalePct / 100f)
     "image-rotator" -> rotate(src, rotation.toFloat())
     "image-blur" -> boxBlur(src, (strength / 100f * 12).toInt().coerceAtLeast(1))
-    "sharpen-image" -> sharpen(src, strength / 100f)
+    "sharpen-image" -> sharpen(src, strength / 100f, sharpRadius)
     else -> src // compressor, exif-remover, batch-convert: pixels unchanged, output re-encoded
 }
 
@@ -832,13 +1027,101 @@ private fun boxBlur(b: Bitmap, radius: Int): Bitmap {
         (b.height / (radius+1)).coerceAtLeast(1), true)
     return Bitmap.createScaledBitmap(small, b.width, b.height, true)
 }
-private fun sharpen(b: Bitmap, amt: Float): Bitmap {
-    // unsharp-ish: overlay original over its blur at alpha
-    val out = b.copy(Bitmap.Config.ARGB_8888, true)
-    val blur = boxBlur(b, 2)
-    val c = Canvas(out)
-    val p = Paint().apply { alpha = (amt * 160).toInt().coerceIn(0,255) }
-    c.drawBitmap(blur, 0f, 0f, Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.DST) })
-    c.drawBitmap(b, 0f, 0f, p)
-    return out
+
+/**
+ * Sharpen, as a real unsharp mask: out = src + amount * (src - blur).
+ *
+ * The old version was a no-op. It drew the blur with PorterDuff.Mode.DST,
+ * which keeps the destination and discards the source, so the blur never
+ * landed; then it drew the original over the identical original. Output
+ * equalled input at every strength.
+ *
+ * Radius is a control because it decides what gets sharpened. A 1-2px radius
+ * lifts fine detail - text on a scanned document, the edge of a product - and
+ * a larger one works on local contrast, which is what a landscape wants. One
+ * fixed radius serves one of those and fails the others.
+ */
+private fun sharpen(b: Bitmap, amt: Float, radius: Int): Bitmap {
+    if (amt <= 0f || radius < 1) return b
+    val w = b.width
+    val h = b.height
+    if (w < 4 || h < 4) return b
+    return try {
+        val px = IntArray(w * h)
+        b.getPixels(px, 0, w, 0, 0, w, h)
+        val blur = boxBlurPixels(px, w, h, radius)
+        val k = amt * 1.2f
+        for (i in px.indices) {
+            val s = px[i]
+            val g = blur[i]
+            val sr = (s shr 16) and 0xFF
+            val sg = (s shr 8) and 0xFF
+            val sb = s and 0xFF
+            val nr = (sr + k * (sr - ((g shr 16) and 0xFF))).toInt().coerceIn(0, 255)
+            val ng = (sg + k * (sg - ((g shr 8) and 0xFF))).toInt().coerceIn(0, 255)
+            val nb = (sb + k * (sb - (g and 0xFF))).toInt().coerceIn(0, 255)
+            // in place: px[i] is not read again after this
+            px[i] = (s and -0x1000000) or (nr shl 16) or (ng shl 8) or nb
+        }
+        Bitmap.createBitmap(px, w, h, Bitmap.Config.ARGB_8888)
+    } catch (e: OutOfMemoryError) {
+        b
+    } catch (e: Exception) {
+        b
+    }
+}
+
+/**
+ * Separable box blur over a pixel array, sliding window, so cost is the same
+ * at any radius.
+ *
+ * The vertical pass runs in place through a single column buffer instead of a
+ * second full array. That is deliberate: the naive three-array version costs
+ * about 150 MB on a 12 megapixel photo, and this app declares no largeHeap.
+ */
+private fun boxBlurPixels(src: IntArray, w: Int, h: Int, r: Int): IntArray {
+    val dst = IntArray(src.size)
+    val div = 2 * r + 1
+
+    for (y in 0 until h) {
+        val row = y * w
+        var sa = 0; var sr = 0; var sg = 0; var sb = 0
+        for (i in -r..r) {
+            val p = src[row + i.coerceIn(0, w - 1)]
+            sa += (p ushr 24) and 0xFF; sr += (p shr 16) and 0xFF
+            sg += (p shr 8) and 0xFF; sb += p and 0xFF
+        }
+        for (x in 0 until w) {
+            dst[row + x] = (((sa / div) shl 24) or ((sr / div) shl 16) or
+                ((sg / div) shl 8) or (sb / div))
+            val add = src[row + (x + r + 1).coerceAtMost(w - 1)]
+            val sub = src[row + (x - r).coerceAtLeast(0)]
+            sa += ((add ushr 24) and 0xFF) - ((sub ushr 24) and 0xFF)
+            sr += ((add shr 16) and 0xFF) - ((sub shr 16) and 0xFF)
+            sg += ((add shr 8) and 0xFF) - ((sub shr 8) and 0xFF)
+            sb += (add and 0xFF) - (sub and 0xFF)
+        }
+    }
+
+    val col = IntArray(h)
+    for (x in 0 until w) {
+        for (y in 0 until h) col[y] = dst[y * w + x]
+        var sa = 0; var sr = 0; var sg = 0; var sb = 0
+        for (i in -r..r) {
+            val p = col[i.coerceIn(0, h - 1)]
+            sa += (p ushr 24) and 0xFF; sr += (p shr 16) and 0xFF
+            sg += (p shr 8) and 0xFF; sb += p and 0xFF
+        }
+        for (y in 0 until h) {
+            dst[y * w + x] = (((sa / div) shl 24) or ((sr / div) shl 16) or
+                ((sg / div) shl 8) or (sb / div))
+            val add = col[(y + r + 1).coerceAtMost(h - 1)]
+            val sub = col[(y - r).coerceAtLeast(0)]
+            sa += ((add ushr 24) and 0xFF) - ((sub ushr 24) and 0xFF)
+            sr += ((add shr 16) and 0xFF) - ((sub shr 16) and 0xFF)
+            sg += ((add shr 8) and 0xFF) - ((sub shr 8) and 0xFF)
+            sb += (add and 0xFF) - (sub and 0xFF)
+        }
+    }
+    return dst
 }
