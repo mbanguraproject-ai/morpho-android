@@ -214,6 +214,42 @@ private fun orientToUpright(b: Bitmap, orientation: Int): Bitmap {
  * constants, and naming them in a `when` would fault on older devices.
  */
 /**
+ * The real size of the picked file, in bytes.
+ *
+ * The transform tools were reporting "Original" by re-encoding the decoded
+ * bitmap at JPEG 100, which is a number that never existed on disk - and the
+ * "Saved %" derived from it was wrong in whichever direction the re-encode
+ * happened to land. This reads what the file actually weighs.
+ *
+ * Returns 0 when there is no Uri, which happens when a bitmap is handed over
+ * from another tool. Callers hide the comparison rather than invent one.
+ */
+fun sourceFileSize(ctx: Context, uri: Uri?): Long {
+    if (uri == null) return 0L
+    try {
+        ctx.contentResolver.query(
+            uri, arrayOf(android.provider.OpenableColumns.SIZE), null, null, null
+        )?.use { c ->
+            val i = c.getColumnIndex(android.provider.OpenableColumns.SIZE)
+            if (i >= 0 && c.moveToFirst() && !c.isNull(i)) {
+                val v = c.getLong(i)
+                if (v > 0) return v
+            }
+        }
+    } catch (e: Exception) {
+        // fall through to the descriptor
+    }
+    return try {
+        ctx.contentResolver.openAssetFileDescriptor(uri, "r")?.use {
+            val l = it.length
+            if (l > 0) l else 0L
+        } ?: 0L
+    } catch (e: Exception) {
+        0L
+    }
+}
+
+/**
  * Compress format for a UI format key.
  *
  * Lives here rather than in ImageTools because the code generators need it

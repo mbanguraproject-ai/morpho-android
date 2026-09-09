@@ -30,6 +30,7 @@ import androidx.compose.ui.geometry.Size as GSize
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.exifinterface.media.ExifInterface
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -108,7 +109,7 @@ fun ImageTool(id: String, accent: Color) {
                 "image-metadata-viewer" -> MetadataBody(bmp, picked, accent)
                 "image-cropper" -> CropBody(bmp, accent)
                 "watermark-image" -> WatermarkBody(bmp, accent)
-                else -> TransformBody(id, bmp, accent)
+                else -> TransformBody(id, bmp, picked, accent)
             }
         }
     }
@@ -180,7 +181,7 @@ internal fun ImagePickPreview(
 
 /** For transform tools: controls + preview + save/share. */
 @Composable
-private fun TransformBody(id: String, src: Bitmap, accent: Color) {
+private fun TransformBody(id: String, src: Bitmap, srcUri: Uri?, accent: Color) {
     val ctx = LocalContext.current
     // per-tool parameters
     // Shrinking is the compressor's whole job, so it starts lower; the rest
@@ -210,10 +211,11 @@ private fun TransformBody(id: String, src: Bitmap, accent: Color) {
     var srcSize by remember(src) { mutableStateOf(0L) }
     var working by remember(src) { mutableStateOf(true) }
 
-    LaunchedEffect(src) {
-        srcSize = withContext(Dispatchers.Default) {
-            bitmapBytes(src, Bitmap.CompressFormat.JPEG, 100)
-        }
+    // Was a JPEG 100 re-encode of the decoded bitmap - a size the file never
+    // had. Reads the real one now, and stays 0 for a bitmap handed over from
+    // another tool, where there is no file to compare against.
+    LaunchedEffect(src, srcUri) {
+        srcSize = withContext(Dispatchers.IO) { sourceFileSize(ctx, srcUri) }
     }
     LaunchedEffect(id, src, quality, scalePct, rotation, strength, sharpRadius, fmt, q) {
         working = true
@@ -278,13 +280,25 @@ private fun TransformBody(id: String, src: Bitmap, accent: Color) {
     }
 
     // stats
-    StatGrid(listOf(
-        "Dimensions" to "${out.width}×${out.height}",
-        (if (id == "image-compressor") "New size" else "Output") to sizeLabel(working, outSize),
-        "Original" to sizeLabel(false, srcSize),
-        "Saved" to if (working || srcSize <= 0L || outSize <= 0L) "…"
-            else "${(100 - outSize * 100 / srcSize).coerceAtLeast(0)}%"
-    ), accent)
+    //
+    // The comparison rows only appear when there is a real file to compare
+    // against. Showing "Saved 75%" against a figure the file never had was
+    // worse than showing nothing.
+    val stats = mutableListOf(
+        "Dimensions" to (out.width.toString() + "\u00d7" + out.height),
+        (if (id == "image-compressor") "New size" else "Output") to sizeLabel(working, outSize)
+    )
+    if (srcSize > 0L) {
+        stats.add("Original" to sizeLabel(false, srcSize))
+        stats.add(
+            "Saved" to if (working || outSize <= 0L) "\u2026"
+            else ((100 - outSize * 100 / srcSize).coerceAtLeast(0).toString() + "%")
+        )
+    } else {
+        stats.add("Format" to fmtKey)
+        stats.add("Quality" to if (fmtKey == "PNG") "Lossless" else quality.toString())
+    }
+    StatGrid(stats, accent)
 
     // actions
     SaveShareRow(
@@ -1145,12 +1159,134 @@ private fun watermarkOf(
 
 @Composable
 private fun MetadataBody(bmp: Bitmap, uri: Uri?, accent: Color) {
-    val info = "Width    ${bmp.width}px\nHeight   ${bmp.height}px\nRatio    ${"%.2f".format(bmp.width.toFloat()/bmp.height)}\nConfig   ${bmp.config}\nPixels   ${bmp.width*bmp.height}"
-    Box(Modifier.fillMaxWidth().heightIn(max = 240.dp).clip(Shape.card).background(PaperSunk),
-        contentAlignment = Alignment.Center) {
+    val ctx = LocalContext.current
+    var report by remember(uri, bmp) { mutableStateOf("") }
+    var working by remember(uri, bmp) { mutableStateOf(true) }
+
+    LaunchedEffect(uri, bmp) {
+        working = true
+        report = withContext(Dispatchers.IO) {
+            try { exifReport(ctx, uri, bmp) }
+            catch (e: Exception) { "Could not read this file's metadata." }
+        }
+        working = false
+    }
+
+    Box(
+        Modifier.fillMaxWidth().heightIn(max = 240.dp).clip(Shape.card).background(PaperSunk),
+        contentAlignment = Alignment.Center
+    ) {
         Image(bmp.asImageBitmap(), null, Modifier.fillMaxWidth(), contentScale = ContentScale.Fit)
     }
-    ToolResult(info, accent, label = "IMAGE INFO")
+    if (working) ProcessingCard("Reading metadata", accent)
+    else ToolResult(report, accent, label = "METADATA")
+}
+
+/**
+ * Real EXIF, not bitmap fields.
+ *
+ * This tool is registered as "Inspect EXIF and hidden photo data" but only
+ * ever printed the decoded bitmap's width, height and config - none of which
+ * is metadata, and all of which the picker already shows. It now reads the
+ * file itself.
+ *
+ * Location is reported deliberately and prominently. Someone opening this tool
+ * is usually asking what a photo gives away before they send it, and the
+ * honest answer is the whole point.
+ */
+private fun exifReport(ctx: android.content.Context, uri: Uri?, bmp: Bitmap): String {
+    val sb = StringBuilder()
+    sb.append("IMAGE\n")
+    sb.append(pad("Dimensions")).append(bmp.width).append(" x ").append(bmp.height).append("\n")
+    sb.append(pad("Megapixels"))
+        .append("%.1f".format(bmp.width.toLong() * bmp.height / 1_000_000f)).append("\n")
+    val fileSize = sourceFileSize(ctx, uri)
+    if (fileSize > 0) sb.append(pad("File size")).append(bytesHuman(fileSize)).append("\n")
+
+    val exif = if (uri == null) null else try {
+        ctx.contentResolver.openInputStream(uri)?.use { ExifInterface(it) }
+    } catch (e: Exception) { null }
+
+    if (exif == null) {
+        sb.append("\nNo metadata could be read from this file.")
+        return sb.toString()
+    }
+
+    var found = false
+    listOf(
+        "CAMERA" to listOf(
+            "Make" to ExifInterface.TAG_MAKE,
+            "Model" to ExifInterface.TAG_MODEL,
+            "Software" to ExifInterface.TAG_SOFTWARE
+        ),
+        "EXPOSURE" to listOf(
+            "Aperture" to ExifInterface.TAG_F_NUMBER,
+            "Shutter" to ExifInterface.TAG_EXPOSURE_TIME,
+            "ISO" to ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY,
+            "Focal length" to ExifInterface.TAG_FOCAL_LENGTH,
+            "Flash" to ExifInterface.TAG_FLASH,
+            "White bal." to ExifInterface.TAG_WHITE_BALANCE
+        ),
+        "WHEN" to listOf(
+            "Taken" to ExifInterface.TAG_DATETIME_ORIGINAL,
+            "Digitised" to ExifInterface.TAG_DATETIME_DIGITIZED,
+            "Modified" to ExifInterface.TAG_DATETIME
+        ),
+        "AUTHORING" to listOf(
+            "Artist" to ExifInterface.TAG_ARTIST,
+            "Copyright" to ExifInterface.TAG_COPYRIGHT,
+            "Description" to ExifInterface.TAG_IMAGE_DESCRIPTION
+        )
+    ).forEach { (title, tags) ->
+        val rows = tags.mapNotNull { (label, tag) ->
+            val v = exif.getAttribute(tag)
+            if (v.isNullOrBlank()) null else label to v
+        }
+        if (rows.isNotEmpty()) {
+            found = true
+            sb.append("\n").append(title).append("\n")
+            rows.forEach { (l, v) -> sb.append(pad(l)).append(v).append("\n") }
+        }
+    }
+
+    val orient = exif.getAttributeInt(
+        ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_UNDEFINED
+    )
+    if (orient != ExifInterface.ORIENTATION_UNDEFINED) {
+        found = true
+        sb.append("\nORIENTATION\n").append(pad("Stored as"))
+            .append(orientationLabel(orient)).append("\n")
+    }
+
+    val ll = exif.latLong
+    if (ll != null && ll.size >= 2) {
+        found = true
+        sb.append("\nLOCATION\n")
+        sb.append(pad("Latitude")).append("%.6f".format(ll[0])).append("\n")
+        sb.append(pad("Longitude")).append("%.6f".format(ll[1])).append("\n")
+        exif.getAttribute(ExifInterface.TAG_GPS_ALTITUDE)?.takeIf { it.isNotBlank() }?.let {
+            sb.append(pad("Altitude")).append(it).append("\n")
+        }
+        sb.append("\nThis photo carries where it was taken. ")
+        sb.append("Remove EXIF Data → strips it before you share.")
+    }
+
+    if (!found) sb.append("\nThis file carries no camera, date or location metadata.")
+    return sb.toString()
+}
+
+private fun pad(label: String): String = label.padEnd(14)
+
+private fun orientationLabel(v: Int): String = when (v) {
+    ExifInterface.ORIENTATION_NORMAL -> "Upright"
+    ExifInterface.ORIENTATION_ROTATE_90 -> "Rotated 90 clockwise"
+    ExifInterface.ORIENTATION_ROTATE_180 -> "Rotated 180"
+    ExifInterface.ORIENTATION_ROTATE_270 -> "Rotated 90 anticlockwise"
+    ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> "Mirrored"
+    ExifInterface.ORIENTATION_FLIP_VERTICAL -> "Flipped vertically"
+    ExifInterface.ORIENTATION_TRANSPOSE -> "Mirrored and rotated 90"
+    ExifInterface.ORIENTATION_TRANSVERSE -> "Mirrored and rotated 270"
+    else -> "Unspecified"
 }
 
 @Composable
