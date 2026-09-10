@@ -2015,7 +2015,7 @@ private fun applyTransform(
     sharpRadius: Int
 ): Bitmap = when (id) {
     "image-rotator" -> rotate(src, rotation.toFloat())
-    "image-blur" -> boxBlur(src, (strength / 100f * 12).toInt().coerceAtLeast(1))
+    "image-blur" -> boxBlur(src, blurRadiusFor(src, strength))
     "sharpen-image" -> sharpen(src, strength / 100f, sharpRadius)
     else -> src // compressor and exif-remover: pixels unchanged, output re-encoded
 }
@@ -2033,12 +2033,58 @@ private fun rotate(b: Bitmap, deg: Float): Bitmap {
     val m = Matrix().apply { postRotate(deg) }
     return Bitmap.createBitmap(b, 0, 0, b.width, b.height, m, true)
 }
+/**
+ * Blur radius for a strength setting, in pixels, scaled to the image.
+ *
+ * The old mapping was a flat strength/100 * 12, so the strongest setting was a
+ * 12 pixel radius whatever the photo. On a 4096px image that is very nearly
+ * invisible - it only ever looked strong because the blur underneath it was
+ * really a 13x downscale. Tying the radius to the longest edge means STRENGTH
+ * 100 looks the same on a screenshot and on a 12 megapixel photo.
+ */
+private fun blurRadiusFor(src: Bitmap, strength: Int): Int {
+    val longest = maxOf(src.width, src.height)
+    return (longest * strength / 2000f).roundToInt().coerceAtLeast(1)
+}
+
+/**
+ * Blur.
+ *
+ * This was a downscale by radius+1 followed by an upscale, which is not a
+ * blur - it is pixelation. At the strongest setting it divided by 13, which is
+ * exactly why heavy blur came out blocky instead of soft.
+ *
+ * Working at a reduced resolution is kept, because that part was sound: a blur
+ * destroys fine detail by definition, so computing it small and scaling back
+ * costs nothing visible. What changed is the method - a real separable box
+ * blur, run twice, which approximates a Gaussian closely enough to look smooth.
+ * One pass alone leaves visible banding at large radii.
+ *
+ * The sliding window in boxBlurPixels makes cost independent of radius, so the
+ * strongest setting is no slower than the weakest.
+ */
 private fun boxBlur(b: Bitmap, radius: Int): Bitmap {
     if (radius < 1) return b
-    // cheap blur: downscale then upscale (fast, no RenderScript)
-    val small = Bitmap.createScaledBitmap(b, (b.width / (radius+1)).coerceAtLeast(1),
-        (b.height / (radius+1)).coerceAtLeast(1), true)
-    return Bitmap.createScaledBitmap(small, b.width, b.height, true)
+    return try {
+        val cap = 1600
+        val big = maxOf(b.width, b.height)
+        val f = if (big > cap) cap.toFloat() / big else 1f
+        val w = (b.width * f).roundToInt().coerceAtLeast(1)
+        val h = (b.height * f).roundToInt().coerceAtLeast(1)
+        val small = if (f < 1f) Bitmap.createScaledBitmap(b, w, h, true) else b
+        val px = IntArray(w * h)
+        small.getPixels(px, 0, w, 0, 0, w, h)
+        // Scale the radius with the working size so the result matches what
+        // the same radius would do at full resolution.
+        val r = (radius * f).roundToInt().coerceIn(1, 400)
+        val blurred = boxBlurPixels(boxBlurPixels(px, w, h, r), w, h, r)
+        val out = Bitmap.createBitmap(blurred, w, h, Bitmap.Config.ARGB_8888)
+        if (f < 1f) Bitmap.createScaledBitmap(out, b.width, b.height, true) else out
+    } catch (e: Exception) {
+        b
+    } catch (e: OutOfMemoryError) {
+        b
+    }
 }
 
 /**
