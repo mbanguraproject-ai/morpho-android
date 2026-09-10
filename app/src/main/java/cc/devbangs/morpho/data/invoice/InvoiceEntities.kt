@@ -152,6 +152,13 @@ data class BusinessRecord(
     val name: String = "",
     val details: String = "",
     val taxId: String = "",
+    /**
+     * Lives on the business, not the invoice, because it is picked once and
+     * reused - the same argument as the address. The invoice still keeps its
+     * own copy of the path, so replacing a logo leaves documents already sent
+     * with the letterhead they were sent with.
+     */
+    val logoPath: String = "",
     val updatedAt: Long = 0L
 )
 

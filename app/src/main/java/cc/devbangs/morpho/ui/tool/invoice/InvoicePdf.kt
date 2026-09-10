@@ -54,7 +54,8 @@ private fun multiline(c: Canvas, text: String, x: Float, y: Float, paint: Paint,
 private fun drawModern(c: Canvas, s: InvoiceState, accent: Int) {
     // header band
     c.drawRect(0f, 0f, PW.toFloat(), 230f, Paint().apply { color = accent })
-    c.drawText(s.bizName.value.ifEmpty { "Your Business" }, M, 120f, p(Color.WHITE, 52f, true))
+    val logoShift = drawLogo(c, s, M, 105f, 108f)
+    c.drawText(s.bizName.value.ifEmpty { "Your Business" }, M + logoShift, 120f, p(Color.WHITE, 52f, true))
     c.drawText(s.docType.value.title, PW - M, 100f, p(Color.WHITE, 46f, true, Paint.Align.RIGHT))
     c.drawText(s.invoiceNumber.value, PW - M, 150f, p(0xCCFFFFFF.toInt(), 28f, false, Paint.Align.RIGHT))
 
@@ -102,7 +103,8 @@ private fun metaCell(c: Canvas, label: String, value: String, x: Float, y: Float
 
 // ---------- CLASSIC ----------
 private fun drawClassic(c: Canvas, s: InvoiceState, accent: Int) {
-    c.drawText(s.bizName.value.ifEmpty { "Your Business" }, M, 110f, p(INK, 48f, true))
+    val logoShift = drawLogo(c, s, M, 92f, 100f)
+    c.drawText(s.bizName.value.ifEmpty { "Your Business" }, M + logoShift, 110f, p(INK, 48f, true))
     c.drawText(s.docType.value.title, PW - M, 100f, p(accent, 50f, true, Paint.Align.RIGHT))
     c.drawText(s.invoiceNumber.value, PW - M, 145f, p(SOFT, 26f, false, Paint.Align.RIGHT))
     c.drawRect(M, 165f, PW - M, 171f, Paint().apply { color = accent })
@@ -127,6 +129,9 @@ private fun drawClassic(c: Canvas, s: InvoiceState, accent: Int) {
 
 // ---------- MINIMAL ----------
 private fun drawMinimal(c: Canvas, s: InvoiceState, accent: Int) {
+    // MINIMAL carries no business name in its header, so the logo takes the
+    // empty top right rather than pushing the wordmark across.
+    drawLogo(c, s, PW - M - 100f, 105f, 100f)
     c.drawText("I N V O I C E", M, 110f, p(INK, 40f, true))
     c.drawText("${s.invoiceNumber.value}  ·  ${s.issueDate.value}", M, 150f, p(FAINT, 24f))
     var y = 240f
@@ -248,6 +253,31 @@ private fun drawPaidStamp(c: Canvas, cx: Float, cy: Float) {
     )
     c.drawText("PAID", cx, cy + 22f, p(green, 62f, true, Paint.Align.CENTER).apply { alpha = 205 })
     c.restore()
+}
+
+/**
+ * The logo, fitted into a square box.
+ *
+ * Returns how far the header text should move right, so a template can place
+ * the mark beside its business name without the name landing on top of it, and
+ * zero when there is no logo so the layout is untouched.
+ */
+private fun drawLogo(c: Canvas, s: InvoiceState, x: Float, centerY: Float, box: Float): Float {
+    val path = s.logoPath.value
+    if (path.isBlank()) return 0f
+    val bmp = try {
+        android.graphics.BitmapFactory.decodeFile(path)
+    } catch (e: Exception) { null } catch (e: OutOfMemoryError) { null } ?: return 0f
+    if (bmp.width <= 0 || bmp.height <= 0) return 0f
+    val scale = minOf(box / bmp.width, box / bmp.height)
+    val w = bmp.width * scale
+    val h = bmp.height * scale
+    c.drawBitmap(
+        bmp, null,
+        RectF(x, centerY - h / 2f, x + w, centerY + h / 2f),
+        Paint().apply { isFilterBitmap = true; isAntiAlias = true }
+    )
+    return w + 24f
 }
 
 /**

@@ -1,5 +1,8 @@
 package cc.devbangs.morpho.ui.tool.invoice
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -311,6 +314,7 @@ private fun DetailsTab(s: InvoiceState, accent: Color) {
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
         SectionTitle("YOUR BUSINESS")
         SavedBusinessRow(s, accent)
+        LogoSection(s, accent)
         Field("BUSINESS NAME", s.bizName, "Acme Studio")
         Field("ADDRESS · PHONE · EMAIL", s.bizDetails, "12 King St, Freetown\n+232 …", minLines = 2)
         Field("TAX / VAT ID", s.bizTaxId, "TIN 100234567")
@@ -519,6 +523,66 @@ private fun StatusBadge(status: String, currency: String, outstanding: Double, a
             label, color = if (filled) Paper else accent,
             fontSize = 10.sp, fontWeight = FontWeight.SemiBold
         )
+    }
+}
+
+@Composable
+private fun LogoSection(s: InvoiceState, accent: Color) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val path = s.logoPath.value
+
+    val picker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) scope.launch {
+            // Decoding and re-encoding a picked image is file work.
+            val written = withContext(Dispatchers.IO) { writeLogo(ctx, uri) }
+            if (written.isNotBlank()) s.logoPath.value = written
+        }
+    }
+    val pick = {
+        picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+    }
+
+    if (path.isBlank()) {
+        Box(
+            Modifier.fillMaxWidth().clip(Shape.field)
+                .background(accent.copy(alpha = 0.09f))
+                .border(1.5.dp, accent.copy(alpha = 0.22f), Shape.field)
+                .clickable { pick() }
+                .padding(vertical = 16.dp),
+            contentAlignment = Alignment.Center
+        ) { Text("Add your logo", color = accent, fontSize = 14.sp) }
+    } else {
+        Row(
+            Modifier.fillMaxWidth().clip(Shape.field).background(PaperSunk).padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            val bmp = remember(path) { android.graphics.BitmapFactory.decodeFile(path) }
+            if (bmp != null) {
+                Image(
+                    bmp.asImageBitmap(), null,
+                    Modifier.size(46.dp), contentScale = ContentScale.Fit
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Text(
+                "Logo added. Save it with the business to reuse it.",
+                color = InkSoft, fontSize = 12.sp, modifier = Modifier.weight(1f)
+            )
+            Box(
+                Modifier.clip(Shape.pill).background(accent.copy(alpha = 0.12f))
+                    .clickable { pick() }
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+            ) { Text("Change", color = accent, fontSize = 12.sp) }
+            Spacer(Modifier.width(6.dp))
+            Box(
+                Modifier.clip(Shape.pill).background(Ink.copy(alpha = 0.5f))
+                    .clickable { s.logoPath.value = "" }
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+            ) { MorphoIcon("close", tint = Paper, size = 12.dp) }
+        }
     }
 }
 
@@ -796,6 +860,7 @@ private fun SavedBusinessRow(s: InvoiceState, accent: Color) {
                 s.bizName.value = it.name
                 s.bizDetails.value = it.details
                 s.bizTaxId.value = it.taxId
+                s.logoPath.value = it.logoPath
             }
         },
         onSave = {
@@ -809,7 +874,8 @@ private fun SavedBusinessRow(s: InvoiceState, accent: Color) {
                         id = existing?.id ?: 0L,
                         name = s.bizName.value,
                         details = s.bizDetails.value,
-                        taxId = s.bizTaxId.value
+                        taxId = s.bizTaxId.value,
+                        logoPath = s.logoPath.value
                     )
                 )
             }
@@ -867,7 +933,7 @@ private fun previewSignature(s: InvoiceState): String = listOf(
     s.bizName.value, s.bizDetails.value, s.bizTaxId.value,
     s.clientName.value, s.clientDetails.value, s.poNumber.value,
     s.taxLabel.value, s.taxRate.value, s.discountRate.value, s.shipping.value,
-    s.showPaidStamp.value.toString(), s.sentAt.value.toString(), s.signaturePath.value,
+    s.showPaidStamp.value.toString(), s.sentAt.value.toString(), s.signaturePath.value, s.logoPath.value,
     s.payments.joinToString("|") { it.amount.value + ";" + it.date.value + ";" + it.note.value },
     s.payment.value, s.notes.value,
     s.items.joinToString("|") {

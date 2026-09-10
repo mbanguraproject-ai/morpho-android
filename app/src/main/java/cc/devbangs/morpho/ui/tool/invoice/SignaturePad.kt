@@ -5,6 +5,8 @@ import android.graphics.Bitmap
 import android.graphics.Canvas as AndroidCanvas
 import android.graphics.Paint as AndroidPaint
 import android.graphics.Color as AColor
+import android.net.Uri
+import cc.devbangs.morpho.ui.tool.kit.decodeBitmap
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -160,4 +162,29 @@ fun writeSignature(ctx: Context, strokes: List<List<Offset>>, padSize: IntSize):
     ""
 } catch (e: OutOfMemoryError) {
     ""
+}
+
+/**
+ * Copy a picked logo into the app's own storage, and return its path.
+ *
+ * Copied rather than kept as a gallery Uri on purpose: a Uri permission can be
+ * revoked and the original can be deleted, and an invoice from last year
+ * losing its letterhead because the photo was tidied up is not acceptable.
+ *
+ * Decoded through the shared image intake, so it arrives the right way up and
+ * capped in size - a 12 megapixel photo of a logo is nobody's intent.
+ * Blocking; the caller runs it off the main thread.
+ */
+fun writeLogo(ctx: Context, uri: Uri): String {
+    return try {
+        val bmp = decodeBitmap(ctx, uri, 600) ?: return ""
+        val dir = File(ctx.filesDir, "invoice_assets").apply { mkdirs() }
+        val file = File(dir, "logo_" + System.currentTimeMillis() + ".png")
+        FileOutputStream(file).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        file.absolutePath
+    } catch (e: Exception) {
+        ""
+    } catch (e: OutOfMemoryError) {
+        ""
+    }
 }

@@ -27,7 +27,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         CatalogItemRecord::class,
         PaymentRecord::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = true
 )
 abstract class MorphoDb : RoomDatabase() {
@@ -60,6 +60,13 @@ abstract class MorphoDb : RoomDatabase() {
          * invoice from last month would show a different total than the
          * customer received, which is the worst thing an invoicing app can do.
          */
+        /** Adds the logo to a saved business, so it is picked once. */
+        private val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE businesses ADD COLUMN logoPath TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         /**
          * Adds the signature and logo paths.
          *
@@ -174,7 +181,7 @@ abstract class MorphoDb : RoomDatabase() {
                 ctx.applicationContext, MorphoDb::class.java, "morpho.db"
             ).addMigrations(
                 MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4,
-                MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7
+                MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8
             ).build().also { instance = it }
         }
     }
