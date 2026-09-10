@@ -63,6 +63,9 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+    // For LocalLifecycleOwner without the deprecated compose-ui one: the
+    // banner has to pause when the app backgrounds.
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("androidx.navigation:navigation-compose:2.8.5")
     debugImplementation("androidx.compose.ui:ui-tooling")
     implementation("androidx.compose.ui:ui-tooling-preview")
@@ -73,6 +76,10 @@ dependencies {
     // On-device subject segmentation for Background Remover.
     // Unbundled: ~200KB in the APK, the model arrives via Play services.
     implementation("com.google.android.gms:play-services-mlkit-subject-segmentation:16.0.0-beta1")
+    // Document scanning: edge detection, perspective correction, shadow and
+    // stain removal. UI flow and models come from Play services, so this adds
+    // roughly 300 KB and needs no CAMERA permission.
+    implementation("com.google.android.gms:play-services-mlkit-document-scanner:16.0.0")
     implementation("com.tom-roush:pdfbox-android:2.0.27.0")
     implementation("dev.chrisbanes.haze:haze:1.6.10")
     implementation("dev.chrisbanes.haze:haze-materials:1.6.10")

@@ -15,8 +15,10 @@ object AdState {
     // are what serves revenue. Do not "swap them for the real ones".
     const val INTERSTITIAL_UNIT = "ca-app-pub-9121922395304175/6203443667"
     const val NATIVE_UNIT = "ca-app-pub-9121922395304175/8812315198"
+    const val BANNER_UNIT = "ca-app-pub-9121922395304175/8853953856"
 
-    // Plus gating — set true when a Plus subscription is active (wired to billing later).
+    // Plus gating. BillingManager sets this from the active subscription, so
+    // a paying subscriber sees no ads of any kind.
     val isPlus = mutableStateOf(false)
 
     // Interstitial cadence: fire on every 3rd completion.

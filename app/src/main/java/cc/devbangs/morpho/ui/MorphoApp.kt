@@ -10,6 +10,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -184,6 +185,8 @@ fun MorphoApp() {
         }
 
         if (topLevel) {
+            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
+            cc.devbangs.morpho.ads.MorphoBanner()
             MorphoBottomBar(
                 hazeState = barHaze,
                 current = currentTab,
@@ -200,9 +203,9 @@ fun MorphoApp() {
                         launchSingleTop = true
                     }
                 },
-                onMaster = { showMaster = true },
-                modifier = Modifier.align(Alignment.BottomCenter)
+                onMaster = { showMaster = true }
             )
+            }
         }
 
         // Full-screen over everything, including the bar.
@@ -245,6 +248,14 @@ fun MorphoApp() {
 @Composable
 private fun bottomBarPadding(withBar: Boolean): PaddingValues {
     val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    // The banner publishes what it is actually taking - zero for Plus users
+    // and on a no-fill - so nothing is reserved unless an ad is on screen.
+    // Animated because the height arrives when the ad loads, and content
+    // sliding is easier to follow than content jumping.
+    val banner by animateDpAsState(
+        targetValue = if (withBar) cc.devbangs.morpho.ads.BannerSlot.height else 0.dp,
+        label = "bannerSlot"
+    )
     // 67dp of bar above the inset: hairline + 6dp + the 52dp centre button + 8dp.
-    return PaddingValues(bottom = if (withBar) 67.dp + navInset else navInset)
+    return PaddingValues(bottom = if (withBar) 67.dp + navInset + banner else navInset)
 }
