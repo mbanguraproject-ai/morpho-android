@@ -61,6 +61,9 @@ data class InvoiceRecord(
      * statement. The arithmetic already exists in InvoiceState and is written
      * here at save time instead.
      */
+    /** Flat amount added after tax. Text, like the other money fields. */
+    val shipping: String = "0",
+
     val total: Double = 0.0,
 
     val createdAt: Long = 0L,
@@ -96,7 +99,14 @@ data class InvoiceItemRecord(
     val position: Int,
     val description: String = "",
     val qty: String = "1",
-    val rate: String = "0"
+    val rate: String = "0",
+    /**
+     * Per line, because one rate for the whole document cannot express a
+     * zero-rated item next to a standard-rated one - which is ordinary on a
+     * real invoice, and the reason the invoice-level rate is now only a
+     * default for new lines.
+     */
+    val taxRate: String = "0"
 )
 
 /**

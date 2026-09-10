@@ -11,11 +11,13 @@ import kotlin.math.roundToLong
 class LineItem(
     description: String = "",
     qty: String = "1",
-    rate: String = "0"
+    rate: String = "0",
+    taxRate: String = "0"
 ) {
     var description = mutableStateOf(description)
     var qty = mutableStateOf(qty)
     var rate = mutableStateOf(rate)
+    var taxRate = mutableStateOf(taxRate)
     val amount: Double
         get() = (qty.value.toDoubleOrNull() ?: 0.0) * (rate.value.toDoubleOrNull() ?: 0.0)
 }
@@ -70,6 +72,7 @@ class InvoiceState {
     val taxRate = mutableStateOf("0")        // percent
     val discountRate = mutableStateOf("0")   // percent
     // Payment / notes
+    val shipping = mutableStateOf("0")
     val payment = mutableStateOf("")
     val notes = mutableStateOf("Thank you for your business.")
     // Style
@@ -79,8 +82,40 @@ class InvoiceState {
     val subtotal: Double get() = items.sumOf { it.amount }
     val discountAmt: Double get() = subtotal * (discountRate.value.toDoubleOrNull() ?: 0.0) / 100.0
     val taxable: Double get() = subtotal - discountAmt
-    val taxAmt: Double get() = taxable * (taxRate.value.toDoubleOrNull() ?: 0.0) / 100.0
-    val total: Double get() = taxable + taxAmt
+
+    /**
+     * How much of each line survives the discount.
+     *
+     * A document discount is spread across the lines rather than taken off at
+     * the end, so tax is charged on what is actually payable for that line.
+     * Taxing the full line and then discounting the total would overstate the
+     * tax, which is the sort of error a tax authority notices.
+     */
+    private val discountFactor: Double
+        get() = if (subtotal <= 0.0) 1.0 else (subtotal - discountAmt) / subtotal
+
+    val taxAmt: Double
+        get() = items.sumOf {
+            it.amount * discountFactor * (it.taxRate.value.toDoubleOrNull() ?: 0.0) / 100.0
+        }
+
+    val shippingAmt: Double get() = shipping.value.toDoubleOrNull() ?: 0.0
+
+    val total: Double get() = taxable + taxAmt + shippingAmt
+
+    /**
+     * The single rate, when every line that carries an amount shares one.
+     *
+     * Null when they differ, so a summary can say "VAT" rather than claiming a
+     * percentage that only applies to part of the document.
+     */
+    val uniformTaxRate: String?
+        get() {
+            val rates = items.filter { it.amount != 0.0 }
+                .map { it.taxRate.value.trim().ifBlank { "0" } }
+                .distinct()
+            return if (rates.size == 1) rates.first() else null
+        }
 
     fun money(v: Double): String {
         val cents = (v * 100).roundToLong()
@@ -109,6 +144,7 @@ fun InvoiceState.toRecord(now: Long = System.currentTimeMillis()): InvoiceRecord
     taxLabel = taxLabel.value,
     taxRate = taxRate.value,
     discountRate = discountRate.value,
+    shipping = shipping.value,
     payment = payment.value,
     notes = notes.value,
     template = template.value.name,
@@ -126,7 +162,8 @@ fun InvoiceState.itemRecords(): List<InvoiceItemRecord> =
             position = i,
             description = li.description.value,
             qty = li.qty.value,
-            rate = li.rate.value
+            rate = li.rate.value,
+            taxRate = li.taxRate.value
         )
     }
 
@@ -157,12 +194,13 @@ fun InvoiceState.loadFrom(data: InvoiceWithItems) {
     taxLabel.value = r.taxLabel
     taxRate.value = r.taxRate
     discountRate.value = r.discountRate
+    shipping.value = r.shipping
     payment.value = r.payment
     notes.value = r.notes
     template.value = runCatching { Template.valueOf(r.template) }.getOrDefault(Template.MODERN)
     accent.value = ACCENTS.getOrElse(r.accentIndex) { ACCENTS[0] }
     items.clear()
-    data.items.forEach { items.add(LineItem(it.description, it.qty, it.rate)) }
+    data.items.forEach { items.add(LineItem(it.description, it.qty, it.rate, it.taxRate)) }
     if (items.isEmpty()) items.add(LineItem("Service or product", "1", "0"))
 }
 

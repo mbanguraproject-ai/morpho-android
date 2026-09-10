@@ -174,8 +174,13 @@ private fun drawTotals(c: Canvas, s: InvoiceState, startY: Float, accent: Int, b
     row("Subtotal", s.money(s.subtotal))
     if ((s.discountRate.value.toDoubleOrNull() ?: 0.0) > 0)
         row("Discount (${s.discountRate.value}%)", "− ${s.money(s.discountAmt)}")
-    if ((s.taxRate.value.toDoubleOrNull() ?: 0.0) > 0)
-        row("${s.taxLabel.value} (${s.taxRate.value}%)", s.money(s.taxAmt))
+    // Naming one percentage was fine while the whole document shared a rate.
+    // With per-line rates it would claim a figure that only applies to part of
+    // the invoice, so the rate is printed only when every line agrees.
+    if (s.taxAmt > 0.0)
+        row(s.taxLabel.value + (s.uniformTaxRate?.let { " ($it%)" } ?: ""), s.money(s.taxAmt))
+    if (s.shippingAmt > 0.0)
+        row("Shipping", s.money(s.shippingAmt))
     y += 6f
     if (boxed) {
         c.drawRoundRect(RectF(labelX - 24f, y - 6f, PW - M, y + 66f), 12f, 12f, Paint().apply { color = accent })

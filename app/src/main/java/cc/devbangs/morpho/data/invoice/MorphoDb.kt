@@ -25,7 +25,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         BusinessRecord::class,
         ClientRecord::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = true
 )
 abstract class MorphoDb : RoomDatabase() {
@@ -49,6 +49,31 @@ abstract class MorphoDb : RoomDatabase() {
          * match, which is a loud failure rather than a quiet corruption, and
          * the only real test is opening an existing database.
          */
+        /**
+         * Per-line tax, and shipping.
+         *
+         * The UPDATE is the part that matters. Existing invoices carried one
+         * rate for the whole document; copying it onto every line keeps their
+         * totals identical to the PDFs already sent. Without it, reopening an
+         * invoice from last month would show a different total than the
+         * customer received, which is the worst thing an invoicing app can do.
+         */
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE invoice_items ADD COLUMN taxRate TEXT NOT NULL DEFAULT '0'"
+                )
+                db.execSQL(
+                    "UPDATE invoice_items SET taxRate = COALESCE(" +
+                        "(SELECT taxRate FROM invoices WHERE invoices.id = invoice_items.invoiceId)," +
+                        " '0')"
+                )
+                db.execSQL(
+                    "ALTER TABLE invoices ADD COLUMN shipping TEXT NOT NULL DEFAULT '0'"
+                )
+            }
+        }
+
         private val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
@@ -82,7 +107,7 @@ abstract class MorphoDb : RoomDatabase() {
         fun get(ctx: Context): MorphoDb = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 ctx.applicationContext, MorphoDb::class.java, "morpho.db"
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build().also { instance = it }
         }
     }
 }

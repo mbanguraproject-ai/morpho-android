@@ -318,14 +318,19 @@ private fun DetailsTab(s: InvoiceState, accent: Color) {
 
         SectionTitle("LINE ITEMS")
         s.items.forEachIndexed { i, item -> LineItemRow(s, i, item, accent) }
-        AddItemButton(accent) { s.items.add(LineItem("", "1", "0")) }
+        // A new line starts on the document's default rate, so the common case
+        // of one rate throughout needs no per-line typing at all.
+        AddItemButton(accent) { s.items.add(LineItem("", "1", "0", s.taxRate.value)) }
 
         SectionTitle("TOTALS")
         Row(horizontalArrangement = Arrangement.spacedBy(Space.md)) {
             Box(Modifier.weight(1f)) { Field("DISCOUNT %", s.discountRate, "0", number = true) }
-            Box(Modifier.weight(1f)) { Field("TAX %", s.taxRate, "0", number = true) }
+            Box(Modifier.weight(1f)) { Field("DEFAULT TAX %", s.taxRate, "0", number = true) }
         }
-        Field("TAX LABEL", s.taxLabel, "GST")
+        Row(horizontalArrangement = Arrangement.spacedBy(Space.md)) {
+            Box(Modifier.weight(1f)) { Field("TAX LABEL", s.taxLabel, "GST") }
+            Box(Modifier.weight(1f)) { Field("SHIPPING", s.shipping, "0", number = true) }
+        }
 
         SectionTitle("PAYMENT & NOTES")
         Field("PAYMENT INSTRUCTIONS", s.payment, "Orange Money +232 …\nBank …", minLines = 2)
@@ -351,9 +356,15 @@ private fun LineItemRow(s: InvoiceState, index: Int, item: LineItem, accent: Col
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Box(Modifier.weight(1f)) { InlineField(item.qty, "Qty", number = true) }
             Box(Modifier.weight(1.4f)) { InlineField(item.rate, "Rate", number = true) }
-            Box(Modifier.weight(1.4f), contentAlignment = Alignment.CenterEnd) {
-                Text(s.money(item.amount), color = Ink, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-            }
+            Box(Modifier.weight(1f)) { InlineField(item.taxRate, "Tax %", number = true) }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            val lineTax = item.amount * (item.taxRate.value.toDoubleOrNull() ?: 0.0) / 100.0
+            Text(
+                if (lineTax > 0.0) "incl. " + s.money(lineTax) + " tax" else "",
+                color = InkFaint, fontSize = 11.sp, modifier = Modifier.weight(1f)
+            )
+            Text(s.money(item.amount), color = Ink, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 }
@@ -383,11 +394,39 @@ private fun AddItemButton(accent: Color, onClick: () -> Unit) {
 
 @Composable
 private fun LiveTotal(s: InvoiceState, accent: Color) {
-    Row(Modifier.fillMaxWidth().clip(Shape.card).background(accent).padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically) {
-        Text("TOTAL DUE", color = Paper.copy(alpha = 0.9f), fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.weight(1f))
-        Text(s.money(s.total), color = Paper, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+    Column(
+        Modifier.fillMaxWidth().clip(Shape.card).background(accent).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        // The parts are shown because a single figure gives the user no way to
+        // tell a mistyped tax rate from a mistyped quantity.
+        BreakdownRow("Subtotal", s.money(s.subtotal))
+        if (s.discountAmt > 0.0) BreakdownRow("Discount", "\u2212 " + s.money(s.discountAmt))
+        if (s.taxAmt > 0.0) {
+            val label = s.taxLabel.value.ifBlank { "Tax" } +
+                (s.uniformTaxRate?.let { " (" + it + "%)" } ?: "")
+            BreakdownRow(label, s.money(s.taxAmt))
+        }
+        if (s.shippingAmt > 0.0) BreakdownRow("Shipping", s.money(s.shippingAmt))
+        Spacer(Modifier.height(6.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "TOTAL DUE", color = Paper.copy(alpha = 0.9f), fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f)
+            )
+            Text(s.money(s.total), color = Paper, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+private fun BreakdownRow(label: String, value: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            label, color = Paper.copy(alpha = 0.72f), fontSize = 12.sp,
+            modifier = Modifier.weight(1f)
+        )
+        Text(value, color = Paper.copy(alpha = 0.9f), fontSize = 13.sp)
     }
 }
 
@@ -592,9 +631,11 @@ private fun previewSignature(s: InvoiceState): String = listOf(
     s.docType.value.name,
     s.bizName.value, s.bizDetails.value, s.bizTaxId.value,
     s.clientName.value, s.clientDetails.value, s.poNumber.value,
-    s.taxLabel.value, s.taxRate.value, s.discountRate.value,
+    s.taxLabel.value, s.taxRate.value, s.discountRate.value, s.shipping.value,
     s.payment.value, s.notes.value,
-    s.items.joinToString("|") { it.description.value + ";" + it.qty.value + ";" + it.rate.value }
+    s.items.joinToString("|") {
+        it.description.value + ";" + it.qty.value + ";" + it.rate.value + ";" + it.taxRate.value
+    }
 ).joinToString("~")
 
 /**
