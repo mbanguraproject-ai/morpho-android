@@ -12,6 +12,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import android.app.Activity
+import android.content.ContextWrapper
+import cc.devbangs.morpho.ads.ConsentManager
 import cc.devbangs.morpho.BuildConfig
 import cc.devbangs.morpho.data.ToolRegistry
 import cc.devbangs.morpho.notify.Prefs
@@ -94,6 +97,19 @@ fun SettingsScreen(
             SettingsGroup("ABOUT") {
                 SettingRow("info", "About Morpho", "v${BuildConfig.VERSION_NAME}") { openUrl(ctx, "https://play.google.com/store/apps/details?id=$PACKAGE") }
                 SettingRow("shield", "Privacy Policy", null) { openUrl(ctx, PRIVACY_URL) }
+                // Only where UMP says a choice was recorded and can be
+                // changed - which is EEA and UK users who were shown a consent
+                // form. Everyone else never sees this row, so a user in
+                // Freetown gets no extra clutter.
+                //
+                // A link to a privacy policy does not satisfy this: the
+                // requirement is to reopen the form itself so the choice can
+                // actually be changed, in either direction.
+                if (ConsentManager.privacyOptionsRequired()) {
+                    SettingRow("shield", "Manage privacy choices", null) {
+                        ctx.hostActivity()?.let { ConsentManager.showPrivacyOptions(it) }
+                    }
+                }
                 SettingRow("file-text", "Terms of Use", null) { openUrl(ctx, TERMS_URL) }
                 SettingRow("star", "Rate Morpho", null) { openPlayRating(ctx) }
             }
@@ -200,4 +216,19 @@ private fun SettingRow(icon: String, label: String, value: String?, onClick: () 
         if (value != null) { Text(value, color = InkFaint, fontSize = 14.sp); Spacer(Modifier.width(8.dp)) }
         MorphoIcon("chevron-right", tint = InkFaint, size = 16.dp)
     }
+}
+
+/**
+ * The hosting Activity. UMP's form needs one and a Context is not enough.
+ *
+ * Null-safe on purpose: no Activity simply means no form opens, rather than a
+ * cast that throws inside Settings.
+ */
+private fun android.content.Context.hostActivity(): Activity? {
+    var c: android.content.Context? = this
+    while (c is ContextWrapper) {
+        if (c is Activity) return c
+        c = c.baseContext
+    }
+    return null
 }
