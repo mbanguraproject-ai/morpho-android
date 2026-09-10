@@ -803,6 +803,8 @@ private fun previewSignature(s: InvoiceState): String = listOf(
     s.bizName.value, s.bizDetails.value, s.bizTaxId.value,
     s.clientName.value, s.clientDetails.value, s.poNumber.value,
     s.taxLabel.value, s.taxRate.value, s.discountRate.value, s.shipping.value,
+    s.showPaidStamp.value.toString(), s.sentAt.value.toString(),
+    s.payments.joinToString("|") { it.amount.value + ";" + it.date.value + ";" + it.note.value },
     s.payment.value, s.notes.value,
     s.items.joinToString("|") {
         it.description.value + ";" + it.qty.value + ";" + it.rate.value + ";" + it.taxRate.value

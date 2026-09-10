@@ -181,22 +181,70 @@ private fun drawTotals(c: Canvas, s: InvoiceState, startY: Float, accent: Int, b
         row(s.taxLabel.value + (s.uniformTaxRate?.let { " ($it%)" } ?: ""), s.money(s.taxAmt))
     if (s.shippingAmt > 0.0)
         row("Shipping", s.money(s.shippingAmt))
+    // Money already received belongs on the document. Sending someone a PDF
+    // that still shows the full total after they part-paid is how disputes
+    // start.
+    if (s.paidAmt > 0.0) {
+        row("Total", s.money(s.total))
+        row("Paid", "\u2212 ${s.money(s.paidAmt)}")
+    }
     y += 6f
+    val owing = s.paidAmt > 0.0
+    val settled = s.showPaidStamp.value && s.derivedStatus == "PAID"
+    val stampY = y + 22f
     if (boxed) {
         c.drawRoundRect(RectF(labelX - 24f, y - 6f, PW - M, y + 66f), 12f, 12f, Paint().apply { color = accent })
-        c.drawText(when (s.docType.value) {
-            DocType.RECEIPT -> "TOTAL PAID"
-            DocType.QUOTE -> "QUOTED TOTAL"
+        c.drawText(when {
+            s.docType.value == DocType.RECEIPT -> "TOTAL PAID"
+            s.docType.value == DocType.QUOTE -> "QUOTED TOTAL"
+            owing -> "BALANCE DUE"
             else -> "TOTAL DUE"
         }, labelX, y + 44f, p(0xE6FFFFFF.toInt(), 24f, true))
-        c.drawText(s.money(s.total), PW - M - 24f, y + 46f, p(Color.WHITE, 34f, true, Paint.Align.RIGHT))
+        c.drawText(
+            s.money(if (owing) s.balanceDue else s.total),
+            PW - M - 24f, y + 46f, p(Color.WHITE, 34f, true, Paint.Align.RIGHT)
+        )
         y += 90f
     } else {
         c.drawLine(labelX, y, PW - M, y, Paint().apply { color = INK; strokeWidth = 3f }); y += 44f
-        c.drawText("Total", labelX, y, p(INK, 30f, true))
-        c.drawText(s.money(s.total), PW - M, y, p(INK, 30f, true, Paint.Align.RIGHT)); y += 40f
+        c.drawText(if (owing) "Balance due" else "Total", labelX, y, p(INK, 30f, true))
+        c.drawText(
+            s.money(if (owing) s.balanceDue else s.total),
+            PW - M, y, p(INK, 30f, true, Paint.Align.RIGHT)
+        ); y += 40f
     }
+    if (settled) drawPaidStamp(c, M + 230f, stampY)
     return y
+}
+
+/**
+ * The PAID mark.
+ *
+ * Placed beside the totals rather than across the middle of the page, because
+ * a stamp over the line items obscures exactly what the customer is checking.
+ * Drawn at a slight angle and outlined so it reads as a stamp rather than as
+ * another field of the document.
+ *
+ * Only ever drawn when the payments actually cover the total - the toggle
+ * controls whether a settled document says so, not whether an unsettled one
+ * can claim to be.
+ */
+private fun drawPaidStamp(c: Canvas, cx: Float, cy: Float) {
+    val green = 0xFF1E9E5A.toInt()
+    c.save()
+    c.rotate(-16f, cx, cy)
+    c.drawRoundRect(
+        RectF(cx - 155f, cy - 48f, cx + 155f, cy + 48f), 12f, 12f,
+        Paint().apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 6f
+            color = green
+            isAntiAlias = true
+            alpha = 205
+        }
+    )
+    c.drawText("PAID", cx, cy + 22f, p(green, 62f, true, Paint.Align.CENTER).apply { alpha = 205 })
+    c.restore()
 }
 
 private fun fmtNum(v: Double): String {
