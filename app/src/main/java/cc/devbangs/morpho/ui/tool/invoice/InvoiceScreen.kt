@@ -27,13 +27,17 @@ import cc.devbangs.morpho.core.Space
 import cc.devbangs.morpho.ui.icon.MorphoIcon
 import cc.devbangs.morpho.ui.theme.*
 import cc.devbangs.morpho.ui.tool.kit.FieldLabel
+import android.graphics.Bitmap
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import cc.devbangs.morpho.data.invoice.InvoiceRecord
 import cc.devbangs.morpho.data.invoice.InvoiceRepo
 import cc.devbangs.morpho.ui.tool.kit.ProcessingCard
 import cc.devbangs.morpho.ui.tool.kit.ToolButton
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.math.roundToLong
 import cc.devbangs.morpho.ui.tool.kit.savePdfToDownloads
 import cc.devbangs.morpho.ui.tool.kit.sharePdf
@@ -437,37 +441,116 @@ private fun StyleTab(s: InvoiceState, accent: Color) {
     }
 }
 
+/**
+ * Everything the rendered page draws, as one string.
+ *
+ * The old refresh list watched item count and the total, which meant renaming
+ * a line changed neither and the preview kept showing the old wording. Line
+ * text is folded in here, so anything that appears on the page triggers a
+ * redraw and nothing else does.
+ */
+private fun previewSignature(s: InvoiceState): String = listOf(
+    s.template.value.name, s.accent.value.label, s.currency.value,
+    s.invoiceNumber.value, s.issueDate.value, s.dueDate.value, s.validUntil.value,
+    s.docType.value.name,
+    s.bizName.value, s.bizDetails.value, s.bizTaxId.value,
+    s.clientName.value, s.clientDetails.value, s.poNumber.value,
+    s.taxLabel.value, s.taxRate.value, s.discountRate.value,
+    s.payment.value, s.notes.value,
+    s.items.joinToString("|") { it.description.value + ";" + it.qty.value + ";" + it.rate.value }
+).joinToString("~")
+
+/**
+ * Preview and export.
+ *
+ * Both halves of this ran on the main thread. The page bitmap was built inside
+ * remember(), so a full-page render happened during composition on every
+ * keystroke that moved the total. And Save PDF rendered the document and wrote
+ * it in the click handler, which is the same freeze - and past about five
+ * seconds, the same "isn't responding" dialog - that the rest of the app was
+ * fixed for.
+ *
+ * The write path did not need changing: reportSave and sharePdf marshal their
+ * own toasts, notification and ad counter to the main thread already, so they
+ * are safe to call from IO exactly as they are.
+ */
 @Composable
 private fun PreviewTab(s: InvoiceState, accent: Color) {
     val ctx = LocalContext.current
-    val bmp = remember(
-        s.template.value, s.accent.value, s.currency.value, s.total,
-        s.bizName.value, s.clientName.value, s.items.size, s.invoiceNumber.value,
-        s.issueDate.value, s.dueDate.value, s.taxRate.value, s.discountRate.value,
-        s.payment.value, s.notes.value
-    ) { renderInvoiceBitmap(s) }
+    val scope = rememberCoroutineScope()
+    val sig = previewSignature(s)
+
+    var bmp by remember { mutableStateOf<Bitmap?>(null) }
+    var busy by remember { mutableStateOf(false) }
+
+    // Debounced, so typing a client name does not render the page per letter.
+    LaunchedEffect(sig) {
+        delay(240)
+        val rendered = withContext(Dispatchers.Default) {
+            try { renderInvoiceBitmap(s) }
+            catch (e: Exception) { null } catch (e: OutOfMemoryError) { null }
+        }
+        if (rendered != null) bmp = rendered
+    }
+
+    fun export(share: Boolean) {
+        busy = true
+        scope.launch {
+            val name = s.invoiceNumber.value.ifBlank { "invoice" }
+            val bytes = withContext(Dispatchers.Default) {
+                try { renderInvoicePdf(s) }
+                catch (e: Exception) { null } catch (e: OutOfMemoryError) { null }
+            }
+            if (bytes != null) {
+                withContext(Dispatchers.IO) {
+                    if (share) sharePdf(ctx, bytes, name) else savePdfToDownloads(ctx, bytes, name)
+                }
+            }
+            busy = false
+        }
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
-        Box(Modifier.fillMaxWidth().clip(Shape.card).background(PaperSunk)
-            .border(1.dp, PaperLine, Shape.card).padding(8.dp)) {
-            Image(bmp.asImageBitmap(), null, Modifier.fillMaxWidth(), contentScale = ContentScale.FillWidth)
+        val page = bmp
+        // The last good render stays up while the next one is built, so the
+        // page does not blink on every edit.
+        if (page == null) {
+            ProcessingCard("Drawing your " + s.docType.value.title.lowercase(), accent)
+        } else {
+            Box(
+                Modifier.fillMaxWidth().clip(Shape.card).background(PaperSunk)
+                    .border(1.dp, PaperLine, Shape.card).padding(8.dp)
+            ) {
+                Image(
+                    page.asImageBitmap(), null,
+                    Modifier.fillMaxWidth(), contentScale = ContentScale.FillWidth
+                )
+            }
         }
+
         Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
             Box(Modifier.weight(1f)) {
-                Box(Modifier.fillMaxWidth().clip(Shape.field).background(accent)
-                    .clickable {
-                        val name = s.invoiceNumber.value.ifBlank { "invoice" }
-                        savePdfToDownloads(ctx, renderInvoicePdf(s), name)
-                    }.padding(vertical = 15.dp), contentAlignment = Alignment.Center) {
-                    Text("Save PDF", color = Paper, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Box(
+                    Modifier.fillMaxWidth().clip(Shape.field)
+                        .background(if (busy) accent.copy(alpha = 0.4f) else accent)
+                        .clickable(enabled = !busy && page != null) { export(false) }
+                        .padding(vertical = 15.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        if (busy) "Working\u2026" else "Save PDF",
+                        color = Paper, fontSize = 15.sp, fontWeight = FontWeight.SemiBold
+                    )
                 }
             }
             Box(Modifier.weight(1f)) {
-                Box(Modifier.fillMaxWidth().clip(Shape.field).background(accent.copy(alpha = 0.10f))
-                    .clickable {
-                        val name = s.invoiceNumber.value.ifBlank { "invoice" }
-                        sharePdf(ctx, renderInvoicePdf(s), name)
-                    }.padding(vertical = 15.dp), contentAlignment = Alignment.Center) {
+                Box(
+                    Modifier.fillMaxWidth().clip(Shape.field)
+                        .background(accent.copy(alpha = if (busy) 0.04f else 0.10f))
+                        .clickable(enabled = !busy && page != null) { export(true) }
+                        .padding(vertical = 15.dp),
+                    contentAlignment = Alignment.Center
+                ) {
                     Text("Share", color = accent, fontSize = 15.sp)
                 }
             }
