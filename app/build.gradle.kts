@@ -2,6 +2,14 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("com.google.devtools.ksp")
+}
+
+// Room writes the schema here on every build. Without it there is nothing to
+// generate a migration from, and a data-holding app cannot ship a schema
+// change safely.
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 android {
@@ -72,6 +80,13 @@ dependencies {
     implementation("com.adamglin:phosphor-icon:1.0.0")
     implementation("com.google.zxing:core:3.5.3")
     implementation("androidx.exifinterface:exifinterface:1.4.2")
+    // Invoices are records, not one-shot output: they need a list, a stable
+    // number sequence, and rows that survive the app closing. 2.6.1 rather
+    // than a newer line because it is the version proven against this
+    // Kotlin/AGP/KSP combination.
+    implementation("androidx.room:room-runtime:2.6.1")
+    implementation("androidx.room:room-ktx:2.6.1")
+    ksp("androidx.room:room-compiler:2.6.1")
     implementation("com.google.mlkit:text-recognition:16.0.1")
     // On-device subject segmentation for Background Remover.
     // Unbundled: ~200KB in the APK, the model arrives via Play services.

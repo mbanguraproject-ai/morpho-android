@@ -1,5 +1,8 @@
 package cc.devbangs.morpho.ui.tool.invoice
 
+import cc.devbangs.morpho.data.invoice.InvoiceItemRecord
+import cc.devbangs.morpho.data.invoice.InvoiceRecord
+import cc.devbangs.morpho.data.invoice.InvoiceWithItems
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import kotlin.math.roundToLong
@@ -39,6 +42,10 @@ val CURRENCIES = listOf("Le", "$", "€", "£", "₦", "₵", "GH₵", "KSh", "R
 
 /** Full invoice state. All fields are Compose-observable. */
 class InvoiceState {
+    /** 0 until this invoice has been saved once. */
+    var recordId: Long = 0L
+    var seq: Int = 1
+    var createdAt: Long = 0L
     // From (business)
     val bizName = mutableStateOf("")
     val bizDetails = mutableStateOf("")      // address / phone / email (multiline)
@@ -80,3 +87,79 @@ class InvoiceState {
         return "${currency.value} $grouped.${"%02d".format(kotlin.math.abs(freq))}"
     }
 }
+
+/** Editor state to stored record. */
+fun InvoiceState.toRecord(now: Long = System.currentTimeMillis()): InvoiceRecord = InvoiceRecord(
+    id = recordId,
+    docType = docType.value.name,
+    seq = seq,
+    number = invoiceNumber.value,
+    issueDate = issueDate.value,
+    dueDate = dueDate.value,
+    validUntil = validUntil.value,
+    currency = currency.value,
+    bizName = bizName.value,
+    bizDetails = bizDetails.value,
+    bizTaxId = bizTaxId.value,
+    clientName = clientName.value,
+    clientDetails = clientDetails.value,
+    poNumber = poNumber.value,
+    taxLabel = taxLabel.value,
+    taxRate = taxRate.value,
+    discountRate = discountRate.value,
+    payment = payment.value,
+    notes = notes.value,
+    template = template.value.name,
+    accentIndex = ACCENTS.indexOf(accent.value).coerceAtLeast(0),
+    status = if (recordId == 0L) "DRAFT" else "UNPAID",
+    createdAt = if (createdAt == 0L) now else createdAt,
+    updatedAt = now
+)
+
+fun InvoiceState.itemRecords(): List<InvoiceItemRecord> =
+    items.mapIndexed { i, li ->
+        InvoiceItemRecord(
+            invoiceId = recordId,
+            position = i,
+            description = li.description.value,
+            qty = li.qty.value,
+            rate = li.rate.value
+        )
+    }
+
+/**
+ * Stored record back into editor state.
+ *
+ * Enum and index lookups are defensive on purpose: a row written by a later
+ * version, or one hand-edited, should open with a sane default rather than
+ * crash the screen the user keeps their invoices in.
+ */
+fun InvoiceState.loadFrom(data: InvoiceWithItems) {
+    val r = data.invoice
+    recordId = r.id
+    seq = r.seq
+    createdAt = r.createdAt
+    docType.value = runCatching { DocType.valueOf(r.docType) }.getOrDefault(DocType.INVOICE)
+    invoiceNumber.value = r.number
+    issueDate.value = r.issueDate
+    dueDate.value = r.dueDate
+    validUntil.value = r.validUntil
+    currency.value = r.currency
+    bizName.value = r.bizName
+    bizDetails.value = r.bizDetails
+    bizTaxId.value = r.bizTaxId
+    clientName.value = r.clientName
+    clientDetails.value = r.clientDetails
+    poNumber.value = r.poNumber
+    taxLabel.value = r.taxLabel
+    taxRate.value = r.taxRate
+    discountRate.value = r.discountRate
+    payment.value = r.payment
+    notes.value = r.notes
+    template.value = runCatching { Template.valueOf(r.template) }.getOrDefault(Template.MODERN)
+    accent.value = ACCENTS.getOrElse(r.accentIndex) { ACCENTS[0] }
+    items.clear()
+    data.items.forEach { items.add(LineItem(it.description, it.qty, it.rate)) }
+    if (items.isEmpty()) items.add(LineItem("Service or product", "1", "0"))
+}
+
