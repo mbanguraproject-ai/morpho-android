@@ -146,15 +146,33 @@ fun MasterSheet(
         scrimColor = Ink.copy(alpha = 0.32f)
     ) {
         Column(Modifier.fillMaxWidth().padding(horizontal = Space.gutter)) {
-            Text(
-                "What do you need?",
-                style = MaterialTheme.typography.headlineSmall, color = Ink
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                "Describe it, or start from a file.",
-                style = MaterialTheme.typography.bodyMedium, color = InkSoft
-            )
+            // Scan to PDF is marked popular but sits inside 32 PDF tools, so
+            // reaching it means knowing it is there. Capturing a page is a
+            // starting point like describing a need or picking a file, so it
+            // belongs here beside them rather than four taps in. The icon is
+            // the tool's own, so nothing new is introduced to the icon set.
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "What do you need?",
+                        style = MaterialTheme.typography.headlineSmall, color = Ink
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Describe it, pick a file, or scan.",
+                        style = MaterialTheme.typography.bodyMedium, color = InkSoft
+                    )
+                }
+                Spacer(Modifier.width(Space.md))
+                Box(
+                    Modifier.size(52.dp).clip(Shape.pill).background(Cobalt)
+                        .clickable { onOpenTool("scan-to-pdf") },
+                    contentAlignment = Alignment.Center
+                ) { MorphoIcon("scan-to-pdf", tint = Paper, size = 22.dp) }
+            }
             Spacer(Modifier.height(Space.lg))
 
             Row(
