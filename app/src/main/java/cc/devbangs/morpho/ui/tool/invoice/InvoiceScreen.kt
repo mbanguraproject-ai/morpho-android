@@ -154,10 +154,13 @@ private fun InvoiceRow(
                     Text(r.issueDate, color = InkFaint, fontSize = 12.sp)
                 }
             }
-            Text(
-                money(r.currency, r.total),
-                color = Ink, fontSize = 15.sp, fontWeight = FontWeight.SemiBold
-            )
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    money(r.currency, r.total),
+                    color = Ink, fontSize = 15.sp, fontWeight = FontWeight.SemiBold
+                )
+                StatusBadge(r.status, r.currency, r.total - r.paid, accent)
+            }
             Spacer(Modifier.width(Space.sm))
             Box(
                 Modifier.size(30.dp).clip(Shape.pill)
@@ -372,6 +375,48 @@ private fun DetailsTab(s: InvoiceState, accent: Color) {
             Box(Modifier.weight(1f)) { Field("SHIPPING", s.shipping, "0", number = true) }
         }
 
+        SectionTitle("PAYMENTS RECEIVED")
+        s.payments.forEachIndexed { i, p -> PaymentRow(s, i, p, accent) }
+        AddItemButton(accent) { s.payments.add(PaymentEntry("0", s.issueDate.value, "")) }
+
+        Row(
+            Modifier.fillMaxWidth().clip(Shape.field)
+                .background(if (s.sentAt.value > 0L) accent.copy(alpha = 0.12f) else PaperSunk)
+                .clickable {
+                    s.sentAt.value = if (s.sentAt.value > 0L) 0L else System.currentTimeMillis()
+                }
+                .padding(horizontal = 14.dp, vertical = 13.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            MorphoIcon(
+                if (s.sentAt.value > 0L) "check" else "close",
+                tint = if (s.sentAt.value > 0L) accent else InkFaint, size = 17.dp
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                "Marked as sent",
+                color = if (s.sentAt.value > 0L) accent else InkSoft, fontSize = 14.sp
+            )
+        }
+
+        Row(
+            Modifier.fillMaxWidth().clip(Shape.field)
+                .background(if (s.showPaidStamp.value) accent.copy(alpha = 0.12f) else PaperSunk)
+                .clickable { s.showPaidStamp.value = !s.showPaidStamp.value }
+                .padding(horizontal = 14.dp, vertical = 13.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            MorphoIcon(
+                if (s.showPaidStamp.value) "check" else "close",
+                tint = if (s.showPaidStamp.value) accent else InkFaint, size = 17.dp
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                "Show PAID once it is settled",
+                color = if (s.showPaidStamp.value) accent else InkSoft, fontSize = 14.sp
+            )
+        }
+
         SectionTitle("PAYMENT & NOTES")
         Field("PAYMENT INSTRUCTIONS", s.payment, "Orange Money +232 …\nBank …", minLines = 2)
         Field("NOTES", s.notes, "Thank you for your business.", minLines = 2)
@@ -438,6 +483,65 @@ private fun InlineField(v: MutableState<String>, hint: String, number: Boolean =
     }
 }
 
+/**
+ * One receipt of money.
+ *
+ * Amount, when it arrived and what it was - a business chasing a balance needs
+ * to say "you paid Le500 on the 3rd", which a single running total cannot.
+ */
+/**
+ * Where a document stands, at a glance.
+ *
+ * A part-paid invoice shows what is still owed rather than the word PARTIAL on
+ * its own, because the outstanding figure is the thing anyone reading a list
+ * of invoices is actually looking for. Draft is left unmarked - the absence of
+ * a badge says it well enough without adding noise to every new row.
+ */
+@Composable
+private fun StatusBadge(status: String, currency: String, outstanding: Double, accent: Color) {
+    if (status == "DRAFT") return
+    val label = when (status) {
+        "PAID" -> "PAID"
+        "PARTIAL" -> money(currency, outstanding) + " due"
+        else -> "SENT"
+    }
+    val filled = status == "PAID"
+    Spacer(Modifier.height(3.dp))
+    Box(
+        Modifier.clip(Shape.pill)
+            .background(if (filled) accent else accent.copy(alpha = 0.14f))
+            .padding(horizontal = 8.dp, vertical = 3.dp)
+    ) {
+        Text(
+            label, color = if (filled) Paper else accent,
+            fontSize = 10.sp, fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+@Composable
+private fun PaymentRow(s: InvoiceState, index: Int, p: PaymentEntry, accent: Color) {
+    Column(
+        Modifier.fillMaxWidth().clip(Shape.tile).background(PaperSunk).padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Payment ${index + 1}", color = InkSoft, fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f)
+            )
+            Box(Modifier.clip(Shape.pill).clickable { s.payments.removeAt(index) }.padding(4.dp)) {
+                MorphoIcon("close", tint = InkFaint, size = 16.dp)
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(Modifier.weight(1f)) { InlineField(p.amount, "Amount", number = true) }
+            Box(Modifier.weight(1.2f)) { InlineField(p.date, "Date") }
+        }
+        InlineField(p.note, "Note, e.g. Orange Money")
+    }
+}
+
 @Composable
 private fun AddItemButton(accent: Color, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().clip(Shape.tile).background(accent.copy(alpha = 0.08f))
@@ -464,13 +568,24 @@ private fun LiveTotal(s: InvoiceState, accent: Color) {
             BreakdownRow(label, s.money(s.taxAmt))
         }
         if (s.shippingAmt > 0.0) BreakdownRow("Shipping", s.money(s.shippingAmt))
+        if (s.paidAmt > 0.0) {
+            BreakdownRow("Total", s.money(s.total))
+            BreakdownRow("Paid", "\u2212 " + s.money(s.paidAmt))
+        }
         Spacer(Modifier.height(6.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
+            // Once money is in, what is owed is the useful figure - a total
+            // that ignores payments is the wrong number to put in front of
+            // someone chasing a balance.
             Text(
-                "TOTAL DUE", color = Paper.copy(alpha = 0.9f), fontSize = 13.sp,
+                if (s.paidAmt > 0.0) "BALANCE DUE" else "TOTAL DUE",
+                color = Paper.copy(alpha = 0.9f), fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f)
             )
-            Text(s.money(s.total), color = Paper, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Text(
+                s.money(if (s.paidAmt > 0.0) s.balanceDue else s.total),
+                color = Paper, fontSize = 22.sp, fontWeight = FontWeight.Bold
+            )
         }
     }
 }

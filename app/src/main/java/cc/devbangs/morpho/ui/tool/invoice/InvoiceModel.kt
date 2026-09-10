@@ -83,7 +83,7 @@ class InvoiceState {
     // Payment / notes
     val shipping = mutableStateOf("0")
     val payments = mutableStateListOf<PaymentEntry>()
-    var sentAt: Long = 0L
+    val sentAt = mutableStateOf(0L)
     val showPaidStamp = mutableStateOf(true)
     val payment = mutableStateOf("")
     val notes = mutableStateOf("Thank you for your business.")
@@ -131,7 +131,7 @@ class InvoiceState {
         get() = when {
             total > 0.0 && paidAmt >= total - 0.005 -> "PAID"
             paidAmt > 0.0 -> "PARTIAL"
-            sentAt > 0L -> "SENT"
+            sentAt.value > 0L -> "SENT"
             else -> "DRAFT"
         }
 
@@ -182,7 +182,7 @@ fun InvoiceState.toRecord(now: Long = System.currentTimeMillis()): InvoiceRecord
     template = template.value.name,
     accentIndex = ACCENTS.indexOf(accent.value).coerceAtLeast(0),
     status = derivedStatus,
-    sentAt = sentAt,
+    sentAt = sentAt.value,
     paid = paidAmt,
     showPaidStamp = showPaidStamp.value,
     total = this.total,
@@ -241,7 +241,7 @@ fun InvoiceState.loadFrom(data: InvoiceWithItems) {
     taxRate.value = r.taxRate
     discountRate.value = r.discountRate
     shipping.value = r.shipping
-    sentAt = r.sentAt
+    sentAt.value = r.sentAt
     showPaidStamp.value = r.showPaidStamp
     payment.value = r.payment
     notes.value = r.notes
