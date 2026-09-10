@@ -20,8 +20,8 @@ android {
         applicationId = "cc.devbangs.morpho"
         minSdk = 24
         targetSdk = 36
-        versionCode = 8
-        versionName = "1.0.7"
+        versionCode = 9
+        versionName = "1.0.8"
         vectorDrawables { useSupportLibrary = true }
     }
 
@@ -100,6 +100,10 @@ dependencies {
     implementation("dev.chrisbanes.haze:haze-materials:1.6.10")
     implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("com.google.android.gms:play-services-ads:24.6.0")
+    // In-app review. The flow is drawn by Play, so there is no dialog of ours
+    // to design and nothing to test outside a Play install.
+    implementation("com.google.android.play:review:2.0.2")
+    implementation("com.google.android.play:review-ktx:2.0.2")
     implementation("com.google.android.ump:user-messaging-platform:4.0.0")
     implementation("com.android.billingclient:billing:9.1.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")

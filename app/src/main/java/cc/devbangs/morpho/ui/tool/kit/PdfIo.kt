@@ -152,6 +152,9 @@ internal fun reportSave(
         cc.devbangs.morpho.data.Stats.recordOutcome(ok)
         if (ok) {
             cc.devbangs.morpho.ads.AdState.markUsed()
+            // Already on the main thread here, and a file has just been
+            // written - the user is between tasks rather than in one.
+            cc.devbangs.morpho.review.ReviewPrompt.onSuccessfulSave(ctx)
             cc.devbangs.morpho.notify.Notifier.notifyDone(ctx, notifyTitle, notifyBody)
             // Blank toast means the screen already shows its own result message.
             if (successToast.isNotEmpty())
