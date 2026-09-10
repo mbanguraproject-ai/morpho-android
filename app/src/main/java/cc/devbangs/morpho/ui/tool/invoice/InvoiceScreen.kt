@@ -27,19 +27,219 @@ import cc.devbangs.morpho.core.Space
 import cc.devbangs.morpho.ui.icon.MorphoIcon
 import cc.devbangs.morpho.ui.theme.*
 import cc.devbangs.morpho.ui.tool.kit.FieldLabel
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import cc.devbangs.morpho.data.invoice.InvoiceRecord
+import cc.devbangs.morpho.data.invoice.InvoiceRepo
+import cc.devbangs.morpho.ui.tool.kit.ProcessingCard
+import cc.devbangs.morpho.ui.tool.kit.ToolButton
+import kotlinx.coroutines.launch
+import kotlin.math.roundToLong
 import cc.devbangs.morpho.ui.tool.kit.savePdfToDownloads
 import cc.devbangs.morpho.ui.tool.kit.sharePdf
 
+/**
+ * Invoices, receipts and quotes.
+ *
+ * This was a single editor that opened blank every time and hardcoded its
+ * number to INV-2026-001. Nothing was kept, so there was no reopening
+ * yesterday's invoice, no sequence, and two invoices in a row carried the same
+ * number. It is a list of saved documents now, with the editor sitting behind
+ * it.
+ */
 @Composable
 fun InvoiceTool(accent: Color, docType: DocType = DocType.INVOICE) {
-    val s = remember {
-        InvoiceState().apply {
-            this.docType.value = docType
-            invoiceNumber.value = "${docType.numberPrefix}-2026-001"
+    // null shows the list. 0 opens a new document, anything else opens that
+    // record. The key forces a fresh editor per open, so state from the last
+    // document cannot leak into the next one.
+    var openId by remember { mutableStateOf<Long?>(null) }
+    var openKey by remember { mutableStateOf(0) }
+
+    if (openId == null) {
+        InvoiceList(
+            docType, accent,
+            onNew = { openId = 0L; openKey++ },
+            onOpen = { openId = it; openKey++ }
+        )
+    } else {
+        InvoiceEditor(openId ?: 0L, openKey, docType, accent) { openId = null }
+    }
+}
+
+/** Amount for a list row, from the stored total. */
+private fun money(currency: String, v: Double): String {
+    val cents = (v * 100).roundToLong()
+    val whole = cents / 100
+    val rest = (cents % 100).toInt()
+    return currency + " " + "%,d".format(whole) + "." + "%02d".format(kotlin.math.abs(rest))
+}
+
+@Composable
+private fun InvoiceList(
+    docType: DocType,
+    accent: Color,
+    onNew: () -> Unit,
+    onOpen: (Long) -> Unit
+) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val all by InvoiceRepo.observeAll(ctx).collectAsState(initial = emptyList())
+    // Each type keeps its own list, matching the separate numbering.
+    val rows = all.filter { it.docType == docType.name }
+    // Deleting a document someone issued should take two taps, not one.
+    var confirmId by remember { mutableStateOf(0L) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+        ToolButton("New " + docType.title.lowercase(), accent, onClick = onNew)
+
+        if (rows.isEmpty()) {
+            Text(
+                "Nothing saved yet. Anything you create here stays on this device.",
+                color = InkFaint, fontSize = 13.sp
+            )
+        } else {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(Space.sm),
+                modifier = Modifier.heightIn(max = 520.dp)
+            ) {
+                items(rows, key = { it.id }) { r ->
+                    InvoiceRow(
+                        r, accent,
+                        confirming = confirmId == r.id,
+                        onOpen = { onOpen(r.id) },
+                        onAskDelete = { confirmId = if (confirmId == r.id) 0L else r.id },
+                        onConfirmDelete = {
+                            confirmId = 0L
+                            scope.launch { InvoiceRepo.delete(ctx, r.id) }
+                        }
+                    )
+                }
+            }
         }
     }
-    var tab by remember { mutableStateOf(0) }
+}
+
+@Composable
+private fun InvoiceRow(
+    r: InvoiceRecord,
+    accent: Color,
+    confirming: Boolean,
+    onOpen: () -> Unit,
+    onAskDelete: () -> Unit,
+    onConfirmDelete: () -> Unit
+) {
+    Column(
+        Modifier.fillMaxWidth().clip(Shape.card).background(PaperSunk).padding(Space.lg)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f).clickable { onOpen() }) {
+                Text(
+                    r.number.ifBlank { "Untitled" },
+                    color = Ink, fontSize = 15.sp, fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    r.clientName.ifBlank { "No client yet" },
+                    color = InkSoft, fontSize = 13.sp
+                )
+                if (r.issueDate.isNotBlank()) {
+                    Text(r.issueDate, color = InkFaint, fontSize = 12.sp)
+                }
+            }
+            Text(
+                money(r.currency, r.total),
+                color = Ink, fontSize = 15.sp, fontWeight = FontWeight.SemiBold
+            )
+            Spacer(Modifier.width(Space.sm))
+            Box(
+                Modifier.size(30.dp).clip(Shape.pill)
+                    .background(if (confirming) accent else PaperLine.copy(alpha = 0.5f))
+                    .clickable { onAskDelete() },
+                contentAlignment = Alignment.Center
+            ) {
+                MorphoIcon("close", tint = if (confirming) Paper else InkSoft, size = 13.dp)
+            }
+        }
+        if (confirming) {
+            Spacer(Modifier.height(Space.sm))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Delete this permanently?", color = InkSoft, fontSize = 13.sp)
+                Spacer(Modifier.weight(1f))
+                Box(
+                    Modifier.clip(Shape.pill).background(accent)
+                        .clickable { onConfirmDelete() }
+                        .padding(horizontal = 14.dp, vertical = 7.dp)
+                ) { Text("Delete", color = Paper, fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InvoiceEditor(
+    id: Long,
+    key: Int,
+    docType: DocType,
+    accent: Color,
+    onBack: () -> Unit
+) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val s = remember(key) { InvoiceState().apply { this.docType.value = docType } }
+    var ready by remember(key) { mutableStateOf(false) }
+    var saving by remember(key) { mutableStateOf(false) }
+    var savedAt by remember(key) { mutableStateOf(0L) }
+    var tab by remember(key) { mutableStateOf(0) }
+
+    LaunchedEffect(key) {
+        if (id > 0L) {
+            InvoiceRepo.load(ctx, id)?.let { s.loadFrom(it) }
+        } else {
+            // The number comes from the highest one already used for this
+            // type, so it never repeats and never skips.
+            val (seq, number) = InvoiceRepo.nextNumber(ctx, docType.name, docType.numberPrefix)
+            s.seq = seq
+            s.invoiceNumber.value = number
+        }
+        ready = true
+    }
+
+    if (!ready) {
+        ProcessingCard("Opening", accent)
+        return
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.clip(Shape.pill).background(PaperSunk)
+                    .clickable { onBack() }
+                    .padding(horizontal = 14.dp, vertical = 9.dp)
+            ) { Text("All " + docType.title.lowercase() + "s", color = InkSoft, fontSize = 13.sp) }
+            Spacer(Modifier.weight(1f))
+            if (savedAt > 0L && !saving) {
+                Text("Saved", color = accent, fontSize = 12.sp)
+                Spacer(Modifier.width(Space.sm))
+            }
+            Box(
+                Modifier.clip(Shape.pill)
+                    .background(if (saving) accent.copy(alpha = 0.4f) else accent)
+                    .clickable(enabled = !saving) {
+                        saving = true
+                        scope.launch {
+                            s.recordId = InvoiceRepo.save(ctx, s.toRecord(), s.itemRecords())
+                            savedAt = System.currentTimeMillis()
+                            saving = false
+                        }
+                    }
+                    .padding(horizontal = 18.dp, vertical = 9.dp)
+            ) {
+                Text(
+                    if (saving) "Saving" else "Save",
+                    color = Paper, fontSize = 13.sp, fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+
         Tabs(tab, accent) { tab = it }
         when (tab) {
             0 -> DetailsTab(s, accent)
@@ -100,7 +300,7 @@ private fun DetailsTab(s: InvoiceState, accent: Color) {
         Field("PO / REFERENCE", s.poNumber, "BC-8842")
 
         SectionTitle("INVOICE DETAILS")
-        Field("INVOICE NUMBER", s.invoiceNumber, "INV-2026-001")
+        Field("INVOICE NUMBER", s.invoiceNumber, "INV00001")
         Row(horizontalArrangement = Arrangement.spacedBy(Space.md)) {
             Box(Modifier.weight(1f)) { DateField("ISSUE DATE", s.issueDate, accent) }
             Box(Modifier.weight(1f)) { DateField("DUE DATE", s.dueDate, accent) }

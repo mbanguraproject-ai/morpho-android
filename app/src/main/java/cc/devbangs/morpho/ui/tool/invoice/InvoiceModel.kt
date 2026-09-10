@@ -56,7 +56,9 @@ class InvoiceState {
     val poNumber = mutableStateOf("")
     // Meta
     val docType = mutableStateOf(DocType.INVOICE)
-    val invoiceNumber = mutableStateOf("INV-2026-001")
+    // Filled by nextNumber() for a new document, or by loadFrom() for a saved
+    // one. A default here would only ever be wrong.
+    val invoiceNumber = mutableStateOf("")
     val validUntil = mutableStateOf("")      // quotes only
     val issueDate = mutableStateOf("")
     val dueDate = mutableStateOf("")
@@ -112,6 +114,7 @@ fun InvoiceState.toRecord(now: Long = System.currentTimeMillis()): InvoiceRecord
     template = template.value.name,
     accentIndex = ACCENTS.indexOf(accent.value).coerceAtLeast(0),
     status = if (recordId == 0L) "DRAFT" else "UNPAID",
+    total = this.total,
     createdAt = if (createdAt == 0L) now else createdAt,
     updatedAt = now
 )

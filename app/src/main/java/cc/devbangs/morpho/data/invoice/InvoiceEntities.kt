@@ -52,6 +52,17 @@ data class InvoiceRecord(
     /** DRAFT, UNPAID or PAID. Only DRAFT and UNPAID are set in this stage. */
     val status: String = "DRAFT",
 
+    /**
+     * The document total, stored rather than derived.
+     *
+     * The list has to show an amount per row. Deriving it would mean either a
+     * query per row, or summing text columns in SQL and then applying the
+     * discount and tax percentages - which are also text - in the same
+     * statement. The arithmetic already exists in InvoiceState and is written
+     * here at save time instead.
+     */
+    val total: Double = 0.0,
+
     val createdAt: Long = 0L,
     val updatedAt: Long = 0L
 )
