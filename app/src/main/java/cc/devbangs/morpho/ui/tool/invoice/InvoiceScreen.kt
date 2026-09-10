@@ -33,6 +33,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import cc.devbangs.morpho.data.invoice.BusinessRecord
+import cc.devbangs.morpho.data.invoice.CatalogItemRecord
 import cc.devbangs.morpho.data.invoice.ClientRecord
 import cc.devbangs.morpho.data.invoice.InvoiceRecord
 import cc.devbangs.morpho.data.invoice.InvoiceRepo
@@ -296,6 +297,12 @@ private fun Field(label: String, v: MutableState<String>, hint: String,
 
 @Composable
 private fun DetailsTab(s: InvoiceState, accent: Color) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    // Collected once here rather than per line, so twenty items do not open
+    // twenty collectors on the same query.
+    val catalog by InvoiceRepo.observeCatalog(ctx).collectAsState(initial = emptyList())
+
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
         SectionTitle("YOUR BUSINESS")
         SavedBusinessRow(s, accent)
@@ -317,7 +324,38 @@ private fun DetailsTab(s: InvoiceState, accent: Color) {
         }
 
         SectionTitle("LINE ITEMS")
-        s.items.forEachIndexed { i, item -> LineItemRow(s, i, item, accent) }
+        if (catalog.isNotEmpty()) {
+            SavedRow(
+                labels = catalog.map { it.id to it.name.ifBlank { "Unnamed" } },
+                accent = accent,
+                canSave = false,
+                onPick = { id ->
+                    catalog.firstOrNull { it.id == id }?.let {
+                        s.items.add(LineItem(it.name, "1", it.rate, it.taxRate))
+                    }
+                },
+                onSave = {},
+                onDelete = { id -> scope.launch { InvoiceRepo.deleteCatalogItem(ctx, id) } }
+            )
+        }
+        s.items.forEachIndexed { i, item ->
+            LineItemRow(s, i, item, accent) {
+                scope.launch {
+                    val existing = catalog.firstOrNull {
+                        it.name.equals(item.description.value, true)
+                    }
+                    InvoiceRepo.saveCatalogItem(
+                        ctx,
+                        CatalogItemRecord(
+                            id = existing?.id ?: 0L,
+                            name = item.description.value,
+                            rate = item.rate.value,
+                            taxRate = item.taxRate.value
+                        )
+                    )
+                }
+            }
+        }
         // A new line starts on the document's default rate, so the common case
         // of one rate throughout needs no per-line typing at all.
         AddItemButton(accent) { s.items.add(LineItem("", "1", "0", s.taxRate.value)) }
@@ -341,12 +379,28 @@ private fun DetailsTab(s: InvoiceState, accent: Color) {
 }
 
 @Composable
-private fun LineItemRow(s: InvoiceState, index: Int, item: LineItem, accent: Color) {
+private fun LineItemRow(
+    s: InvoiceState,
+    index: Int,
+    item: LineItem,
+    accent: Color,
+    onSaveToCatalogue: () -> Unit
+) {
     Column(Modifier.fillMaxWidth().clip(Shape.tile).background(PaperSunk).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Item ${index + 1}", color = InkSoft, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.weight(1f))
+            // Only offered once the line says something worth keeping, and
+            // this is where people discover the catalogue exists at all.
+            if (item.description.value.isNotBlank()) {
+                Box(
+                    Modifier.clip(Shape.pill).background(accent.copy(alpha = 0.12f))
+                        .clickable { onSaveToCatalogue() }
+                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                ) { Text("Save to list", color = accent, fontSize = 11.sp) }
+                Spacer(Modifier.width(6.dp))
+            }
             if (s.items.size > 1)
                 Box(Modifier.clip(Shape.pill).clickable { s.items.removeAt(index) }.padding(4.dp)) {
                     MorphoIcon("close", tint = InkFaint, size = 16.dp)

@@ -23,9 +23,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         InvoiceRecord::class,
         InvoiceItemRecord::class,
         BusinessRecord::class,
-        ClientRecord::class
+        ClientRecord::class,
+        CatalogItemRecord::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = true
 )
 abstract class MorphoDb : RoomDatabase() {
@@ -58,6 +59,20 @@ abstract class MorphoDb : RoomDatabase() {
          * invoice from last month would show a different total than the
          * customer received, which is the worst thing an invoicing app can do.
          */
+        /** Adds the saved items catalogue. */
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `catalog_items` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`name` TEXT NOT NULL, " +
+                        "`rate` TEXT NOT NULL, " +
+                        "`taxRate` TEXT NOT NULL, " +
+                        "`updatedAt` INTEGER NOT NULL)"
+                )
+            }
+        }
+
         private val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
@@ -107,7 +122,7 @@ abstract class MorphoDb : RoomDatabase() {
         fun get(ctx: Context): MorphoDb = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 ctx.applicationContext, MorphoDb::class.java, "morpho.db"
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build().also { instance = it }
         }
     }
 }

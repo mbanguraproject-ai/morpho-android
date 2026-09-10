@@ -140,3 +140,22 @@ data class ClientRecord(
     val reference: String = "",
     val updatedAt: Long = 0L
 )
+
+/**
+ * Something you bill for often.
+ *
+ * Named catalog_items rather than items so it cannot be confused with
+ * invoice_items, which is a different thing entirely: these are the templates,
+ * those are the lines on a document.
+ *
+ * Copied onto the line when picked, never referenced. Raising a price next
+ * year must not change what an invoice from last year says you charged.
+ */
+@Entity(tableName = "catalog_items")
+data class CatalogItemRecord(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String = "",
+    val rate: String = "0",
+    val taxRate: String = "0",
+    val updatedAt: Long = 0L
+)

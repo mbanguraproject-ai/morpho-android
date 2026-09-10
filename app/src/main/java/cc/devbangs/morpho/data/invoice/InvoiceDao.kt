@@ -73,6 +73,15 @@ interface InvoiceDao {
     @Query("DELETE FROM clients WHERE id = :id")
     suspend fun deleteClient(id: Long)
 
+    @Query("SELECT * FROM catalog_items ORDER BY updatedAt DESC")
+    fun observeCatalog(): Flow<List<CatalogItemRecord>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertCatalogItem(record: CatalogItemRecord): Long
+
+    @Query("DELETE FROM catalog_items WHERE id = :id")
+    suspend fun deleteCatalogItem(id: Long)
+
     @Transaction
     suspend fun load(id: Long): InvoiceWithItems? {
         val inv = find(id) ?: return null
