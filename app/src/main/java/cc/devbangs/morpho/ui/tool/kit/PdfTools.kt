@@ -9,7 +9,12 @@ import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import com.google.mlkit.vision.documentscanner.GmsDocumentScanner
+import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
+import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
+import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -17,6 +22,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.rememberCoroutineScope
@@ -622,71 +628,233 @@ private fun buildSingle(
     return docBytes(doc)
 }
 
-@androidx.compose.runtime.Composable
+/** Matches the picker limit the other image-to-PDF tools use. */
+private const val SCAN_PAGE_LIMIT = 30
+
+/**
+ * Walk up the context chain to the hosting Activity.
+ *
+ * The scanner hands back an IntentSender that has to be launched from an
+ * Activity; LocalContext inside Compose is usually a ContextWrapper around it.
+ */
+private fun android.content.Context.hostActivity(): android.app.Activity? {
+    var c: android.content.Context? = this
+    while (c is android.content.ContextWrapper) {
+        if (c is android.app.Activity) return c
+        c = c.baseContext
+    }
+    return null
+}
+
+/**
+ * Scan to PDF.
+ *
+ * This took a plain camera photo per page. A photo of a document is not a
+ * scan: no edge detection, no perspective correction, no shadow removal, so a
+ * page shot at an angle stayed at an angle and went into the PDF that way.
+ * Against any dedicated scanner app the difference is immediate.
+ *
+ * Capture now goes through ML Kit's document scanner, which does the corner
+ * detection, flattening, filters and shadow removal in a flow delivered by
+ * Play services - about 300 KB of download, no CAMERA permission, and page
+ * reorder, retake and gallery import for free.
+ *
+ * It can return a finished PDF, and this deliberately does not use it: asking
+ * for the JPEG pages and building the PDF here keeps page size, orientation
+ * and quality under the user's control, the same as every other tool. A scan
+ * bound for email and one bound for print are not the same file.
+ *
+ * The plain camera path stays as a fallback for devices where the scanner
+ * cannot start, rather than leaving the tool dead on those devices.
+ */
+@Composable
 private fun ScanToPdf(accent: Color, onOpenTool: (String) -> Unit = {}) {
     val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
     var pages by remember { mutableStateOf<List<Uri>>(emptyList()) }
+    var thumbs by remember { mutableStateOf<List<Bitmap>>(emptyList()) }
     var output by remember { mutableStateOf<ByteArray?>(null) }
     var scanName by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
+    var failed by remember { mutableStateOf(false) }
+    var scannerUnavailable by remember { mutableStateOf(false) }
     var pendingUri by remember { mutableStateOf<Uri?>(null) }
-    val scope = rememberCoroutineScope()
+
+    var pageSize by remember { mutableStateOf("A4") }
+    var landscape by remember { mutableStateOf(false) }
+    var quality by remember { mutableStateOf(90) }
+
+    // Thumbnails were decoded inside the list item, during composition, on the
+    // main thread - a full-size photo down to 400px for every page on every
+    // recomposition. Decoded once, off-thread, when the page set changes.
+    LaunchedEffect(pages) {
+        thumbs = withContext(Dispatchers.IO) {
+            pages.mapNotNull {
+                try { decodeBitmap(ctx, it, 320) }
+                catch (e: Exception) { null } catch (e: OutOfMemoryError) { null }
+            }
+        }
+    }
+
+    val scanLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) { res ->
+        if (res.resultCode == android.app.Activity.RESULT_OK) {
+            val got = GmsDocumentScanningResult
+                .fromActivityResultIntent(res.data)
+                ?.pages
+                ?.map { it.imageUri }
+                .orEmpty()
+            if (got.isNotEmpty()) {
+                pages = pages + got
+                output = null
+                failed = false
+            }
+        }
+    }
 
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
-        if (ok && pendingUri != null) { pages = pages + pendingUri!!; output = null }
+        val u = pendingUri
+        if (ok && u != null) { pages = pages + u; output = null }
         pendingUri = null
     }
 
-    fun capture() {
+    fun capturePlain() {
         val dir = File(ctx.cacheDir, "shared").apply { mkdirs() }
         val f = File(dir, "scan_${System.currentTimeMillis()}.jpg")
-        val u = androidx.core.content.FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", f)
+        val u = androidx.core.content.FileProvider.getUriForFile(
+            ctx, "${ctx.packageName}.fileprovider", f
+        )
         pendingUri = u
         camera.launch(u)
     }
 
+    fun startScan() {
+        val activity = ctx.hostActivity()
+        if (activity == null) { scannerUnavailable = true; capturePlain(); return }
+        val options = GmsDocumentScannerOptions.Builder()
+            .setGalleryImportAllowed(true)
+            .setPageLimit(SCAN_PAGE_LIMIT)
+            .setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_JPEG)
+            .setScannerMode(GmsDocumentScannerOptions.SCANNER_MODE_FULL)
+            .build()
+        val scanner: GmsDocumentScanner = GmsDocumentScanning.getClient(options)
+        scanner.getStartScanIntent(activity)
+            .addOnSuccessListener { sender ->
+                scannerUnavailable = false
+                scanLauncher.launch(IntentSenderRequest.Builder(sender).build())
+            }
+            .addOnFailureListener {
+                // No Play services, or the module could not be fetched. Fall
+                // back rather than leaving the tool dead on this device.
+                scannerUnavailable = true
+                capturePlain()
+            }
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
-        PickRow(if (pages.isEmpty()) "Scan a page" else "Scan another page", "image-add", accent) { capture() }
+        PickRow(
+            if (pages.isEmpty()) "Scan a document" else "Add more pages",
+            "scan-to-pdf", accent
+        ) { startScan() }
+
+        if (scannerUnavailable) Text(
+            "Using the plain camera on this device - the guided scanner needs Google Play services.",
+            color = InkFaint, fontSize = 12.sp
+        )
+
         if (pages.isNotEmpty()) {
-            Text("${pages.size} page(s) scanned", color = InkSoft, fontSize = 13.sp)
+            Text("${pages.size} page(s)", color = InkSoft, fontSize = 13.sp)
             LazyRow(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-                items(pages) { u ->
-                    decodeBitmap(ctx, u, 400)?.let { bmp ->
-                        Image(bmp.asImageBitmap(), null,
+                itemsIndexed(thumbs) { i, bmp ->
+                    Box {
+                        Image(
+                            bmp.asImageBitmap(), null,
                             Modifier.height(120.dp).clip(Shape.tile).background(PaperSunk),
-                            contentScale = ContentScale.Fit)
+                            contentScale = ContentScale.Fit
+                        )
+                        // One bad page used to mean re-shooting all of them.
+                        Box(
+                            Modifier.align(Alignment.TopEnd).padding(4.dp)
+                                .size(24.dp).clip(Shape.pill)
+                                .background(Ink.copy(alpha = 0.62f))
+                                .clickable {
+                                    if (i < pages.size) {
+                                        pages = pages.toMutableList().also { it.removeAt(i) }
+                                        output = null
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) { MorphoIcon("close", tint = Paper, size = 12.dp) }
                     }
                 }
             }
-            Box(Modifier.fillMaxWidth().clip(Shape.field).background(accent.copy(alpha = 0.10f))
-                .clickable { pages = emptyList(); output = null }.padding(vertical = 12.dp),
-                contentAlignment = Alignment.Center) {
-                Text("Clear all", color = accent, fontSize = 14.sp)
+
+            FieldLabel("PAGE SIZE")
+            OptionRow(listOf("A4", "Letter", "Original"), pageSize, accent) {
+                pageSize = it; output = null
             }
-            if (busy) {
-                ProcessingCard("Building your PDF...", accent)
-            } else {
-                ToolButton("Create PDF", accent) {
-                    busy = true
-                    val shots = pages.toList()
-                    scope.launch {
-                        val bytes = withContext(Dispatchers.Default) {
-                            buildImagesPdf(ctx, shots, "A4", false, 90)
+            if (pageSize != "Original") {
+                FieldLabel("ORIENTATION")
+                OptionRow(
+                    listOf("Portrait", "Landscape"),
+                    if (landscape) "Landscape" else "Portrait", accent
+                ) { landscape = it == "Landscape"; output = null }
+            }
+            StepControl("QUALITY %", quality, listOf(60, 75, 90, 100), accent) {
+                quality = it; output = null
+            }
+
+            Box(
+                Modifier.fillMaxWidth().clip(Shape.field)
+                    .background(accent.copy(alpha = 0.10f))
+                    .clickable {
+                        pages = emptyList()
+                        output = null
+                        failed = false
+                        // Only the files this tool wrote itself; the scanner's
+                        // own pages are not ours to delete.
+                        runCatching {
+                            File(ctx.cacheDir, "shared").listFiles()
+                                ?.filter { it.name.startsWith("scan_") }
+                                ?.forEach { it.delete() }
                         }
-                        if (bytes != null) {
-                            output = bytes
-                            scanName = "scan_${System.currentTimeMillis()}"
-                        }
-                        busy = false
                     }
+                    .padding(vertical = 12.dp),
+                contentAlignment = Alignment.Center
+            ) { Text("Clear all", color = accent, fontSize = 14.sp) }
+
+            if (busy) ProcessingCard("Building your PDF...", accent)
+            else ToolButton("Create PDF", accent) {
+                busy = true; failed = false
+                val shots = pages.toList()
+                val size = pageSize; val land = landscape; val q = quality
+                scope.launch {
+                    val bytes = withContext(Dispatchers.Default) {
+                        try { buildImagesPdf(ctx, shots, size, land, q) }
+                        catch (e: Exception) { null } catch (e: OutOfMemoryError) { null }
+                    }
+                    if (bytes == null || bytes.isEmpty()) failed = true
+                    else {
+                        output = bytes
+                        scanName = "scan_${System.currentTimeMillis()}"
+                    }
+                    busy = false
                 }
             }
+
+            if (failed) ToolErrorCard(
+                "Couldn't build that PDF",
+                "One or more of those pages couldn't be read. Remove it and try again.",
+                accent
+            )
+
             output?.let { bytes ->
                 ToolResultCard(
                     fileName = "$scanName.pdf",
                     sizeBytes = bytes.size.toLong(),
                     accent = accent,
-                    detail = "${pages.size} page(s)",
+                    detail = "${pages.size} page(s) \u00b7 $pageSize",
                     onSave = { savePdfToDownloads(ctx, bytes, scanName) },
                     onShare = { sharePdf(ctx, bytes, scanName) }
                 )
