@@ -12,7 +12,8 @@ import kotlinx.coroutines.flow.Flow
 /** An invoice with its lines, in order. */
 data class InvoiceWithItems(
     val invoice: InvoiceRecord,
-    val items: List<InvoiceItemRecord>
+    val items: List<InvoiceItemRecord>,
+    val payments: List<PaymentRecord> = emptyList()
 )
 
 @Dao
@@ -27,6 +28,15 @@ interface InvoiceDao {
 
     @Query("SELECT * FROM invoice_items WHERE invoiceId = :id ORDER BY position ASC")
     suspend fun itemsOf(id: Long): List<InvoiceItemRecord>
+
+    @Query("SELECT * FROM payments WHERE invoiceId = :id ORDER BY position ASC")
+    suspend fun paymentsOf(id: Long): List<PaymentRecord>
+
+    @Insert
+    suspend fun insertPayments(rows: List<PaymentRecord>)
+
+    @Query("DELETE FROM payments WHERE invoiceId = :id")
+    suspend fun clearPayments(id: Long)
 
     /**
      * Highest sequence used for a document type, or null when none exists.
@@ -85,7 +95,7 @@ interface InvoiceDao {
     @Transaction
     suspend fun load(id: Long): InvoiceWithItems? {
         val inv = find(id) ?: return null
-        return InvoiceWithItems(inv, itemsOf(id))
+        return InvoiceWithItems(inv, itemsOf(id), paymentsOf(id))
     }
 
     /**
@@ -97,7 +107,11 @@ interface InvoiceDao {
      * this size.
      */
     @Transaction
-    suspend fun save(record: InvoiceRecord, items: List<InvoiceItemRecord>): Long {
+    suspend fun save(
+        record: InvoiceRecord,
+        items: List<InvoiceItemRecord>,
+        payments: List<PaymentRecord>
+    ): Long {
         val id = if (record.id == 0L) insert(record) else {
             update(record)
             record.id
@@ -105,6 +119,10 @@ interface InvoiceDao {
         clearItems(id)
         if (items.isNotEmpty()) {
             insertItems(items.mapIndexed { i, it -> it.copy(id = 0, invoiceId = id, position = i) })
+        }
+        clearPayments(id)
+        if (payments.isNotEmpty()) {
+            insertPayments(payments.mapIndexed { i, it -> it.copy(id = 0, invoiceId = id, position = i) })
         }
         return id
     }

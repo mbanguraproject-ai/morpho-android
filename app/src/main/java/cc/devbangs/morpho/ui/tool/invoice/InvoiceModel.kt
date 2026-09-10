@@ -1,6 +1,7 @@
 package cc.devbangs.morpho.ui.tool.invoice
 
 import cc.devbangs.morpho.data.invoice.InvoiceItemRecord
+import cc.devbangs.morpho.data.invoice.PaymentRecord
 import cc.devbangs.morpho.data.invoice.InvoiceRecord
 import cc.devbangs.morpho.data.invoice.InvoiceWithItems
 import androidx.compose.runtime.mutableStateListOf
@@ -20,6 +21,14 @@ class LineItem(
     var taxRate = mutableStateOf(taxRate)
     val amount: Double
         get() = (qty.value.toDoubleOrNull() ?: 0.0) * (rate.value.toDoubleOrNull() ?: 0.0)
+}
+
+/** One receipt of money against the document. */
+class PaymentEntry(amount: String = "0", date: String = "", note: String = "") {
+    var amount = mutableStateOf(amount)
+    var date = mutableStateOf(date)
+    var note = mutableStateOf(note)
+    val value: Double get() = this.amount.value.toDoubleOrNull() ?: 0.0
 }
 
 enum class Template(val label: String) { MODERN("Modern"), CLASSIC("Classic"), MINIMAL("Minimal") }
@@ -73,6 +82,9 @@ class InvoiceState {
     val discountRate = mutableStateOf("0")   // percent
     // Payment / notes
     val shipping = mutableStateOf("0")
+    val payments = mutableStateListOf<PaymentEntry>()
+    var sentAt: Long = 0L
+    val showPaidStamp = mutableStateOf(true)
     val payment = mutableStateOf("")
     val notes = mutableStateOf("Thank you for your business.")
     // Style
@@ -102,6 +114,26 @@ class InvoiceState {
     val shippingAmt: Double get() = shipping.value.toDoubleOrNull() ?: 0.0
 
     val total: Double get() = taxable + taxAmt + shippingAmt
+
+    val paidAmt: Double get() = payments.sumOf { it.value }
+
+    val balanceDue: Double get() = total - paidAmt
+
+    /**
+     * What the document is, derived rather than typed.
+     *
+     * A status someone sets by hand drifts from the numbers underneath it -
+     * an invoice marked paid with money still owing helps nobody. Settled is
+     * decided by the arithmetic, with a small tolerance so rounding to the
+     * cent does not leave a document a fraction short of paid.
+     */
+    val derivedStatus: String
+        get() = when {
+            total > 0.0 && paidAmt >= total - 0.005 -> "PAID"
+            paidAmt > 0.0 -> "PARTIAL"
+            sentAt > 0L -> "SENT"
+            else -> "DRAFT"
+        }
 
     /**
      * The single rate, when every line that carries an amount shares one.
@@ -149,7 +181,10 @@ fun InvoiceState.toRecord(now: Long = System.currentTimeMillis()): InvoiceRecord
     notes = notes.value,
     template = template.value.name,
     accentIndex = ACCENTS.indexOf(accent.value).coerceAtLeast(0),
-    status = if (recordId == 0L) "DRAFT" else "UNPAID",
+    status = derivedStatus,
+    sentAt = sentAt,
+    paid = paidAmt,
+    showPaidStamp = showPaidStamp.value,
     total = this.total,
     createdAt = if (createdAt == 0L) now else createdAt,
     updatedAt = now
@@ -164,6 +199,17 @@ fun InvoiceState.itemRecords(): List<InvoiceItemRecord> =
             qty = li.qty.value,
             rate = li.rate.value,
             taxRate = li.taxRate.value
+        )
+    }
+
+fun InvoiceState.paymentRecords(): List<PaymentRecord> =
+    payments.mapIndexed { i, p ->
+        PaymentRecord(
+            invoiceId = recordId,
+            position = i,
+            amount = p.amount.value,
+            date = p.date.value,
+            note = p.note.value
         )
     }
 
@@ -195,6 +241,8 @@ fun InvoiceState.loadFrom(data: InvoiceWithItems) {
     taxRate.value = r.taxRate
     discountRate.value = r.discountRate
     shipping.value = r.shipping
+    sentAt = r.sentAt
+    showPaidStamp.value = r.showPaidStamp
     payment.value = r.payment
     notes.value = r.notes
     template.value = runCatching { Template.valueOf(r.template) }.getOrDefault(Template.MODERN)
@@ -202,5 +250,7 @@ fun InvoiceState.loadFrom(data: InvoiceWithItems) {
     items.clear()
     data.items.forEach { items.add(LineItem(it.description, it.qty, it.rate, it.taxRate)) }
     if (items.isEmpty()) items.add(LineItem("Service or product", "1", "0"))
+    payments.clear()
+    data.payments.forEach { payments.add(PaymentEntry(it.amount, it.date, it.note)) }
 }
 

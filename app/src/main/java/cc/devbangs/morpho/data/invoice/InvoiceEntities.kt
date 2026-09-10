@@ -49,8 +49,22 @@ data class InvoiceRecord(
     val template: String = "MODERN",
     val accentIndex: Int = 0,
 
-    /** DRAFT, UNPAID or PAID. Only DRAFT and UNPAID are set in this stage. */
+    /**
+     * DRAFT, SENT, PARTIAL or PAID.
+     *
+     * Derived from the payments and the sent time rather than set by hand, and
+     * written here so the list can show it without loading every payment row.
+     */
     val status: String = "DRAFT",
+
+    /** When it was marked as sent. 0 means it has not been. */
+    val sentAt: Long = 0L,
+
+    /** Total received against this document, stored for the same reason as [total]. */
+    val paid: Double = 0.0,
+
+    /** Whether a settled document prints the PAID mark. */
+    val showPaidStamp: Boolean = true,
 
     /**
      * The document total, stored rather than derived.
@@ -158,4 +172,33 @@ data class CatalogItemRecord(
     val rate: String = "0",
     val taxRate: String = "0",
     val updatedAt: Long = 0L
+)
+
+/**
+ * Money received against an invoice.
+ *
+ * Rows rather than a single "amount paid" field, because part payments are
+ * normal and a business needs to see when each one arrived, not just the
+ * remaining balance. CASCADE for the same reason as the line items: a payment
+ * against a deleted invoice means nothing.
+ */
+@Entity(
+    tableName = "payments",
+    foreignKeys = [
+        ForeignKey(
+            entity = InvoiceRecord::class,
+            parentColumns = ["id"],
+            childColumns = ["invoiceId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [Index("invoiceId")]
+)
+data class PaymentRecord(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val invoiceId: Long,
+    val position: Int,
+    val amount: String = "0",
+    val date: String = "",
+    val note: String = ""
 )

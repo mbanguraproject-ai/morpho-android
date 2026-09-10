@@ -24,9 +24,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         InvoiceItemRecord::class,
         BusinessRecord::class,
         ClientRecord::class,
-        CatalogItemRecord::class
+        CatalogItemRecord::class,
+        PaymentRecord::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = true
 )
 abstract class MorphoDb : RoomDatabase() {
@@ -59,6 +60,41 @@ abstract class MorphoDb : RoomDatabase() {
          * invoice from last month would show a different total than the
          * customer received, which is the worst thing an invoicing app can do.
          */
+        /**
+         * Adds payments, and the fields that follow from them.
+         *
+         * The foreign key and index wording is copied from what Room generated
+         * for invoice_items rather than written from memory - a close but
+         * inexact CREATE TABLE fails at open, and a missing index is a schema
+         * mismatch just as much as a missing column.
+         *
+         * showPaidStamp defaults to 1 so existing invoices behave as they did.
+         */
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `payments` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`invoiceId` INTEGER NOT NULL, " +
+                        "`position` INTEGER NOT NULL, " +
+                        "`amount` TEXT NOT NULL, " +
+                        "`date` TEXT NOT NULL, " +
+                        "`note` TEXT NOT NULL, " +
+                        "FOREIGN KEY(`invoiceId`) REFERENCES `invoices`(`id`) " +
+                        "ON UPDATE NO ACTION ON DELETE CASCADE )"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_payments_invoiceId` " +
+                        "ON `payments` (`invoiceId`)"
+                )
+                db.execSQL("ALTER TABLE invoices ADD COLUMN sentAt INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE invoices ADD COLUMN paid REAL NOT NULL DEFAULT 0")
+                db.execSQL(
+                    "ALTER TABLE invoices ADD COLUMN showPaidStamp INTEGER NOT NULL DEFAULT 1"
+                )
+            }
+        }
+
         /** Adds the saved items catalogue. */
         private val MIGRATION_4_5 = object : Migration(4, 5) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -122,7 +158,10 @@ abstract class MorphoDb : RoomDatabase() {
         fun get(ctx: Context): MorphoDb = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 ctx.applicationContext, MorphoDb::class.java, "morpho.db"
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build().also { instance = it }
+            ).addMigrations(
+                MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4,
+                MIGRATION_4_5, MIGRATION_5_6
+            ).build().also { instance = it }
         }
     }
 }

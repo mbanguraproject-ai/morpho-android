@@ -235,7 +235,9 @@ private fun InvoiceEditor(
                     .clickable(enabled = !saving) {
                         saving = true
                         scope.launch {
-                            s.recordId = InvoiceRepo.save(ctx, s.toRecord(), s.itemRecords())
+                            s.recordId = InvoiceRepo.save(
+                                ctx, s.toRecord(), s.itemRecords(), s.paymentRecords()
+                            )
                             savedAt = System.currentTimeMillis()
                             saving = false
                         }

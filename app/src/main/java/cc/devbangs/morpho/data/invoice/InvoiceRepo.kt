@@ -18,8 +18,12 @@ object InvoiceRepo {
     suspend fun load(ctx: Context, id: Long): InvoiceWithItems? =
         MorphoDb.get(ctx).invoices().load(id)
 
-    suspend fun save(ctx: Context, record: InvoiceRecord, items: List<InvoiceItemRecord>): Long =
-        MorphoDb.get(ctx).invoices().save(record, items)
+    suspend fun save(
+        ctx: Context,
+        record: InvoiceRecord,
+        items: List<InvoiceItemRecord>,
+        payments: List<PaymentRecord>
+    ): Long = MorphoDb.get(ctx).invoices().save(record, items, payments)
 
     suspend fun delete(ctx: Context, id: Long) =
         MorphoDb.get(ctx).invoices().deleteById(id)
