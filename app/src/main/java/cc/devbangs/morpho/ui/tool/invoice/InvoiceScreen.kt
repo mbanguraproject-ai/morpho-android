@@ -30,6 +30,10 @@ import cc.devbangs.morpho.ui.tool.kit.FieldLabel
 import android.graphics.Bitmap
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import cc.devbangs.morpho.data.invoice.BusinessRecord
+import cc.devbangs.morpho.data.invoice.ClientRecord
 import cc.devbangs.morpho.data.invoice.InvoiceRecord
 import cc.devbangs.morpho.data.invoice.InvoiceRepo
 import cc.devbangs.morpho.ui.tool.kit.ProcessingCard
@@ -294,11 +298,13 @@ private fun Field(label: String, v: MutableState<String>, hint: String,
 private fun DetailsTab(s: InvoiceState, accent: Color) {
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
         SectionTitle("YOUR BUSINESS")
+        SavedBusinessRow(s, accent)
         Field("BUSINESS NAME", s.bizName, "Acme Studio")
         Field("ADDRESS · PHONE · EMAIL", s.bizDetails, "12 King St, Freetown\n+232 …", minLines = 2)
         Field("TAX / VAT ID", s.bizTaxId, "TIN 100234567")
 
         SectionTitle("BILL TO")
+        SavedClientRow(s, accent)
         Field("CLIENT NAME", s.clientName, "Blue Co Ltd")
         Field("CLIENT ADDRESS", s.clientDetails, "45 Wilkinson Rd", minLines = 2)
         Field("PO / REFERENCE", s.poNumber, "BC-8842")
@@ -439,6 +445,137 @@ private fun StyleTab(s: InvoiceState, accent: Color) {
             }
         }
     }
+}
+
+/**
+ * A saved entry, and the control that saves the current one.
+ *
+ * Tapping an entry fills the fields below rather than binding to them. The
+ * invoice keeps its own copy, so editing a client here later leaves documents
+ * already issued exactly as they were sent.
+ */
+@Composable
+private fun SavedRow(
+    labels: List<Pair<Long, String>>,
+    accent: Color,
+    canSave: Boolean,
+    onPick: (Long) -> Unit,
+    onSave: () -> Unit,
+    onDelete: (Long) -> Unit
+) {
+    var armed by remember { mutableStateOf(0L) }
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (canSave) {
+            Box(
+                Modifier.clip(Shape.pill).background(accent)
+                    .clickable { onSave() }
+                    .padding(horizontal = 13.dp, vertical = 8.dp)
+            ) {
+                Text("Save this", color = Paper, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            }
+        }
+        labels.forEach { (id, label) ->
+            val warn = armed == id
+            Row(
+                Modifier.clip(Shape.pill)
+                    .background(if (warn) accent.copy(alpha = 0.22f) else PaperSunk)
+                    .padding(start = 13.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    label,
+                    color = InkSoft, fontSize = 12.sp,
+                    modifier = Modifier.clickable { armed = 0L; onPick(id) }
+                )
+                Spacer(Modifier.width(6.dp))
+                Box(
+                    Modifier.size(20.dp).clip(Shape.pill)
+                        .background(if (warn) accent else PaperLine.copy(alpha = 0.6f))
+                        .clickable {
+                            if (warn) { armed = 0L; onDelete(id) } else armed = id
+                        },
+                    contentAlignment = Alignment.Center
+                ) { MorphoIcon("close", tint = if (warn) Paper else InkSoft, size = 10.dp) }
+            }
+        }
+        if (labels.isEmpty() && !canSave) {
+            Text("Fill this in once and save it for next time.", color = InkFaint, fontSize = 12.sp)
+        }
+    }
+}
+
+@Composable
+private fun SavedBusinessRow(s: InvoiceState, accent: Color) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val saved by InvoiceRepo.observeBusinesses(ctx).collectAsState(initial = emptyList())
+    SavedRow(
+        labels = saved.map { it.id to it.name.ifBlank { "Unnamed" } },
+        accent = accent,
+        canSave = s.bizName.value.isNotBlank(),
+        onPick = { id ->
+            saved.firstOrNull { it.id == id }?.let {
+                s.bizName.value = it.name
+                s.bizDetails.value = it.details
+                s.bizTaxId.value = it.taxId
+            }
+        },
+        onSave = {
+            scope.launch {
+                // Same name updates in place instead of stacking duplicates
+                // every time an invoice is written.
+                val existing = saved.firstOrNull { it.name.equals(s.bizName.value, true) }
+                InvoiceRepo.saveBusiness(
+                    ctx,
+                    BusinessRecord(
+                        id = existing?.id ?: 0L,
+                        name = s.bizName.value,
+                        details = s.bizDetails.value,
+                        taxId = s.bizTaxId.value
+                    )
+                )
+            }
+        },
+        onDelete = { id -> scope.launch { InvoiceRepo.deleteBusiness(ctx, id) } }
+    )
+}
+
+@Composable
+private fun SavedClientRow(s: InvoiceState, accent: Color) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val saved by InvoiceRepo.observeClients(ctx).collectAsState(initial = emptyList())
+    SavedRow(
+        labels = saved.map { it.id to it.name.ifBlank { "Unnamed" } },
+        accent = accent,
+        canSave = s.clientName.value.isNotBlank(),
+        onPick = { id ->
+            saved.firstOrNull { it.id == id }?.let {
+                s.clientName.value = it.name
+                s.clientDetails.value = it.details
+                s.poNumber.value = it.reference
+            }
+        },
+        onSave = {
+            scope.launch {
+                val existing = saved.firstOrNull { it.name.equals(s.clientName.value, true) }
+                InvoiceRepo.saveClient(
+                    ctx,
+                    ClientRecord(
+                        id = existing?.id ?: 0L,
+                        name = s.clientName.value,
+                        details = s.clientDetails.value,
+                        reference = s.poNumber.value
+                    )
+                )
+            }
+        },
+        onDelete = { id -> scope.launch { InvoiceRepo.deleteClient(ctx, id) } }
+    )
 }
 
 /**

@@ -24,6 +24,24 @@ object InvoiceRepo {
     suspend fun delete(ctx: Context, id: Long) =
         MorphoDb.get(ctx).invoices().deleteById(id)
 
+    fun observeBusinesses(ctx: Context): Flow<List<BusinessRecord>> =
+        MorphoDb.get(ctx).invoices().observeBusinesses()
+
+    suspend fun saveBusiness(ctx: Context, record: BusinessRecord): Long =
+        MorphoDb.get(ctx).invoices().upsertBusiness(record.copy(updatedAt = System.currentTimeMillis()))
+
+    suspend fun deleteBusiness(ctx: Context, id: Long) =
+        MorphoDb.get(ctx).invoices().deleteBusiness(id)
+
+    fun observeClients(ctx: Context): Flow<List<ClientRecord>> =
+        MorphoDb.get(ctx).invoices().observeClients()
+
+    suspend fun saveClient(ctx: Context, record: ClientRecord): Long =
+        MorphoDb.get(ctx).invoices().upsertClient(record.copy(updatedAt = System.currentTimeMillis()))
+
+    suspend fun deleteClient(ctx: Context, id: Long) =
+        MorphoDb.get(ctx).invoices().deleteClient(id)
+
     /**
      * The next document number for a type, as sequence and formatted string.
      *

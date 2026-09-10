@@ -98,3 +98,35 @@ data class InvoiceItemRecord(
     val qty: String = "1",
     val rate: String = "0"
 )
+
+/**
+ * A business you invoice as.
+ *
+ * Nothing links an invoice to this row. The invoice keeps its own copy of the
+ * name, address and tax id, and this only fills those fields. That is
+ * deliberate: an invoice is a record of what was sent, and if the address is
+ * referenced rather than copied, moving premises next year silently rewrites
+ * every invoice already issued.
+ */
+@Entity(tableName = "businesses")
+data class BusinessRecord(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String = "",
+    val details: String = "",
+    val taxId: String = "",
+    val updatedAt: Long = 0L
+)
+
+/**
+ * Someone you bill. Copied onto the invoice for the same reason as
+ * [BusinessRecord] - a client changing address must not alter last year's
+ * documents.
+ */
+@Entity(tableName = "clients")
+data class ClientRecord(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String = "",
+    val details: String = "",
+    val reference: String = "",
+    val updatedAt: Long = 0L
+)

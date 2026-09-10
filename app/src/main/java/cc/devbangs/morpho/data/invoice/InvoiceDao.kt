@@ -55,6 +55,24 @@ interface InvoiceDao {
     @Query("DELETE FROM invoice_items WHERE invoiceId = :id")
     suspend fun clearItems(id: Long)
 
+    @Query("SELECT * FROM businesses ORDER BY updatedAt DESC")
+    fun observeBusinesses(): Flow<List<BusinessRecord>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertBusiness(record: BusinessRecord): Long
+
+    @Query("DELETE FROM businesses WHERE id = :id")
+    suspend fun deleteBusiness(id: Long)
+
+    @Query("SELECT * FROM clients ORDER BY updatedAt DESC")
+    fun observeClients(): Flow<List<ClientRecord>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertClient(record: ClientRecord): Long
+
+    @Query("DELETE FROM clients WHERE id = :id")
+    suspend fun deleteClient(id: Long)
+
     @Transaction
     suspend fun load(id: Long): InvoiceWithItems? {
         val inv = find(id) ?: return null

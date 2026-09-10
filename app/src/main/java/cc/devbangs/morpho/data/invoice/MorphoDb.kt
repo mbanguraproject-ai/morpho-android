@@ -19,8 +19,13 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * loudly in development instead.
  */
 @Database(
-    entities = [InvoiceRecord::class, InvoiceItemRecord::class],
-    version = 2,
+    entities = [
+        InvoiceRecord::class,
+        InvoiceItemRecord::class,
+        BusinessRecord::class,
+        ClientRecord::class
+    ],
+    version = 3,
     exportSchema = true
 )
 abstract class MorphoDb : RoomDatabase() {
@@ -35,6 +40,36 @@ abstract class MorphoDb : RoomDatabase() {
          * costs ten lines here; the alternative would have dropped every saved
          * invoice to add one column.
          */
+        /**
+         * Adds saved businesses and clients.
+         *
+         * The SQL has to match what Room generates for these entities exactly
+         * - column order, types, the NOT NULL and AUTOINCREMENT wording. Room
+         * hashes the schema and refuses to open a database that does not
+         * match, which is a loud failure rather than a quiet corruption, and
+         * the only real test is opening an existing database.
+         */
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `businesses` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`name` TEXT NOT NULL, " +
+                        "`details` TEXT NOT NULL, " +
+                        "`taxId` TEXT NOT NULL, " +
+                        "`updatedAt` INTEGER NOT NULL)"
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `clients` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`name` TEXT NOT NULL, " +
+                        "`details` TEXT NOT NULL, " +
+                        "`reference` TEXT NOT NULL, " +
+                        "`updatedAt` INTEGER NOT NULL)"
+                )
+            }
+        }
+
         private val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE invoices ADD COLUMN total REAL NOT NULL DEFAULT 0")
@@ -47,7 +82,7 @@ abstract class MorphoDb : RoomDatabase() {
         fun get(ctx: Context): MorphoDb = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 ctx.applicationContext, MorphoDb::class.java, "morpho.db"
-            ).addMigrations(MIGRATION_1_2).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { instance = it }
         }
     }
 }
