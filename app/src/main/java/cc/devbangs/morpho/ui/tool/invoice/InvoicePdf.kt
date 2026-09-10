@@ -92,6 +92,7 @@ private fun drawModern(c: Canvas, s: InvoiceState, accent: Int) {
         y = multiline(c, s.payment.value, M, y, p(SOFT, 24f), 32f)
         if (s.notes.value.isNotBlank()) { y += 16f; multiline(c, s.notes.value, M, y, p(SOFT, 24f), 32f) }
     }
+    drawSignature(c, s)
 }
 
 private fun metaCell(c: Canvas, label: String, value: String, x: Float, y: Float) {
@@ -121,6 +122,7 @@ private fun drawClassic(c: Canvas, s: InvoiceState, accent: Int) {
     if (s.payment.value.isNotBlank()) { y += 40f; c.drawText("PAYMENT", M, y, p(FAINT, 22f, true)); y += 32f
         y = multiline(c, s.payment.value, M, y, p(SOFT, 24f), 32f) }
     if (s.notes.value.isNotBlank()) { y += 16f; multiline(c, s.notes.value, M, y, p(SOFT, 24f), 32f) }
+    drawSignature(c, s)
 }
 
 // ---------- MINIMAL ----------
@@ -137,6 +139,7 @@ private fun drawMinimal(c: Canvas, s: InvoiceState, accent: Int) {
     y = drawTable(c, s, y, accent, minimal = true)
     y += 20f; y = drawTotals(c, s, y, accent, boxed = false)
     if (s.notes.value.isNotBlank()) { y += 40f; multiline(c, s.notes.value, M, y, p(SOFT, 24f), 32f) }
+    drawSignature(c, s)
 }
 
 // ---------- shared table ----------
@@ -245,6 +248,39 @@ private fun drawPaidStamp(c: Canvas, cx: Float, cy: Float) {
     )
     c.drawText("PAID", cx, cy + 22f, p(green, 62f, true, Paint.Align.CENTER).apply { alpha = 205 })
     c.restore()
+}
+
+/**
+ * The signature block, bottom right.
+ *
+ * Fixed to the page rather than flowing after the notes: the templates track
+ * their own y differently and one of them does not advance it past the notes
+ * at all, so a flowed signature would land in a different place depending on
+ * which template was chosen. A signature belongs above the bottom margin
+ * regardless.
+ */
+private fun drawSignature(c: Canvas, s: InvoiceState) {
+    val path = s.signaturePath.value
+    if (path.isBlank()) return
+    val bmp = try {
+        android.graphics.BitmapFactory.decodeFile(path)
+    } catch (e: Exception) { null } catch (e: OutOfMemoryError) { null } ?: return
+
+    val boxW = 340f
+    val boxH = 120f
+    val left = PW - M - boxW
+    val rule = PH - M - 60f
+    val scale = minOf(boxW / bmp.width, boxH / bmp.height)
+    val w = bmp.width * scale
+    val h = bmp.height * scale
+    val x = left + (boxW - w) / 2f
+    c.drawBitmap(
+        bmp, null,
+        RectF(x, rule - h - 6f, x + w, rule - 6f),
+        Paint().apply { isFilterBitmap = true; isAntiAlias = true }
+    )
+    c.drawLine(left, rule, left + boxW, rule, Paint().apply { color = SOFT; strokeWidth = 2f })
+    c.drawText("Authorised signature", left, rule + 34f, p(FAINT, 20f))
 }
 
 private fun fmtNum(v: Double): String {

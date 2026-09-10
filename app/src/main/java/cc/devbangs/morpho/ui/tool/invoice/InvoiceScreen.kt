@@ -375,6 +375,9 @@ private fun DetailsTab(s: InvoiceState, accent: Color) {
             Box(Modifier.weight(1f)) { Field("SHIPPING", s.shipping, "0", number = true) }
         }
 
+        SectionTitle("SIGNATURE")
+        SignatureSection(s, accent)
+
         SectionTitle("PAYMENTS RECEIVED")
         s.payments.forEachIndexed { i, p -> PaymentRow(s, i, p, accent) }
         AddItemButton(accent) { s.payments.add(PaymentEntry("0", s.issueDate.value, "")) }
@@ -516,6 +519,67 @@ private fun StatusBadge(status: String, currency: String, outstanding: Double, a
             label, color = if (filled) Paper else accent,
             fontSize = 10.sp, fontWeight = FontWeight.SemiBold
         )
+    }
+}
+
+@Composable
+private fun SignatureSection(s: InvoiceState, accent: Color) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var padOpen by remember { mutableStateOf(false) }
+    val path = s.signaturePath.value
+
+    when {
+        padOpen -> SignaturePad(
+            accent = accent,
+            onCancel = { padOpen = false },
+            onSave = { strokes, size ->
+                padOpen = false
+                scope.launch {
+                    // Rasterising and writing a PNG is file work, not UI work.
+                    val written = withContext(Dispatchers.IO) {
+                        writeSignature(ctx, strokes, size)
+                    }
+                    if (written.isNotBlank()) s.signaturePath.value = written
+                }
+            }
+        )
+
+        path.isNotBlank() -> Row(
+            Modifier.fillMaxWidth().clip(Shape.field).background(PaperSunk).padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            val bmp = remember(path) { android.graphics.BitmapFactory.decodeFile(path) }
+            if (bmp != null) {
+                Image(
+                    bmp.asImageBitmap(), null,
+                    Modifier.height(46.dp).weight(1f),
+                    contentScale = ContentScale.Fit
+                )
+            } else {
+                Text("Signature saved", color = InkSoft, fontSize = 13.sp, modifier = Modifier.weight(1f))
+            }
+            Box(
+                Modifier.clip(Shape.pill).background(accent.copy(alpha = 0.12f))
+                    .clickable { padOpen = true }
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+            ) { Text("Redraw", color = accent, fontSize = 12.sp) }
+            Spacer(Modifier.width(6.dp))
+            Box(
+                Modifier.clip(Shape.pill).background(Ink.copy(alpha = 0.5f))
+                    .clickable { s.signaturePath.value = "" }
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+            ) { MorphoIcon("close", tint = Paper, size = 12.dp) }
+        }
+
+        else -> Box(
+            Modifier.fillMaxWidth().clip(Shape.field)
+                .background(accent.copy(alpha = 0.09f))
+                .border(1.5.dp, accent.copy(alpha = 0.22f), Shape.field)
+                .clickable { padOpen = true }
+                .padding(vertical = 16.dp),
+            contentAlignment = Alignment.Center
+        ) { Text("Add a signature", color = accent, fontSize = 14.sp) }
     }
 }
 
@@ -803,7 +867,7 @@ private fun previewSignature(s: InvoiceState): String = listOf(
     s.bizName.value, s.bizDetails.value, s.bizTaxId.value,
     s.clientName.value, s.clientDetails.value, s.poNumber.value,
     s.taxLabel.value, s.taxRate.value, s.discountRate.value, s.shipping.value,
-    s.showPaidStamp.value.toString(), s.sentAt.value.toString(),
+    s.showPaidStamp.value.toString(), s.sentAt.value.toString(), s.signaturePath.value,
     s.payments.joinToString("|") { it.amount.value + ";" + it.date.value + ";" + it.note.value },
     s.payment.value, s.notes.value,
     s.items.joinToString("|") {

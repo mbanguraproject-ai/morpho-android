@@ -27,7 +27,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         CatalogItemRecord::class,
         PaymentRecord::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = true
 )
 abstract class MorphoDb : RoomDatabase() {
@@ -60,6 +60,20 @@ abstract class MorphoDb : RoomDatabase() {
          * invoice from last month would show a different total than the
          * customer received, which is the worst thing an invoicing app can do.
          */
+        /**
+         * Adds the signature and logo paths.
+         *
+         * Both columns land together although only the signature is wired in
+         * this stage - a second migration to add one more empty text column
+         * would be cost with no benefit.
+         */
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE invoices ADD COLUMN signaturePath TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE invoices ADD COLUMN logoPath TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         /**
          * Adds payments, and the fields that follow from them.
          *
@@ -160,7 +174,7 @@ abstract class MorphoDb : RoomDatabase() {
                 ctx.applicationContext, MorphoDb::class.java, "morpho.db"
             ).addMigrations(
                 MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4,
-                MIGRATION_4_5, MIGRATION_5_6
+                MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7
             ).build().also { instance = it }
         }
     }

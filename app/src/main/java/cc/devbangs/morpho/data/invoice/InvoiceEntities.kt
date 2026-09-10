@@ -67,6 +67,20 @@ data class InvoiceRecord(
     val showPaidStamp: Boolean = true,
 
     /**
+     * Files under filesDir, not blobs in the table.
+     *
+     * A logo is tens of kilobytes; a hundred invoices holding one each would
+     * bloat the database and slow every query that touches this table, for
+     * data no query ever looks inside. The path is copied onto the invoice
+     * rather than pointing at the business, so replacing a logo next year
+     * leaves last year's documents as they were sent.
+     *
+     * Empty means none.
+     */
+    val signaturePath: String = "",
+    val logoPath: String = "",
+
+    /**
      * The document total, stored rather than derived.
      *
      * The list has to show an amount per row. Deriving it would mean either a

@@ -85,6 +85,8 @@ class InvoiceState {
     val payments = mutableStateListOf<PaymentEntry>()
     val sentAt = mutableStateOf(0L)
     val showPaidStamp = mutableStateOf(true)
+    val signaturePath = mutableStateOf("")
+    val logoPath = mutableStateOf("")
     val payment = mutableStateOf("")
     val notes = mutableStateOf("Thank you for your business.")
     // Style
@@ -185,6 +187,8 @@ fun InvoiceState.toRecord(now: Long = System.currentTimeMillis()): InvoiceRecord
     sentAt = sentAt.value,
     paid = paidAmt,
     showPaidStamp = showPaidStamp.value,
+    signaturePath = signaturePath.value,
+    logoPath = logoPath.value,
     total = this.total,
     createdAt = if (createdAt == 0L) now else createdAt,
     updatedAt = now
@@ -243,6 +247,8 @@ fun InvoiceState.loadFrom(data: InvoiceWithItems) {
     shipping.value = r.shipping
     sentAt.value = r.sentAt
     showPaidStamp.value = r.showPaidStamp
+    signaturePath.value = r.signaturePath
+    logoPath.value = r.logoPath
     payment.value = r.payment
     notes.value = r.notes
     template.value = runCatching { Template.valueOf(r.template) }.getOrDefault(Template.MODERN)
