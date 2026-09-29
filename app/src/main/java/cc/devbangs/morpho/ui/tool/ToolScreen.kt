@@ -195,7 +195,9 @@ private fun ToolPitchBlock(tool: Tool, accent: Color) {
         style = MaterialTheme.typography.bodyLarge, color = Ink, lineHeight = 23.sp
     )
     Spacer(Modifier.height(Space.md))
-    Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+    // Spread end to end rather than bunched at the left edge with the rest of
+    // the row empty. Chips keep their natural width, so nothing clips.
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         ToolPitch.badges(tool).forEach { b -> BadgeChip(b, accent) }
     }
     if (!tool.offline) {
