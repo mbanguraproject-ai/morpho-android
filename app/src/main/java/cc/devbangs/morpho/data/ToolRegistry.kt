@@ -90,6 +90,7 @@ object ToolRegistry {
         Tool("palette-generator", "Color Palette Generator", "Generate shades from a base color", ToolCategory.GENERATOR, "palette-generator", offline = true, popular = false),
         Tool("youtube-thumbnail-downloader", "YouTube Thumbnail Downloader", "Download YouTube thumbnails in HD", ToolCategory.GENERATOR, "youtube-thumbnail-downloader", offline = true, popular = false),
         Tool("barcode-generator", "Barcode Generator", "Generate barcodes in multiple formats", ToolCategory.GENERATOR, "barcode-generator", offline = true, popular = false),
+        Tool("code-scanner", "QR & Barcode Scanner", "Read any QR code or barcode from a picture", ToolCategory.GENERATOR, "code-scanner", offline = true, popular = true, keywords = listOf("scan", "read qr", "decode", "reader", "wifi qr", "barcode reader")),
         Tool("json-formatter", "JSON Formatter & Validator", "Format and validate JSON data", ToolCategory.DEVELOPER, "json-formatter", offline = true, popular = true),
         Tool("color-picker", "Color Picker & Palette Generator", "Pick colors and generate palettes", ToolCategory.DEVELOPER, "color-picker", offline = true, popular = false),
         Tool("favicon-generator", "Favicon Generator", "Generate website favicons from images", ToolCategory.DEVELOPER, "favicon-generator", offline = true, popular = false),

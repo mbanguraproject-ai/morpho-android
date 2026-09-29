@@ -28,7 +28,7 @@ import kotlinx.coroutines.withContext
 import kotlin.random.Random
 
 fun hasGeneratorTool(id: String): Boolean = id in setOf(
-    "password-generator","qr-code-generator","barcode-generator","fake-data-generator",
+    "password-generator","qr-code-generator","barcode-generator","code-scanner","fake-data-generator",
     "username-generator","email-signature-generator","gradient-generator","css-generator",
     "cover-letter-generator","api-key-generator","hashtag-generator","palette-generator"
 )
@@ -37,6 +37,7 @@ fun hasGeneratorTool(id: String): Boolean = id in setOf(
 fun GeneratorTool(id: String, accent: Color) {
     when (id) {
         "password-generator" -> PasswordTool(accent)
+        "code-scanner" -> ScannerTool(accent)
         "username-generator" -> UsernameTool(accent)
         "email-signature-generator" -> EmailSigTool(accent)
         "gradient-generator" -> GradientTool(accent)

@@ -189,6 +189,8 @@ object ToolPitch {
             "Generate a full range of tints and shades from one base colour, with every code ready to copy.",
         "youtube-thumbnail-downloader" to
             "Grab the thumbnail image from a YouTube video in the highest resolution available.",
+        "code-scanner" to
+            "Read what is actually on a QR code or barcode - point your camera at it, or open a screenshot someone sent you. Morpho tells you whether it is a link, a Wi-Fi network, a contact or a product number before you act on it, and finds every code in the picture rather than just the first.",
         "barcode-generator" to
             "Generate barcodes in the standard retail and logistics formats, then save or share them as images. For labelling stock, assets or anything that needs scanning.",
         "json-formatter" to
