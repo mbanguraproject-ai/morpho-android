@@ -61,52 +61,185 @@ fun LastTool(id: String, accent: Color) {
 }
 
 // ---- Voice recorder ----
+
+/** Capture settings, so the user picks the trade rather than inheriting one. */
+private data class RecQuality(
+    val label: String,
+    val detail: String,
+    val sampleRate: Int,
+    val channels: Int,
+    val bitRate: Int
+)
+
+private val REC_QUALITIES = listOf(
+    RecQuality("Voice note", "22 kHz mono - smallest file", 22050, 1, 64_000),
+    RecQuality("Standard", "44 kHz mono - speech and lectures", 44100, 1, 128_000),
+    RecQuality("High", "44 kHz stereo - music and room sound", 44100, 2, 192_000)
+)
+
 @Composable
 private fun VoiceRecorder(accent: Color) {
     val ctx = LocalContext.current
-    var recording by remember { mutableStateOf(false) }
     var recorder by remember { mutableStateOf<MediaRecorder?>(null) }
     var lastFile by remember { mutableStateOf<File?>(null) }
+    var quality by remember { mutableStateOf(1) }
+    var elapsed by remember { mutableStateOf(0L) }
+    var level by remember { mutableStateOf(0f) }
+    var error by remember { mutableStateOf("") }
+    val recording = recorder != null
     var hasPerm by remember { mutableStateOf(
         ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
     ) }
     val permLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()) { hasPerm = it }
 
+    // Clock and level meter, so it is obvious the microphone is actually live.
+    LaunchedEffect(recording) {
+        if (!recording) return@LaunchedEffect
+        val began = System.currentTimeMillis()
+        while (true) {
+            kotlinx.coroutines.delay(100)
+            elapsed = System.currentTimeMillis() - began
+            level = (runCatching { recorder?.maxAmplitude ?: 0 }.getOrDefault(0) / 12000f)
+                .coerceIn(0f, 1f)
+        }
+    }
+    // A recorder left running holds the microphone open for the whole app.
+    DisposableEffect(Unit) {
+        onDispose {
+            recorder?.let { r -> runCatching { r.stop() }; runCatching { r.release() } }
+            ToolWork.reset()
+        }
+    }
+
+    fun begin() {
+        error = ""
+        val q = REC_QUALITIES[quality]
+        val f = File(ctx.cacheDir, "rec_${System.currentTimeMillis()}.m4a")
+        val r = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) MediaRecorder(ctx)
+                else @Suppress("DEPRECATION") MediaRecorder()
+        // prepare() throws IOException and start() throws IllegalStateException
+        // when the microphone is held by a call or another app. Unguarded, that
+        // was a process crash rather than a failed recording.
+        try {
+            r.setAudioSource(MediaRecorder.AudioSource.MIC)
+            r.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            r.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            r.setAudioSamplingRate(q.sampleRate)
+            r.setAudioChannels(q.channels)
+            r.setAudioEncodingBitRate(q.bitRate)
+            r.setOutputFile(f.absolutePath)
+            r.prepare()
+            r.start()
+            recorder = r
+            lastFile = f
+            elapsed = 0L
+            ToolWork.start()
+        } catch (e: Exception) {
+            runCatching { r.release() }
+            f.delete()
+            error = "Morpho couldn't start the microphone. Another app or a call may be using it."
+        }
+    }
+
+    fun finish() {
+        val r = recorder ?: return
+        recorder = null
+        ToolWork.done()
+        val ok = runCatching { r.stop() }.isSuccess
+        runCatching { r.release() }
+        level = 0f
+        if (!ok || (lastFile?.length() ?: 0L) <= 0L) {
+            lastFile?.delete(); lastFile = null
+            error = "That recording came out empty. Try again and speak for a second or two."
+        }
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
         if (!hasPerm) {
+            Text("Morpho records straight to your device - nothing is uploaded.",
+                color = InkSoft, fontSize = 14.sp)
             ToolButton("Grant microphone access", accent) {
                 permLauncher.launch(Manifest.permission.RECORD_AUDIO)
             }
-        } else {
-            Box(Modifier.fillMaxWidth().clip(Shape.card)
-                .background(if (recording) accent else accent.copy(alpha = 0.08f))
-                .clickable {
-                    if (!recording) {
-                        val f = File(ctx.cacheDir, "rec_${System.currentTimeMillis()}.m4a")
-                        val r = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) MediaRecorder(ctx) else MediaRecorder()
-                        r.setAudioSource(MediaRecorder.AudioSource.MIC)
-                        r.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-                        r.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-                        r.setOutputFile(f.absolutePath)
-                        r.prepare(); r.start()
-                        recorder = r; lastFile = f; recording = true
-                    } else {
-                        try { recorder?.stop(); recorder?.release() } catch (_: Exception) {}
-                        recorder = null; recording = false
+            return@Column
+        }
+
+        if (!recording && lastFile == null) {
+            Column {
+                FieldLabel("QUALITY")
+                Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
+                    REC_QUALITIES.forEachIndexed { i, q ->
+                        val on = i == quality
+                        Row(
+                            Modifier.fillMaxWidth().clip(Shape.field)
+                                .background(if (on) accent.copy(alpha = 0.12f) else PaperSunk)
+                                .clickable { quality = i }
+                                .padding(horizontal = Space.md, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(q.label, color = Ink, fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold)
+                                Text(q.detail, color = InkSoft, fontSize = 12.5.sp)
+                            }
+                            if (on) MorphoIcon("check", tint = accent, size = 17.dp)
+                        }
                     }
-                }.padding(Space.xl), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    MorphoIcon("cat-audio", tint = if (recording) Paper else accent, size = 36.dp)
-                    Spacer(Modifier.height(Space.sm))
-                    Text(if (recording) "Recording… tap to stop" else "Tap to record",
-                        color = if (recording) Paper else accent, fontSize = 15.sp)
                 }
             }
-            lastFile?.let { f ->
-                if (!recording) ToolButton("Save recording", accent) {
-                    saveMediaToGallery(ctx, f, "voice_${System.currentTimeMillis()}.m4a", false)
+        }
+
+        Column(
+            Modifier.fillMaxWidth().clip(Shape.card)
+                .background(if (recording) accent.copy(alpha = 0.12f) else PaperSunk)
+                .padding(vertical = Space.xl),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(Space.md)
+        ) {
+            Text(fmtTime(elapsed), color = Ink, fontSize = 34.sp, fontWeight = FontWeight.Bold)
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = Space.xl),
+                horizontalArrangement = Arrangement.spacedBy(3.dp)
+            ) {
+                repeat(24) { i ->
+                    val lit = recording && level * 24f > i
+                    Box(
+                        Modifier.weight(1f).height(if (lit) 18.dp else 6.dp).clip(Shape.pill)
+                            .background(if (lit) accent else accent.copy(alpha = 0.18f))
+                    )
                 }
+            }
+            Text(
+                when {
+                    recording -> "Recording"
+                    lastFile != null -> "Recorded"
+                    else -> "Ready"
+                },
+                color = InkSoft, fontSize = 13.sp
+            )
+        }
+
+        if (error.isNotEmpty()) ToolErrorCard("Couldn't record", error, accent)
+
+        if (recording) {
+            ToolButton("Stop recording", accent) { finish() }
+        } else if (lastFile == null) {
+            ToolButton("Start recording", accent) { begin() }
+        } else {
+            val f = lastFile!!
+            ToolResultCard(
+                fileName = f.name,
+                sizeBytes = f.length(),
+                accent = accent,
+                detail = "${fmtTime(elapsed)} · ${REC_QUALITIES[quality].label}",
+                onSave = {
+                    saveMediaToGallery(ctx, f, "voice_${System.currentTimeMillis()}.m4a", false)
+                },
+                onShare = { shareCacheFile(ctx, f, "audio/mp4", "Share audio") }
+            )
+            ToolButton("Record another", accent.copy(alpha = 0.35f)) {
+                lastFile = null; elapsed = 0L; error = ""
             }
         }
     }
@@ -119,14 +252,50 @@ private fun AudioJoiner(accent: Color) {
     var uris by remember { mutableStateOf<List<Uri>>(emptyList()) }
     var joining by remember { mutableStateOf(false) }
     val joinScope = androidx.compose.runtime.rememberCoroutineScope()
+    var joinError by remember { mutableStateOf("") }
     val picker = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenMultipleDocuments()) { uris = it }
+        ActivityResultContracts.OpenMultipleDocuments()) { picked ->
+        if (picked.isNotEmpty()) { uris = picked; joinError = "" }
+    }
     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
         PickRow("Choose audio files", "cat-audio", accent) {
             picker.launch(arrayOf("audio/*"))
         }
         if (uris.isNotEmpty()) {
-            Text("${uris.size} file(s) — joined in order", color = InkSoft, fontSize = 13.sp)
+            Text("${uris.size} file(s) — joined in the order below",
+                color = InkSoft, fontSize = 13.sp)
+            // The order is the whole point of a joiner, so it has to be movable.
+            Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
+                uris.forEachIndexed { i, u ->
+                    Row(
+                        Modifier.fillMaxWidth().clip(Shape.field).background(PaperSunk)
+                            .padding(start = Space.md, end = Space.sm, top = 6.dp, bottom = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("${i + 1}", color = accent, fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(end = Space.md))
+                        Text(u.lastPathSegment ?: "Audio", color = Ink, fontSize = 13.5.sp,
+                            maxLines = 1, modifier = Modifier.weight(1f))
+                        if (i > 0) Box(
+                            Modifier.size(36.dp).clip(Shape.pill).clickable {
+                                uris = uris.toMutableList()
+                                    .also { it.add(i - 1, it.removeAt(i)) }
+                                joinError = ""
+                            },
+                            contentAlignment = Alignment.Center
+                        ) { MorphoIcon("chevron-up", tint = accent, size = 14.dp) }
+                        Box(
+                            Modifier.size(36.dp).clip(Shape.pill).clickable {
+                                uris = uris.toMutableList().also { it.removeAt(i) }
+                                joinError = ""
+                            },
+                            contentAlignment = Alignment.Center
+                        ) { MorphoIcon("close", tint = InkFaint, size = 14.dp) }
+                    }
+                }
+            }
+            if (joinError.isNotEmpty()) ToolErrorCard("Couldn't join those files", joinError, accent)
             // Concatenating tracks is not main-thread work, and without this
             // there was no indication anything was happening at all.
             if (joining) ProcessingCard("Joining audio\u2026", accent)
@@ -135,7 +304,15 @@ private fun AudioJoiner(accent: Color) {
                 val srcs = uris.toList()
                 joinScope.launch {
                     val out = withContext(Dispatchers.IO) { joinAudio(ctx, srcs) }
-                    if (out != null) saveMediaToGallery(ctx, out, "joined_${System.currentTimeMillis()}.m4a", false)
+                    // A null used to mean the button simply did nothing, which
+                    // reads as the app ignoring the tap.
+                    if (out != null) {
+                        joinError = ""
+                        saveMediaToGallery(ctx, out, "joined_${System.currentTimeMillis()}.m4a", false)
+                    } else {
+                        joinError = "Morpho couldn't decode one of those files on this " +
+                            "device. Try removing the last one you added."
+                    }
                     joining = false
                 }
             }
@@ -225,6 +402,34 @@ private fun PdfStamp(id: String, accent: Color) {
 }
 
 // ---- helpers ----
+/** Copy a cache file into the shared/ dir and hand it to the chooser. */
+private fun shareCacheFile(
+    ctx: android.content.Context, file: File, mime: String, title: String
+) {
+    try {
+        val dir = File(ctx.cacheDir, "shared").apply { mkdirs() }
+        val copy = File(dir, file.name)
+        file.inputStream().use { i ->
+            java.io.FileOutputStream(copy).use { o -> i.copyTo(o) }
+        }
+        val uri = androidx.core.content.FileProvider.getUriForFile(
+            ctx, "${ctx.packageName}.fileprovider", copy
+        )
+        ctx.startActivity(
+            Intent.createChooser(
+                Intent(Intent.ACTION_SEND).apply {
+                    type = mime
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                },
+                title
+            )
+        )
+    } catch (e: Exception) {
+        android.widget.Toast.makeText(ctx, "Share failed", android.widget.Toast.LENGTH_SHORT).show()
+    }
+}
+
 private fun stampHeaderFooter(src: Bitmap, header: String, footer: String): Bitmap {
     val out = src.copy(Bitmap.Config.ARGB_8888, true); val c = Canvas(out)
     val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF444444.toInt(); textSize = out.width/40f }
