@@ -51,6 +51,8 @@ object ToolPitch {
             "Fix pages that scanned in sideways or upside down. Rotate the whole document or just the pages that are wrong, and save it straight.",
         "image-compressor" to
             "Make an image smaller without making it look bad. You choose the quality level and see the resulting file size before you save, so you can hit an upload limit exactly instead of guessing.",
+        "image-target-size" to
+            "Name the size you are allowed - 200 KB, 1 MB, whatever the form says - and Morpho finds the highest quality that still fits underneath it. For exam boards, visa portals and job applications that reject anything over a limit.",
         "image-resizer" to
             "Resize an image to exact dimensions. Pick a preset or type your own width and height, choose whether to fit or fill, and see the real output size before you save — no surprise crops.",
         "background-remover" to

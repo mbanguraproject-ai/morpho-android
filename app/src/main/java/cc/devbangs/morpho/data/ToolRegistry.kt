@@ -21,6 +21,7 @@ object ToolRegistry {
         Tool("pdf-page-rotator", "PDF Page Rotator", "Rotate PDF pages to any angle", ToolCategory.PDF, "pdf-page-rotator", offline = true, popular = false),
         Tool("image-compressor", "Image Compressor", "Compress images without losing quality", ToolCategory.IMAGE, "image-compressor", offline = true, popular = true),
         Tool("image-resizer", "Image Resizer", "Resize images to exact dimensions", ToolCategory.IMAGE, "image-resizer", offline = true, popular = true),
+        Tool("image-target-size", "Compress to Target Size", "Hit an exact KB limit, not a guess", ToolCategory.IMAGE, "image-compressor", offline = true, popular = true, keywords = listOf("kb", "limit", "under", "exact size", "upload limit", "passport", "exam", "visa", "portal")),
         Tool("background-remover", "Background Remover", "Remove image backgrounds with AI", ToolCategory.IMAGE, "background-remover", offline = true, popular = true, plus = true),
         Tool("image-cropper", "Image Cropper", "Crop images to any size or ratio", ToolCategory.IMAGE, "image-cropper", offline = true, popular = false),
         Tool("jpg-to-png", "JPG to PNG Converter", "Convert JPG images to PNG format", ToolCategory.CONVERTER, "jpg-to-png", offline = true, popular = false),

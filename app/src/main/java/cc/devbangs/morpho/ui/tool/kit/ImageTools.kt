@@ -48,7 +48,7 @@ import kotlin.math.hypot
 import kotlin.math.roundToInt
 
 fun hasImageTool(id: String): Boolean = id in setOf(
-    "image-compressor","image-resizer","image-cropper","image-rotator","image-blur",
+    "image-compressor","image-target-size","image-resizer","image-cropper","image-rotator","image-blur",
     "sharpen-image","watermark-image","exif-remover","image-metadata-viewer",
     "batch-image-converter","thumbnail-creator"
 )
@@ -115,6 +115,7 @@ fun ImageTool(id: String, accent: Color) {
         if (bmp != null) {
             when (id) {
                 "image-metadata-viewer" -> MetadataBody(bmp, picked, accent)
+                "image-target-size" -> TargetSizeBody(bmp, picked, accent)
                 "image-cropper" -> CropBody(bmp, accent)
                 "image-resizer" -> ResizeBody(bmp, picked, accent)
                 "thumbnail-creator" -> ThumbnailBody(bmp, accent)
@@ -1975,6 +1976,236 @@ private fun orientationLabel(v: Int): String = when (v) {
     ExifInterface.ORIENTATION_TRANSVERSE -> "Mirrored and rotated 270"
     else -> "Unspecified"
 }
+
+/** What a search settled on: the bitmap to write, and the terms it found. */
+private class FitResult(
+    val bitmap: Bitmap,
+    val quality: Int,
+    val bytes: Long,
+    val width: Int,
+    val height: Int,
+    val resized: Boolean
+)
+
+/**
+ * Find the best-looking encode that still fits under [targetBytes].
+ *
+ * Quality is searched rather than stepped, so a 12MP photo costs about seven
+ * encodes instead of ninety. If even the floor quality overshoots, the scale
+ * needed is computed from how far over it landed - file size goes roughly with
+ * pixel count, so sqrt(target/actual) lands close on the first try instead of
+ * shrinking by a fixed step six times and encoding at every stop.
+ *
+ * Pure and safe off the main thread. Returns null when the target cannot be
+ * met, which is a real answer and not a failure.
+ */
+private fun fitUnder(
+    src: Bitmap,
+    fmt: Bitmap.CompressFormat,
+    targetBytes: Long,
+    allowResize: Boolean
+): FitResult? {
+    fun search(b: Bitmap): Pair<Int, Long>? {
+        var lo = 5
+        var hi = 95
+        var best: Pair<Int, Long>? = null
+        while (lo <= hi) {
+            val mid = (lo + hi) / 2
+            val n = bitmapBytes(b, fmt, mid)
+            if (n in 1..targetBytes) { best = mid to n; lo = mid + 1 } else hi = mid - 1
+        }
+        return best
+    }
+
+    return try {
+        search(src)?.let {
+            return FitResult(src, it.first, it.second, src.width, src.height, false)
+        }
+        if (!allowResize) return null
+
+        var work = src
+        var owned = false          // never recycle the caller's bitmap
+        repeat(4) {
+            val floor = bitmapBytes(work, fmt, 5).coerceAtLeast(1L)
+            if (floor <= targetBytes) return@repeat
+            val factor = kotlin.math.sqrt(targetBytes.toDouble() / floor.toDouble()) * 0.94
+            val w = (work.width * factor).toInt().coerceAtLeast(64)
+            val h = (work.height * factor).toInt().coerceAtLeast(64)
+            if (w >= work.width || h >= work.height) return null
+            val next = Bitmap.createScaledBitmap(work, w, h, true)
+            if (owned) work.recycle()
+            work = next
+            owned = true
+            search(work)?.let {
+                return FitResult(work, it.first, it.second, work.width, work.height, true)
+            }
+        }
+        search(work)?.let {
+            FitResult(work, it.first, it.second, work.width, work.height, work !== src)
+        }
+    } catch (e: Exception) {
+        null
+    } catch (e: OutOfMemoryError) {
+        null
+    }
+}
+
+private val TARGET_PRESETS = listOf(100, 200, 500, 1024, 2048)
+
+/**
+ * Compress to a size the user names.
+ *
+ * The compressor asks "what quality?", which nobody knows the answer to. Every
+ * exam board, visa portal and job site instead states a ceiling in kilobytes,
+ * and people were left nudging a quality slider and re-checking the number.
+ */
+@Composable
+private fun TargetSizeBody(src: Bitmap, picked: Uri?, accent: Color) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var targetKb by remember { mutableStateOf(200) }
+    var custom by remember { mutableStateOf("") }
+    var fmtKey by remember { mutableStateOf("JPEG") }
+    var allowResize by remember { mutableStateOf(true) }
+    var working by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
+    var result by remember { mutableStateOf<FitResult?>(null) }
+    var impossible by remember { mutableStateOf(false) }
+    val original = remember(picked) { sourceFileSize(ctx, picked) }
+
+    val effectiveKb = custom.trim().toIntOrNull()?.takeIf { it > 0 } ?: targetKb
+    val fmt = compressFormatOf(fmtKey)
+
+    // Any change to the terms invalidates a result found under the old ones.
+    LaunchedEffect(effectiveKb, fmtKey, allowResize) {
+        result = null; impossible = false
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+        Column {
+            FieldLabel("FIT UNDER")
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                TARGET_PRESETS.forEach { kb ->
+                    val on = custom.isBlank() && kb == targetKb
+                    Box(Modifier.weight(1f)) {
+                        ToolButton(
+                            if (kb >= 1024) "${kb / 1024}MB" else "${kb}KB",
+                            if (on) accent else accent.copy(alpha = 0.35f)
+                        ) { targetKb = kb; custom = "" }
+                    }
+                }
+            }
+        }
+        Column {
+            FieldLabel("OR AN EXACT LIMIT IN KB")
+            ToolInput(custom, { custom = it.filter { c -> c.isDigit() }.take(7) },
+                "e.g. 150", minLines = 1, mono = true)
+        }
+        Column {
+            FieldLabel("FORMAT")
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                // PNG is left out on purpose: it ignores the quality argument,
+                // so there is nothing for the search to turn.
+                listOf("JPEG" to "Photos", "WEBP" to "Smaller").forEach { (key, hint) ->
+                    val on = key == fmtKey
+                    Column(
+                        Modifier.weight(1f).clip(Shape.field)
+                            .background(if (on) accent else accent.copy(alpha = 0.12f))
+                            .clickable { fmtKey = key }
+                            .padding(vertical = 10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(key, color = if (on) Paper else InkSoft, fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold)
+                        Text(hint, color = if (on) Paper.copy(alpha = 0.82f) else InkFaint,
+                            fontSize = 10.sp)
+                    }
+                }
+            }
+        }
+        Row(
+            Modifier.fillMaxWidth().clip(Shape.field).background(PaperSunk)
+                .clickable { allowResize = !allowResize }
+                .padding(horizontal = Space.md, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                Modifier.size(22.dp).clip(Shape.chip)
+                    .background(if (allowResize) accent else accent.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) { if (allowResize) MorphoIcon("check", tint = Paper, size = 13.dp) }
+            Spacer(Modifier.width(Space.md))
+            Column {
+                Text("Shrink dimensions if needed", color = Ink, fontSize = 14.5.sp,
+                    fontWeight = FontWeight.SemiBold)
+                Text("Only when quality alone cannot reach the limit",
+                    color = InkSoft, fontSize = 12.sp)
+            }
+        }
+
+        if (working) {
+            ProcessingCard("Finding the best quality that fits...", accent)
+        } else {
+            ToolButton("Fit under ${fmtKb(effectiveKb)}", accent) {
+                working = true
+                impossible = false
+                val target = effectiveKb.toLong() * 1024L
+                val allow = allowResize
+                scope.launch {
+                    val found = withContext(Dispatchers.Default) {
+                        fitUnder(src, fmt, target, allow)
+                    }
+                    result = found
+                    impossible = found == null
+                    working = false
+                }
+            }
+        }
+
+        if (impossible) ToolErrorCard(
+            title = "Can't reach ${fmtKb(effectiveKb)}",
+            body = if (allowResize)
+                "Even at the lowest quality and a much smaller size, this image " +
+                    "will not fit under ${fmtKb(effectiveKb)}. Try a higher limit."
+            else
+                "Quality alone will not get this under ${fmtKb(effectiveKb)}. Turn on " +
+                    "\"Shrink dimensions if needed\" and try again.",
+            accent = accent
+        )
+
+        result?.let { r ->
+            StatGrid(
+                listOf(
+                    "Result" to fmtKb((r.bytes / 1024).toInt()),
+                    "Limit" to fmtKb(effectiveKb),
+                    "Quality" to "${r.quality}",
+                    "Size" to "${r.width}\u00d7${r.height}"
+                ),
+                accent
+            )
+            if (r.resized) Text(
+                "Quality alone could not reach the limit, so the image was scaled " +
+                    "from ${src.width}\u00d7${src.height} down to ${r.width}\u00d7${r.height}.",
+                color = InkSoft, fontSize = 12.5.sp
+            ) else if (original > 0L) Text(
+                "Down from ${fmtKb((original / 1024).toInt())}, at full ${src.width}\u00d7${src.height}.",
+                color = InkSoft, fontSize = 12.5.sp
+            )
+            SaveShareRow(
+                accent, enabled = !busy,
+                onSave = {
+                    runSaveAsync(scope, ctx, "fitted", fmt, r.quality, { busy = it }) { r.bitmap }
+                },
+                onShare = {
+                    runShareAsync(scope, ctx, "fitted", fmt, r.quality, { busy = it }) { r.bitmap }
+                }
+            )
+        }
+    }
+}
+
+private fun fmtKb(kb: Int): String =
+    if (kb >= 1024 && kb % 1024 == 0) "${kb / 1024} MB" else "$kb KB"
 
 @Composable
 private fun StepControl(label: String, value: Int, opts: List<Int>, accent: Color, onChange: (Int) -> Unit) {
