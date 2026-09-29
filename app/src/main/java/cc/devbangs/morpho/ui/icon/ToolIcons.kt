@@ -182,6 +182,7 @@ object ToolIcons {
         "quotation-generator" to PhosphorIcons.Bold.ClipboardText,
         "scan-to-pdf" to PhosphorIcons.Bold.Camera,
         "camera" to PhosphorIcons.Bold.Camera,
+        "passport-photo" to PhosphorIcons.Bold.IdentificationCard,
         "scan" to PhosphorIcons.Bold.Scan,
         "code-scanner" to PhosphorIcons.Bold.Scan,
         "pdf-page-deleter" to PhosphorIcons.Bold.FileX,

@@ -42,6 +42,7 @@ import cc.devbangs.morpho.ui.tool.kit.TextDevTool
 import cc.devbangs.morpho.ui.tool.kit.hasGeneratorTool
 import cc.devbangs.morpho.ui.tool.kit.GeneratorTool
 import cc.devbangs.morpho.ui.tool.kit.BackgroundRemoverTool
+import cc.devbangs.morpho.ui.tool.kit.PassportPhotoTool
 import cc.devbangs.morpho.ui.tool.kit.AiTool
 import cc.devbangs.morpho.ui.tool.kit.hasAiTool
 import cc.devbangs.morpho.ui.tool.kit.PdfMarkupTool
@@ -282,6 +283,7 @@ private fun ToolHost(tool: Tool, onOpenTool: (String) -> Unit, onOpenPlus: () ->
         hasAiTool(tool.id) -> AiTool(tool.id, tool.category.accent)
         hasMarkupTool(tool.id) -> PdfMarkupTool(tool.id, tool.category.accent)
         tool.id == "background-remover" -> BackgroundRemoverTool(tool.category.accent)
+        tool.id == "passport-photo" -> PassportPhotoTool(tool.category.accent)
         tool.id == "pdf-signer" -> PdfSignerTool(tool.category.accent)
         tool.id == "resume-builder" -> ResumeTool(tool.category.accent)
         else -> Placeholder(tool)

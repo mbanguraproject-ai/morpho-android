@@ -24,6 +24,7 @@ object ToolRegistry {
         Tool("image-target-size", "Compress to Target Size", "Hit an exact KB limit, not a guess", ToolCategory.IMAGE, "image-compressor", offline = true, popular = true, keywords = listOf("kb", "limit", "under", "exact size", "upload limit", "passport", "exam", "visa", "portal")),
         Tool("background-remover", "Background Remover", "Remove image backgrounds with AI", ToolCategory.IMAGE, "background-remover", offline = true, popular = true, plus = true),
         Tool("image-cropper", "Image Cropper", "Crop images to any size or ratio", ToolCategory.IMAGE, "image-cropper", offline = true, popular = false),
+        Tool("passport-photo", "Passport & ID Photo", "Exact photo sizes, ready to print", ToolCategory.IMAGE, "passport-photo", offline = true, popular = true, keywords = listOf("passport", "id photo", "visa", "35x45", "2x2", "print", "biometric")),
         Tool("jpg-to-png", "JPG to PNG Converter", "Convert JPG images to PNG format", ToolCategory.CONVERTER, "jpg-to-png", offline = true, popular = false),
         Tool("png-to-jpg", "PNG to JPG Converter", "Convert PNG images to JPG format", ToolCategory.CONVERTER, "png-to-jpg", offline = true, popular = false),
         Tool("webp-to-png", "WebP to PNG Converter", "Convert WebP images to PNG", ToolCategory.CONVERTER, "webp-to-png", offline = true, popular = false),

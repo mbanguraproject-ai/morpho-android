@@ -57,6 +57,8 @@ object ToolPitch {
             "Resize an image to exact dimensions. Pick a preset or type your own width and height, choose whether to fit or fill, and see the real output size before you save — no surprise crops.",
         "background-remover" to
             "Cut the subject out of a photo and drop the background, leaving a transparent PNG you can put on any colour. Runs on your device, so the photo is never uploaded.",
+        "passport-photo" to
+            "Make an ID or passport photo at an exact physical size \u2014 35 \u00d7 45 mm, 2 \u00d7 2 in and other common formats \u2014 at 300 or 600 dpi for printing. Replace the background with a plain one on your device, set the crop yourself, and lay copies onto a 6 \u00d7 4 in sheet to print and cut. Sizes are named by their millimetres, not by any authority\u2019s rules, so check the spec on your own form.",
         "image-cropper" to
             "Crop to a free shape or to a fixed ratio — square, 4:3, 16:9, or the sizes profile pictures actually want. You see the crop before you commit to it.",
         "jpg-to-png" to
