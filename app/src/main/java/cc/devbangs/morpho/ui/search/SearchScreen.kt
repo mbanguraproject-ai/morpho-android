@@ -28,6 +28,7 @@ import cc.devbangs.morpho.data.ToolRegistry
 import cc.devbangs.morpho.data.ToolSearch
 import cc.devbangs.morpho.ui.components.Eyebrow
 import cc.devbangs.morpho.ui.components.IconButtonMorpho
+import cc.devbangs.morpho.ui.components.MorphoHeader
 import cc.devbangs.morpho.ui.components.morphLift
 import cc.devbangs.morpho.ui.icon.MorphoIcon
 import cc.devbangs.morpho.ui.theme.*
@@ -36,7 +37,7 @@ private val HeroTint = Color(0xFFF0F3FF)
 
 @Composable
 fun SearchScreen(
-    onBack: () -> Unit,
+    onOpenSettings: () -> Unit,
     onOpenTool: (String) -> Unit,
     contentPadding: PaddingValues
 ) {
@@ -64,33 +65,34 @@ fun SearchScreen(
                 Brush.verticalGradient(0f to HeroTint, 1f to Paper)
             )
         ) {
-            Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+            MorphoHeader(hazeState = null, onOpenSettings = onOpenSettings)
+            // The field sits under the header on its own line, full width and
+            // fully rounded, rather than squeezed beside a back chevron.
             Row(
-                Modifier.fillMaxWidth().padding(start = Space.sm, end = Space.gutter, top = Space.sm, bottom = Space.md),
+                Modifier.fillMaxWidth()
+                    .padding(start = Space.gutter, end = Space.gutter,
+                        top = Space.xs, bottom = Space.lg)
+                    .morphLift(Shape.pill, elevation = 8.dp)
+                    .padding(start = Space.lg, end = Space.sm),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButtonMorpho("chevron-left", onBack, contentDescription = "Back")
-                Spacer(Modifier.width(Space.xs))
-                Row(
-                    Modifier.weight(1f).morphLift(Shape.card, elevation = 8.dp)
-                        .padding(horizontal = Space.md, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    MorphoIcon("tab-search", tint = Cobalt, size = 20.dp)
-                    Spacer(Modifier.width(Space.md))
-                    Box(Modifier.weight(1f)) {
-                        if (query.isEmpty())
-                            Text("Search tools…", color = InkFaint, fontSize = 15.sp)
-                        BasicTextField(
-                            value = query, onValueChange = { query = it }, singleLine = true,
-                            textStyle = TextStyle(color = Ink, fontSize = 15.sp),
-                            cursorBrush = SolidColor(Cobalt),
-                            modifier = Modifier.fillMaxWidth().focusRequester(focus)
-                        )
-                    }
+                MorphoIcon("tab-search", tint = Cobalt, size = 20.dp)
+                Spacer(Modifier.width(Space.md))
+                Box(Modifier.weight(1f).padding(vertical = 15.dp)) {
+                    if (query.isEmpty())
+                        Text("Search tools…", color = InkFaint, fontSize = 15.sp)
+                    BasicTextField(
+                        value = query, onValueChange = { query = it }, singleLine = true,
+                        textStyle = TextStyle(color = Ink, fontSize = 15.sp),
+                        cursorBrush = SolidColor(Cobalt),
+                        modifier = Modifier.fillMaxWidth().focusRequester(focus)
+                    )
+                }
+                // Holds the row's right edge steady whether or not it shows.
+                Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
                     if (query.isNotEmpty())
                         IconButtonMorpho("close", { query = "" }, tint = InkFaint,
-                        contentDescription = "Clear search")
+                            contentDescription = "Clear search")
                 }
             }
         }

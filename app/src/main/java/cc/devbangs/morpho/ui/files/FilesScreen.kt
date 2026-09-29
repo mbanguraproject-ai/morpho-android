@@ -38,6 +38,8 @@ import cc.devbangs.morpho.data.FileKind
 import cc.devbangs.morpho.data.FileStore
 import cc.devbangs.morpho.data.MorphoFile
 import cc.devbangs.morpho.ui.components.Eyebrow
+import cc.devbangs.morpho.ui.components.HeaderHeight
+import cc.devbangs.morpho.ui.components.MorphoHeader
 import cc.devbangs.morpho.ui.icon.MorphoIcon
 import cc.devbangs.morpho.ui.theme.*
 import dev.chrisbanes.haze.HazeState
@@ -59,6 +61,7 @@ import java.util.Calendar
 @Composable
 fun FilesScreen(
     contentPadding: PaddingValues,
+    onOpenSettings: () -> Unit,
     onOpenFile: (MorphoFile) -> Unit,
     onUseTool: (MorphoFile) -> Unit
 ) {
@@ -95,7 +98,7 @@ fun FilesScreen(
         ) {
             item {
                 Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
-                Spacer(Modifier.height(60.dp))
+                Spacer(Modifier.height(HeaderHeight))
                 Spacer(Modifier.height(Space.md))
             }
 
@@ -199,23 +202,12 @@ fun FilesScreen(
             }
         }
 
-        Row(
-            Modifier.fillMaxWidth().zIndex(1f)
-                .hazeChild(hazeState, style = HazeMaterials.ultraThin(Paper))
-                .windowInsetsPadding(WindowInsets.statusBars)
-                .padding(start = Space.gutter, end = Space.gutter, top = Space.sm, bottom = Space.sm),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text("Files", style = MaterialTheme.typography.titleLarge, color = Ink,
-                    fontWeight = FontWeight.Bold)
-                Text(
-                    if (FileStore.loading) "Loading\u2026"
-                    else "Everything Morpho has made",
-                    style = MaterialTheme.typography.bodySmall, color = InkFaint, fontSize = 11.sp
-                )
-            }
-        }
+        // One header across every tab - see [MorphoHeader]. Files keeps only
+        // its live line, because "reading your storage" is worth saying.
+        MorphoHeader(
+            hazeState, onOpenSettings,
+            subtitle = if (FileStore.loading) "Loading\u2026" else null
+        )
 
         menuFor?.let { target ->
             FileActionsSheet(

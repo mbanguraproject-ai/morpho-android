@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import cc.devbangs.morpho.core.Shape
 import cc.devbangs.morpho.core.Space
 import cc.devbangs.morpho.data.Tool
+import cc.devbangs.morpho.data.ToolPitch
 import cc.devbangs.morpho.data.ToolRegistry
 import cc.devbangs.morpho.data.Stats
 import cc.devbangs.morpho.data.Workspace
@@ -172,20 +173,7 @@ fun ToolScreen(
                 }
                 Spacer(Modifier.height(Space.md))
             }
-            Text(tool.short, style = MaterialTheme.typography.bodyLarge, color = InkSoft)
-            Spacer(Modifier.height(Space.lg))
-            HowItWorks(tool, tool.category.accent)
-            if (!tool.offline) {
-                Spacer(Modifier.height(Space.md))
-                // Said before the file is chosen, not after. Someone who cares
-                // where their documents go should not have to find this out by
-                // watching a progress bar.
-                Text(
-                    "This tool sends your file to Morpho's converter over the " +
-                        "internet. Every other tool in Morpho works on your device.",
-                    style = MaterialTheme.typography.bodyMedium, color = InkFaint
-                )
-            }
+            ToolPitchBlock(tool, tool.category.accent)
             Spacer(Modifier.height(Space.lg))
             // Real tool UIs mount here via dispatch.
             ToolHost(tool = tool, onOpenTool = onOpenTool, onOpenPlus = onOpenPlus)
@@ -193,44 +181,64 @@ fun ToolScreen(
     }
 }
 
+/**
+ * What this tool is for, what it costs, and what it will not do to your file.
+ *
+ * Replaces the 1-2-3 dots that used to sit here. Those were generated from the
+ * tool's id, so they said the same thing on every screen and told the user
+ * nothing they had not already worked out by tapping the tool.
+ */
 @Composable
-private fun HowItWorks(tool: Tool, accent: Color) {
-    // Derived per tool rather than the same three words on all 132 of them.
-    val (one, two, three) = cc.devbangs.morpho.data.ToolSearch.steps(tool)
+private fun ToolPitchBlock(tool: Tool, accent: Color) {
+    Text(
+        ToolPitch.of(tool),
+        style = MaterialTheme.typography.bodyLarge, color = Ink, lineHeight = 23.sp
+    )
+    Spacer(Modifier.height(Space.md))
+    Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+        ToolPitch.badges(tool).forEach { b -> BadgeChip(b, accent) }
+    }
+    if (!tool.offline) {
+        Spacer(Modifier.height(Space.md))
+        // Said before the file is chosen, not after. Someone who cares where
+        // their documents go should not have to find this out by watching a
+        // progress bar.
+        Text(
+            "This tool sends your file to Morpho's converter over the " +
+                "internet. Every other tool in Morpho works on your device.",
+            style = MaterialTheme.typography.bodyMedium, color = InkFaint
+        )
+    }
+    // Only for a subscriber. Someone who is not on Plus gets the full
+    // explanation from PlusGate a few lines further down, and saying it twice
+    // on one screen reads as nagging.
+    ToolPitch.plusNote(tool, true).takeIf { AdState.isPlus.value }?.let { note ->
+        Spacer(Modifier.height(Space.md))
+        Row(
+            Modifier.fillMaxWidth().clip(Shape.card)
+                .background(accent.copy(alpha = 0.07f))
+                .padding(horizontal = Space.md, vertical = Space.md)
+        ) {
+            MorphoIcon("crown", tint = accent, size = 17.dp)
+            Spacer(Modifier.width(Space.sm))
+            Text(note, style = MaterialTheme.typography.bodyMedium, color = Ink,
+                lineHeight = 19.sp)
+        }
+    }
+}
+
+@Composable
+private fun BadgeChip(b: ToolPitch.Badge, accent: Color) {
     Row(
-        Modifier.fillMaxWidth().clip(Shape.card).background(accent.copy(alpha = 0.06f))
-            .padding(horizontal = Space.lg, vertical = Space.md),
+        Modifier.clip(Shape.pill).background(accent.copy(alpha = 0.10f))
+            .padding(horizontal = 9.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        StepDot("1", one, accent)
-        StepConnector(accent)
-        StepDot("2", two, accent)
-        StepConnector(accent)
-        StepDot("3", three, accent)
+        MorphoIcon(b.icon, tint = accent, size = 12.dp)
+        Spacer(Modifier.width(5.dp))
+        Text(b.label, color = Ink, fontSize = 11.5.sp,
+            fontWeight = FontWeight.SemiBold, maxLines = 1)
     }
-}
-
-@Composable
-private fun RowScope.StepDot(n: String, label: String, accent: Color) {
-    Column(
-        Modifier.weight(1f),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Box(
-            Modifier.size(30.dp).clip(androidx.compose.foundation.shape.CircleShape).background(accent),
-            contentAlignment = Alignment.Center
-        ) { Text(n, color = Paper, fontSize = 14.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) }
-        Spacer(Modifier.height(6.dp))
-        Text(label, color = InkSoft, fontSize = 12.sp)
-    }
-}
-
-@Composable
-private fun RowScope.StepConnector(accent: Color) {
-    Box(
-        Modifier.weight(0.5f).height(2.dp)
-            .background(accent.copy(alpha = 0.25f))
-    )
 }
 
 @Composable
@@ -287,9 +295,17 @@ private fun PlusGate(tool: Tool, onOpenPlus: () -> Unit) {
         Column(horizontalAlignment = Alignment.CenterHorizontally,
                verticalArrangement = Arrangement.spacedBy(Space.md)) {
             MorphoIcon("crown", tint = tool.category.accent, size = 34.dp)
-            Text("Morpho Plus feature", color = Ink, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-            Text("${tool.name} runs on our secure conversion engine. Unlock it and all server tools with Morpho Plus.",
-                color = InkSoft, textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyMedium)
+            Text("Part of Morpho Plus", color = Ink, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text(
+                ToolPitch.plusNote(tool, false).orEmpty(),
+                color = InkSoft, textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Text(
+                "Everything else in Morpho stays free.",
+                color = InkFaint, textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.bodySmall
+            )
             Spacer(Modifier.height(Space.sm))
             Box(
                 Modifier.clip(Shape.field).background(tool.category.accent)

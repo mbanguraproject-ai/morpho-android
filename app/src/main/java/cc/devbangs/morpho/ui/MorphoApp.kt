@@ -108,6 +108,7 @@ fun MorphoApp() {
             composable(Dest.Files.route) {
                 FilesScreen(
                     contentPadding = bottomBarPadding(true),
+                    onOpenSettings = { nav.navigate(Dest.Settings.route) },
                     onOpenFile = { viewing = it },
                     onUseTool = { masterFile = it; showMaster = true }
                 )
@@ -115,6 +116,7 @@ fun MorphoApp() {
             composable(Dest.Categories.route) {
                 CategoriesScreen(
                     onOpenCategory = { nav.navigate(Dest.Category(it).route) },
+                    onOpenSettings = { nav.navigate(Dest.Settings.route) },
                     contentPadding = bottomBarPadding(true)
                 )
             }
@@ -145,7 +147,7 @@ fun MorphoApp() {
             }
             composable(Dest.Search.route) {
                 SearchScreen(
-                    onBack = { nav.popBackStack() },
+                    onOpenSettings = { nav.navigate(Dest.Settings.route) },
                     onOpenTool = { nav.navigate(Dest.Tool(it).route) },
                     contentPadding = bottomBarPadding(false)
                 )

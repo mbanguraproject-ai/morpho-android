@@ -23,6 +23,8 @@ import cc.devbangs.morpho.core.Space
 import cc.devbangs.morpho.ads.NativeAdCard
 import cc.devbangs.morpho.data.ToolCategory
 import cc.devbangs.morpho.data.ToolRegistry
+import cc.devbangs.morpho.ui.components.HeaderHeight
+import cc.devbangs.morpho.ui.components.MorphoHeader
 import cc.devbangs.morpho.ui.components.morphLift
 import cc.devbangs.morpho.ui.icon.MorphoIcon
 import cc.devbangs.morpho.ui.theme.*
@@ -35,6 +37,7 @@ import dev.chrisbanes.haze.materials.HazeMaterials
 @Composable
 fun CategoriesScreen(
     onOpenCategory: (String) -> Unit,
+    onOpenSettings: () -> Unit,
     contentPadding: PaddingValues
 ) {
     val cats = ToolCategory.entries
@@ -47,7 +50,19 @@ fun CategoriesScreen(
         ) {
             item {
                 Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
-                Spacer(Modifier.height(60.dp))
+                Spacer(Modifier.height(HeaderHeight))
+                Text(
+                    "All tools",
+                    style = MaterialTheme.typography.displaySmall, color = Ink,
+                    modifier = Modifier.padding(start = Space.gutter, end = Space.gutter,
+                        top = Space.lg)
+                )
+                Text(
+                    "${ToolRegistry.all.size} tools across ${cats.size} categories",
+                    style = MaterialTheme.typography.bodyLarge, color = InkSoft,
+                    modifier = Modifier.padding(start = Space.gutter, end = Space.gutter,
+                        top = 2.dp)
+                )
                 Spacer(Modifier.height(Space.md))
             }
             items(cats.chunked(2)) { row ->
@@ -69,20 +84,7 @@ fun CategoriesScreen(
 
         // Same pinned frosted bar as Home: both are top-level tabs, so they use
         // one header pattern rather than each screen inventing its own.
-        Row(
-            Modifier.fillMaxWidth().zIndex(1f)
-                .hazeChild(hazeState, style = HazeMaterials.ultraThin(Paper))
-                .windowInsetsPadding(WindowInsets.statusBars)
-                .padding(start = Space.gutter, end = Space.gutter, top = Space.sm, bottom = Space.sm),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text("All tools", style = MaterialTheme.typography.titleLarge, color = Ink,
-                    fontWeight = FontWeight.Bold)
-                Text("${ToolRegistry.all.size} tools across ${cats.size} categories",
-                    style = MaterialTheme.typography.bodySmall, color = InkFaint, fontSize = 11.sp)
-            }
-        }
+        MorphoHeader(hazeState, onOpenSettings)
     }
 }
 

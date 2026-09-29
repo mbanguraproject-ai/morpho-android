@@ -2,9 +2,6 @@ package cc.devbangs.morpho.ui.home
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -26,14 +23,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.zIndex
-import cc.devbangs.morpho.R
-import cc.devbangs.morpho.ads.AdState
 import cc.devbangs.morpho.core.Motion
 import cc.devbangs.morpho.core.Shape
 import cc.devbangs.morpho.core.Space
@@ -42,14 +35,14 @@ import cc.devbangs.morpho.data.Recommender
 import cc.devbangs.morpho.data.ToolRegistry
 import cc.devbangs.morpho.data.Workspace
 import cc.devbangs.morpho.ui.components.Eyebrow
+import cc.devbangs.morpho.ui.components.HeaderHeight
+import cc.devbangs.morpho.ui.components.MorphoHeader
 import cc.devbangs.morpho.ui.components.cornerPetal
 import cc.devbangs.morpho.ui.components.morphLift
 import cc.devbangs.morpho.ui.icon.MorphoIcon
 import cc.devbangs.morpho.ui.theme.*
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.haze
-import dev.chrisbanes.haze.hazeChild
-import dev.chrisbanes.haze.materials.HazeMaterials
 import java.util.Calendar
 
 /**
@@ -81,7 +74,7 @@ fun HomeScreen(
         ) {
             item {
                 Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
-                Spacer(Modifier.height(60.dp))
+                Spacer(Modifier.height(HeaderHeight))
                 Text(
                     greeting(),
                     style = MaterialTheme.typography.displaySmall, color = Ink,
@@ -154,26 +147,7 @@ fun HomeScreen(
             item { ToolsBanner(onExploreTools) }
         }
 
-        Row(
-            Modifier.fillMaxWidth().zIndex(1f)
-                .hazeChild(hazeState, style = HazeMaterials.ultraThin(Paper))
-                .windowInsetsPadding(WindowInsets.statusBars)
-                .padding(start = Space.gutter, end = Space.gutter, top = Space.sm, bottom = Space.sm),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            WingsMark()
-            Spacer(Modifier.width(9.dp))
-            Column {
-                Text("Morpho", style = MaterialTheme.typography.titleLarge, color = Ink,
-                    fontWeight = FontWeight.Bold)
-                Text("Files, transformed", style = MaterialTheme.typography.bodySmall,
-                    color = InkFaint, fontSize = 11.sp)
-            }
-            Spacer(Modifier.weight(1f))
-            PlanPill()
-            Spacer(Modifier.width(8.dp))
-            SettingsButton(onOpenSettings)
-        }
+        MorphoHeader(hazeState, onOpenSettings)
     }
 }
 
@@ -339,28 +313,6 @@ private fun AddToolsCell(onClick: () -> Unit, modifier: Modifier) {
     }
 }
 
-@Composable
-private fun SettingsButton(onClick: () -> Unit) {
-    val i = remember { MutableInteractionSource() }
-    val pressed by i.collectIsPressedAsState()
-    // Section 39: the painted surface stays 38dp; the touch target is 48dp.
-    Box(
-        Modifier.size(48.dp).clickable(
-            interactionSource = i, indication = null,
-            role = androidx.compose.ui.semantics.Role.Button, onClick = onClick
-        ),
-        contentAlignment = Alignment.Center
-    ) {
-        Box(
-            Modifier.size(38.dp).morphLift(Shape.chip, elevation = 4.dp, pressed = pressed),
-            contentAlignment = Alignment.Center
-        ) {
-            MorphoIcon("settings", tint = InkSoft, size = 19.dp,
-                contentDescription = "Settings")
-        }
-    }
-}
-
 /** Staggered rise + fade-in reveal for list items. */
 @Composable
 private fun Modifier.reveal(indexKey: Int): Modifier {
@@ -376,44 +328,4 @@ private fun Modifier.reveal(indexKey: Int): Modifier {
         label = "reveal"
     )
     return this.graphicsLayer { translationY = (1f - p) * 34f; this.alpha = p }
-}
-
-/** Cobalt wings mark that flaps once on home entry, then rests. */
-@Composable
-private fun WingsMark() {
-    var spread by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { spread = true }
-    val wingSpread by animateFloatAsState(
-        targetValue = if (spread) 1f else 0.55f,
-        animationSpec = spring(dampingRatio = 0.35f, stiffness = Spring.StiffnessLow),
-        label = "wingSpread"
-    )
-    Box(
-        Modifier.size(34.dp).clip(Shape.chip).background(Cobalt),
-        contentAlignment = Alignment.Center
-    ) {
-        Image(
-            painter = painterResource(R.drawable.ic_launcher_foreground),
-            contentDescription = null,
-            modifier = Modifier.size(34.dp).graphicsLayer {
-                scaleX = wingSpread
-                scaleY = 0.9f + (wingSpread * 0.1f)
-            }
-        )
-    }
-}
-
-/** Small non-intrusive plan indicator: "Free" or "Plus". */
-@Composable
-private fun PlanPill() {
-    val isPlus = AdState.isPlus.value
-    val bg = if (isPlus) Cobalt else PaperSunk
-    val fg = if (isPlus) Paper else InkSoft
-    Box(
-        Modifier.clip(Shape.pill).background(bg)
-            .padding(horizontal = 10.dp, vertical = 4.dp)
-    ) {
-        Text(if (isPlus) "Plus" else "Free", color = fg, fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold)
-    }
 }
