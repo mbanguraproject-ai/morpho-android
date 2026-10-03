@@ -1,0 +1,424 @@
+From dd6d59fc3c4ce8302095bac201b0862136c8b225 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 3 Oct 2026 16:29:24 +0000
+Subject: [PATCH] Carry the Terms in the app, and point Privacy at mebs.app
+
+The Terms of Use row opened https://mbanguraproject-ai.github.io/terms/,
+which was never published and returned a 404. That is the one screen a
+Play reviewer is most likely to open, and the user most likely to open
+after something goes wrong.
+
+Terms now live in the binary rather than behind a link. They cannot rot,
+they work with no connection - which is how most of this app is used -
+and they ship and version with the build they describe. Fourteen clauses
+covering the licence, eligibility, ownership of the user's own files,
+acceptable use, Plus billing through Google Play, advertising and the
+EEA consent form, the Google components the app builds on, warranty
+disclaimers, liability limits, termination and governing law.
+
+The warranty clause says plainly that Morpho is a tool and not
+professional advice, and singles out the cases where that bites: invoices,
+receipts, signed and stamped PDFs, Bates sets, and redaction. Someone who
+redacts a document and ships it should have been told to check it first.
+
+Privacy Policy now points at https://mebs.app/privacy/morpho, verified
+serving a real policy rather than assumed.
+
+Version 1.0.9 (10). Nothing else changed: no file under ads/, review/ or
+PdfIo.kt is touched, and the signing config is intact.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_012XVfZwTyFK8AbPiu8JTUsL
+---
+ app/build.gradle.kts                          |   4 +-
+ .../main/java/cc/devbangs/morpho/core/Nav.kt  |   1 +
+ .../java/cc/devbangs/morpho/ui/MorphoApp.kt   |   8 +
+ .../morpho/ui/settings/SettingsScreen.kt      |   9 +-
+ .../morpho/ui/settings/TermsScreen.kt         | 288 ++++++++++++++++++
+ 5 files changed, 304 insertions(+), 6 deletions(-)
+ create mode 100644 app/src/main/java/cc/devbangs/morpho/ui/settings/TermsScreen.kt
+
+diff --git a/app/build.gradle.kts b/app/build.gradle.kts
+index 118caaa..e9379ff 100644
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -20,8 +20,8 @@ android {
+         applicationId = "cc.devbangs.morpho"
+         minSdk = 24
+         targetSdk = 36
+-        versionCode = 9
+-        versionName = "1.0.8"
++        versionCode = 10
++        versionName = "1.0.9"
+         vectorDrawables { useSupportLibrary = true }
+     }
+ 
+diff --git a/app/src/main/java/cc/devbangs/morpho/core/Nav.kt b/app/src/main/java/cc/devbangs/morpho/core/Nav.kt
+index 7109170..48cece3 100644
+--- a/app/src/main/java/cc/devbangs/morpho/core/Nav.kt
++++ b/app/src/main/java/cc/devbangs/morpho/core/Nav.kt
+@@ -8,6 +8,7 @@ sealed class Dest(val route: String) {
+     data object Categories : Dest("categories")
+     data object Files : Dest("files")
+     data object Stats : Dest("stats")
++    data object Terms : Dest("terms")
+     data object AddTools : Dest("addtools")
+     data object Arrange : Dest("arrange")
+     data class Category(val id: String) : Dest("category/$id") {
+diff --git a/app/src/main/java/cc/devbangs/morpho/ui/MorphoApp.kt b/app/src/main/java/cc/devbangs/morpho/ui/MorphoApp.kt
+index ad8d8cc..f83a515 100644
+--- a/app/src/main/java/cc/devbangs/morpho/ui/MorphoApp.kt
++++ b/app/src/main/java/cc/devbangs/morpho/ui/MorphoApp.kt
+@@ -35,6 +35,7 @@ import cc.devbangs.morpho.ui.components.MorphoBottomBar
+ import cc.devbangs.morpho.ui.home.HomeScreen
+ import cc.devbangs.morpho.ui.search.SearchScreen
+ import cc.devbangs.morpho.ui.settings.SettingsScreen
++import cc.devbangs.morpho.ui.settings.TermsScreen
+ import cc.devbangs.morpho.ui.settings.StatsScreen
+ import cc.devbangs.morpho.ui.plus.PlusScreen
+ import cc.devbangs.morpho.ui.tool.ToolScreen
+@@ -157,6 +158,13 @@ fun MorphoApp() {
+                     onBack = { nav.popBackStack() },
+                     onOpenPlus = { nav.navigate(Dest.Plus.route) },
+                     onOpenStats = { nav.navigate(Dest.Stats.route) },
++                    onOpenTerms = { nav.navigate(Dest.Terms.route) },
++                    contentPadding = bottomBarPadding(false)
++                )
++            }
++            composable(Dest.Terms.route) {
++                TermsScreen(
++                    onBack = { nav.popBackStack() },
+                     contentPadding = bottomBarPadding(false)
+                 )
+             }
+diff --git a/app/src/main/java/cc/devbangs/morpho/ui/settings/SettingsScreen.kt b/app/src/main/java/cc/devbangs/morpho/ui/settings/SettingsScreen.kt
+index e6c759c..1313c7a 100644
+--- a/app/src/main/java/cc/devbangs/morpho/ui/settings/SettingsScreen.kt
++++ b/app/src/main/java/cc/devbangs/morpho/ui/settings/SettingsScreen.kt
+@@ -40,9 +40,9 @@ import cc.devbangs.morpho.ui.icon.MorphoIcon
+ import cc.devbangs.morpho.ui.theme.*
+ 
+ 
+-// Morpho links — swap GitHub Pages URLs before launch
+-private const val PRIVACY_URL = "https://mbanguraproject-ai.github.io/privacy/"
+-private const val TERMS_URL = "https://mbanguraproject-ai.github.io/terms/"
++// Terms are carried in the app - see TermsScreen - because the published
++// URL they used to point at was never put up and returned a 404.
++private const val PRIVACY_URL = "https://mebs.app/privacy/morpho"
+ private const val PACKAGE = "cc.devbangs.morpho"
+ 
+ private fun openUrl(ctx: android.content.Context, url: String) {
+@@ -62,6 +62,7 @@ fun SettingsScreen(
+     onBack: () -> Unit,
+     onOpenPlus: () -> Unit,
+     onOpenStats: () -> Unit,
++    onOpenTerms: () -> Unit,
+     contentPadding: PaddingValues
+ ) {
+     val ctx = LocalContext.current
+@@ -110,7 +111,7 @@ fun SettingsScreen(
+                         ctx.hostActivity()?.let { ConsentManager.showPrivacyOptions(it) }
+                     }
+                 }
+-                SettingRow("file-text", "Terms of Use", null) { openUrl(ctx, TERMS_URL) }
++                SettingRow("file-text", "Terms of Use", null) { onOpenTerms() }
+                 SettingRow("star", "Rate Morpho", null) { openPlayRating(ctx) }
+             }
+             Text("Morpho v${BuildConfig.VERSION_NAME}  ·  ${ToolRegistry.all.size} tools",
+diff --git a/app/src/main/java/cc/devbangs/morpho/ui/settings/TermsScreen.kt b/app/src/main/java/cc/devbangs/morpho/ui/settings/TermsScreen.kt
+new file mode 100644
+index 0000000..6c5088f
+--- /dev/null
++++ b/app/src/main/java/cc/devbangs/morpho/ui/settings/TermsScreen.kt
+@@ -0,0 +1,288 @@
++package cc.devbangs.morpho.ui.settings
++
++import androidx.compose.foundation.background
++import androidx.compose.foundation.layout.*
++import androidx.compose.foundation.rememberScrollState
++import androidx.compose.foundation.verticalScroll
++import androidx.compose.material3.MaterialTheme
++import androidx.compose.material3.Text
++import androidx.compose.runtime.Composable
++import androidx.compose.ui.Alignment
++import androidx.compose.ui.Modifier
++import androidx.compose.ui.draw.clip
++import androidx.compose.ui.graphics.Brush
++import androidx.compose.ui.graphics.Color
++import androidx.compose.ui.text.font.FontWeight
++import androidx.compose.ui.unit.dp
++import androidx.compose.ui.unit.sp
++import cc.devbangs.morpho.BuildConfig
++import cc.devbangs.morpho.core.Shape
++import cc.devbangs.morpho.core.Space
++import cc.devbangs.morpho.ui.components.IconButtonMorpho
++import cc.devbangs.morpho.ui.theme.*
++
++/**
++ * Terms of Use, carried in the app rather than linked out.
++ *
++ * The old row opened a GitHub Pages URL that was never published, so the one
++ * screen a reviewer or a user is most likely to open led to a 404. Terms that
++ * live in the binary cannot rot, work with no connection - which is how most
++ * of this app is used - and ship and version with the build they describe.
++ */
++
++private const val EFFECTIVE = "3 October 2026"
++private const val PUBLISHER = "Mohameds Engineering and Build Studio (MEBS)"
++private const val CONTACT = "support@mebs.app"
++
++private class Clause(val heading: String, val body: List<String>)
++
++private val TERMS: List<Clause> = listOf(
++    Clause(
++        "1. These terms",
++        listOf(
++            "Morpho is a file and document toolkit for Android, published by $PUBLISHER " +
++                "(\"we\", \"us\"). By installing or using Morpho you agree to these terms. " +
++                "If you do not agree, do not use the app.",
++            "We may update these terms when the app changes. The effective date above " +
++                "tells you which version you are reading, and an updated version ships " +
++                "with the app update that it covers. Continuing to use Morpho after an " +
++                "update means you accept the revised terms."
++        )
++    ),
++    Clause(
++        "2. Your licence to use Morpho",
++        listOf(
++            "We grant you a personal, non-exclusive, non-transferable, revocable licence " +
++                "to install and use Morpho on devices you own or control, for your own " +
++                "purposes, personal or commercial.",
++            "You may not copy, sell, rent, sublicense or redistribute the app; reverse " +
++                "engineer, decompile or disassemble it except where that right cannot " +
++                "lawfully be excluded; remove or obscure any notice in it; or use it to " +
++                "build a competing product."
++        )
++    ),
++    Clause(
++        "3. Who may use it",
++        listOf(
++            "You must be old enough to form a binding contract where you live, and at " +
++                "least 13. If you are under the age of majority in your country, you may " +
++                "use Morpho only with the involvement of a parent or guardian, who accepts " +
++                "these terms on your behalf.",
++            "You are responsible for complying with the laws that apply to you when you " +
++                "use the app."
++        )
++    ),
++    Clause(
++        "4. Your files stay yours",
++        listOf(
++            "You keep every right you already had in the files you open, create or save " +
++                "with Morpho. We claim no ownership of them and no licence to use them.",
++            "Most tools in Morpho run entirely on your device. Those files are never sent " +
++                "anywhere by us. A small number of tools are marked \"Needs internet\" on " +
++                "their own screen, and those send the file you choose to our conversion " +
++                "service so it can be processed and returned. We use those files only to " +
++                "perform the conversion you asked for.",
++            "You are responsible for having the right to use the files you process, and " +
++                "for the content of anything you create with the app - including invoices, " +
++                "receipts, quotations, resumes and anything you stamp, sign or redact.",
++            "Morpho writes its output to your device's storage. Keep your own backups: " +
++                "uninstalling the app, clearing its data, or a device fault can remove " +
++                "files and saved records, and we cannot recover them for you."
++        )
++    ),
++    Clause(
++        "5. How you may not use it",
++        listOf(
++            "Do not use Morpho to break the law, infringe anyone's rights, or process " +
++                "material you have no right to process.",
++            "Do not use it to create or alter documents in order to deceive - including " +
++                "forging identity documents, falsifying invoices, receipts or records, or " +
++                "misrepresenting a document as issued or signed by someone who did not " +
++                "issue or sign it.",
++            "Do not use it to remove security, watermarks, passwords or restrictions from " +
++                "material that is not yours.",
++            "Do not interfere with the app's advertising or subscription mechanisms, or " +
++                "attempt to access paid features without paying for them."
++        )
++    ),
++    Clause(
++        "6. Morpho Plus",
++        listOf(
++            "Morpho Plus is an optional subscription that unlocks the tools marked Plus " +
++                "and removes advertising. Prices are shown in the app before you buy, in " +
++                "your local currency where Google Play supports it.",
++            "Subscriptions are sold and billed by Google Play, not by us. They renew " +
++                "automatically for the same period until you cancel, and the renewal is " +
++                "charged to your Google Play account within 24 hours of the period ending.",
++            "Cancel at any time in your Google Play subscription settings. Cancelling " +
++                "stops the next renewal; you keep Plus until the end of the period you " +
++                "have already paid for.",
++            "Refunds are handled by Google under Google Play's refund policy. We cannot " +
++                "issue refunds for a Google Play purchase ourselves, though we will help " +
++                "where we can.",
++            "We may change what Plus includes or what it costs. A price change takes " +
++                "effect on your next renewal, and Google will notify you and ask you to " +
++                "accept it where the law requires."
++        )
++    ),
++    Clause(
++        "7. Advertising",
++        listOf(
++            "Morpho is free to use and shows advertising to users who are not subscribed " +
++                "to Plus. Ads are served by Google AdMob and may be personalised depending " +
++                "on the choice you were given and the settings on your device.",
++            "If you are in the European Economic Area or the United Kingdom, you were " +
++                "shown a consent form the first time you opened the app. You can reopen it " +
++                "at any time from Settings, under \"Manage privacy choices\", and change " +
++                "your answer in either direction.",
++            "We do not control the content of individual ads. Report anything that looks " +
++                "wrong to us and we will pass it on."
++        )
++    ),
++    Clause(
++        "8. Services we build on",
++        listOf(
++            "Morpho uses Google Play services for advertising, for in-app purchases, for " +
++                "Play ratings, and for the on-device machine-learning features behind " +
++                "document scanning, background removal and text recognition. Your use of " +
++                "those components is also subject to Google's own terms.",
++            "Some on-device models download through Google Play services the first time " +
++                "you use the feature that needs them. That download needs a connection; " +
++                "everything after it runs offline."
++        )
++    ),
++    Clause(
++        "9. Our intellectual property",
++        listOf(
++            "Morpho, its name, logo, interface, icons and code are owned by us or our " +
++                "licensors and are protected by copyright and other laws. Nothing in these " +
++                "terms transfers any of that to you beyond the licence in clause 2."
++        )
++    ),
++    Clause(
++        "10. No warranty",
++        listOf(
++            "Morpho is provided \"as is\" and \"as available\". To the fullest extent the " +
++                "law allows, we disclaim all warranties, express or implied, including " +
++                "merchantability, fitness for a particular purpose, accuracy and " +
++                "non-infringement.",
++            "We do not warrant that the app will be uninterrupted or error-free, that " +
++                "every conversion will be perfect, or that output will be accepted by any " +
++                "third party that you submit it to.",
++            "Morpho is a tool, not professional advice. Documents it helps you produce - " +
++                "invoices, receipts, quotations, signed or stamped PDFs, Bates-numbered " +
++                "sets, redactions - are your responsibility to check. Take legal, tax or " +
++                "financial advice where it matters. In particular, satisfy yourself that a " +
++                "redaction or a metadata removal has removed what you needed removed " +
++                "before you share the file.",
++            "Nothing here excludes any right you have as a consumer that cannot lawfully " +
++                "be excluded."
++        )
++    ),
++    Clause(
++        "11. Limits on our liability",
++        listOf(
++            "To the fullest extent the law allows, we are not liable for indirect, " +
++                "incidental, special or consequential loss, or for lost profits, lost " +
++                "business, lost data or loss of goodwill, arising from your use of Morpho.",
++            "Where liability cannot be excluded, our total liability to you for all claims " +
++                "is limited to the greater of the amount you paid us for Morpho in the " +
++                "twelve months before the claim, or ten United States dollars.",
++            "These limits do not apply to liability for death or personal injury caused by " +
++                "negligence, for fraud, or to any other liability that cannot lawfully be " +
++                "limited."
++        )
++    ),
++    Clause(
++        "12. Ending the licence",
++        listOf(
++            "You can end this licence at any time by uninstalling Morpho.",
++            "We may suspend or end your licence if you breach these terms, or if we stop " +
++                "offering the app. If we end it without your being at fault while you hold " +
++                "an active Plus subscription, you may be entitled to a pro-rata refund " +
++                "through Google Play.",
++            "Clauses 4, 9, 10, 11 and 13 survive the end of this licence."
++        )
++    ),
++    Clause(
++        "13. Governing law",
++        listOf(
++            "These terms are governed by the laws of Sierra Leone, and the courts of " +
++                "Sierra Leone have non-exclusive jurisdiction over any dispute. If you are " +
++                "a consumer elsewhere, you keep the benefit of any mandatory protections " +
++                "of the country you live in, and may bring proceedings there."
++        )
++    ),
++    Clause(
++        "14. Contact",
++        listOf(
++            "Questions, complaints or reports about these terms or the app: $CONTACT.",
++            "How Morpho handles data is covered separately in the Privacy Policy, linked " +
++                "from Settings."
++        )
++    )
++)
++
++@Composable
++fun TermsScreen(
++    onBack: () -> Unit,
++    contentPadding: PaddingValues
++) {
++    Column(Modifier.fillMaxSize().background(Paper)) {
++        Column(
++            Modifier.fillMaxWidth().background(
++                Brush.verticalGradient(0f to Color(0xFFF0F3FF), 1f to Paper)
++            )
++        ) {
++            Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
++            Row(
++                Modifier.fillMaxWidth().height(56.dp).padding(horizontal = Space.sm),
++                verticalAlignment = Alignment.CenterVertically
++            ) {
++                IconButtonMorpho("chevron-left", onBack, contentDescription = "Back")
++                Spacer(Modifier.width(4.dp))
++                Text("Terms of Use", style = MaterialTheme.typography.headlineSmall, color = Ink)
++            }
++        }
++
++        Column(
++            Modifier.fillMaxSize().verticalScroll(rememberScrollState())
++                .padding(
++                    start = Space.gutter, end = Space.gutter, top = Space.md,
++                    bottom = contentPadding.calculateBottomPadding() + Space.xxl
++                )
++        ) {
++            Column(
++                Modifier.fillMaxWidth().clip(Shape.card).background(PaperSunk).padding(Space.lg)
++            ) {
++                Text("Effective $EFFECTIVE", color = Ink, fontSize = 14.sp,
++                    fontWeight = FontWeight.SemiBold)
++                Text("Applies to Morpho v${BuildConfig.VERSION_NAME} and later",
++                    color = InkSoft, fontSize = 12.5.sp)
++            }
++            Spacer(Modifier.height(Space.lg))
++
++            TERMS.forEach { clause ->
++                Text(
++                    clause.heading,
++                    color = Ink, fontSize = 16.sp, fontWeight = FontWeight.Bold,
++                    modifier = Modifier.padding(top = Space.lg, bottom = Space.sm)
++                )
++                clause.body.forEach { para ->
++                    Text(
++                        para,
++                        color = InkSoft, fontSize = 14.sp, lineHeight = 21.sp,
++                        modifier = Modifier.padding(bottom = Space.sm)
++                    )
++                }
++            }
++
++            Spacer(Modifier.height(Space.xl))
++            Text(
++                "© 2026 $PUBLISHER",
++                color = InkFaint, fontSize = 12.sp,
++                modifier = Modifier.align(Alignment.CenterHorizontally)
++            )
++        }
++    }
++}
+-- 
+2.43.0
+

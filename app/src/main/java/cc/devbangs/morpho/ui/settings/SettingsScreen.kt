@@ -40,9 +40,9 @@ import cc.devbangs.morpho.ui.icon.MorphoIcon
 import cc.devbangs.morpho.ui.theme.*
 
 
-// Morpho links — swap GitHub Pages URLs before launch
-private const val PRIVACY_URL = "https://mbanguraproject-ai.github.io/privacy/"
-private const val TERMS_URL = "https://mbanguraproject-ai.github.io/terms/"
+// Terms are carried in the app - see TermsScreen - because the published
+// URL they used to point at was never put up and returned a 404.
+private const val PRIVACY_URL = "https://mebs.app/privacy/morpho"
 private const val PACKAGE = "cc.devbangs.morpho"
 
 private fun openUrl(ctx: android.content.Context, url: String) {
@@ -62,6 +62,7 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onOpenPlus: () -> Unit,
     onOpenStats: () -> Unit,
+    onOpenTerms: () -> Unit,
     contentPadding: PaddingValues
 ) {
     val ctx = LocalContext.current
@@ -110,7 +111,7 @@ fun SettingsScreen(
                         ctx.hostActivity()?.let { ConsentManager.showPrivacyOptions(it) }
                     }
                 }
-                SettingRow("file-text", "Terms of Use", null) { openUrl(ctx, TERMS_URL) }
+                SettingRow("file-text", "Terms of Use", null) { onOpenTerms() }
                 SettingRow("star", "Rate Morpho", null) { openPlayRating(ctx) }
             }
             Text("Morpho v${BuildConfig.VERSION_NAME}  ·  ${ToolRegistry.all.size} tools",

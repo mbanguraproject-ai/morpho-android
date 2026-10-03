@@ -8,6 +8,7 @@ sealed class Dest(val route: String) {
     data object Categories : Dest("categories")
     data object Files : Dest("files")
     data object Stats : Dest("stats")
+    data object Terms : Dest("terms")
     data object AddTools : Dest("addtools")
     data object Arrange : Dest("arrange")
     data class Category(val id: String) : Dest("category/$id") {

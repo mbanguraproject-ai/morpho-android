@@ -1,0 +1,891 @@
+From b3c46877bfafec617265d5540b46a6bd0fada1cd Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 29 Sep 2026 04:56:17 +0000
+Subject: [PATCH 1/3] QR & Barcode Scanner: read the codes Morpho could only
+ write
+
+Morpho generated QR codes and barcodes and could not read one, which is
+half a tool - the person who makes a code is usually the one who later
+needs to check what is actually on it. It sits in the Generator category
+beside the two writers, which is where someone looking for it will go.
+
+Decoding is deliberately stubborn. One pass with the default binarizer
+misses a lot of real pictures: photos of screens, printed labels under
+uneven light, codes shot at an angle. Two binarizers across four
+rotations is still well under a second on a 1600px bitmap and turns most
+of those misses into reads. The multiple reader runs first, because a
+photo of a sheet of labels holds more than one code and returning only
+the first is wrong.
+
+The bitmap is capped at 1600px before decoding: RGBLuminanceSource needs
+the pixels as an IntArray, four bytes each, so a full 12MP photo would
+allocate 48MB to read a code that needs none of that resolution.
+
+Each result says what the payload is - Wi-Fi network, contact card,
+web link, product number - before the user acts on it, rather than
+handing back a raw string. A miss says what to change about the photo
+instead of just failing.
+
+Two generic icon keys added (camera, scan) rather than borrowing another
+tool's id as an icon key. No file under ads/ is touched.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_012XVfZwTyFK8AbPiu8JTUsL
+---
+ .../java/cc/devbangs/morpho/data/ToolPitch.kt |   2 +
+ .../cc/devbangs/morpho/data/ToolRegistry.kt   |   1 +
+ .../cc/devbangs/morpho/ui/icon/ToolIcons.kt   |   3 +
+ .../morpho/ui/tool/kit/CodeScanner.kt         | 254 ++++++++++++++++++
+ .../morpho/ui/tool/kit/GeneratorTools.kt      |   3 +-
+ 5 files changed, 262 insertions(+), 1 deletion(-)
+ create mode 100644 app/src/main/java/cc/devbangs/morpho/ui/tool/kit/CodeScanner.kt
+
+diff --git a/app/src/main/java/cc/devbangs/morpho/data/ToolPitch.kt b/app/src/main/java/cc/devbangs/morpho/data/ToolPitch.kt
+index ecb6ee9..ccc23fd 100644
+--- a/app/src/main/java/cc/devbangs/morpho/data/ToolPitch.kt
++++ b/app/src/main/java/cc/devbangs/morpho/data/ToolPitch.kt
+@@ -189,6 +189,8 @@ object ToolPitch {
+             "Generate a full range of tints and shades from one base colour, with every code ready to copy.",
+         "youtube-thumbnail-downloader" to
+             "Grab the thumbnail image from a YouTube video in the highest resolution available.",
++        "code-scanner" to
++            "Read what is actually on a QR code or barcode - point your camera at it, or open a screenshot someone sent you. Morpho tells you whether it is a link, a Wi-Fi network, a contact or a product number before you act on it, and finds every code in the picture rather than just the first.",
+         "barcode-generator" to
+             "Generate barcodes in the standard retail and logistics formats, then save or share them as images. For labelling stock, assets or anything that needs scanning.",
+         "json-formatter" to
+diff --git a/app/src/main/java/cc/devbangs/morpho/data/ToolRegistry.kt b/app/src/main/java/cc/devbangs/morpho/data/ToolRegistry.kt
+index 01bbb28..ce530c1 100644
+--- a/app/src/main/java/cc/devbangs/morpho/data/ToolRegistry.kt
++++ b/app/src/main/java/cc/devbangs/morpho/data/ToolRegistry.kt
+@@ -90,6 +90,7 @@ object ToolRegistry {
+         Tool("palette-generator", "Color Palette Generator", "Generate shades from a base color", ToolCategory.GENERATOR, "palette-generator", offline = true, popular = false),
+         Tool("youtube-thumbnail-downloader", "YouTube Thumbnail Downloader", "Download YouTube thumbnails in HD", ToolCategory.GENERATOR, "youtube-thumbnail-downloader", offline = true, popular = false),
+         Tool("barcode-generator", "Barcode Generator", "Generate barcodes in multiple formats", ToolCategory.GENERATOR, "barcode-generator", offline = true, popular = false),
++        Tool("code-scanner", "QR & Barcode Scanner", "Read any QR code or barcode from a picture", ToolCategory.GENERATOR, "code-scanner", offline = true, popular = true, keywords = listOf("scan", "read qr", "decode", "reader", "wifi qr", "barcode reader")),
+         Tool("json-formatter", "JSON Formatter & Validator", "Format and validate JSON data", ToolCategory.DEVELOPER, "json-formatter", offline = true, popular = true),
+         Tool("color-picker", "Color Picker & Palette Generator", "Pick colors and generate palettes", ToolCategory.DEVELOPER, "color-picker", offline = true, popular = false),
+         Tool("favicon-generator", "Favicon Generator", "Generate website favicons from images", ToolCategory.DEVELOPER, "favicon-generator", offline = true, popular = false),
+diff --git a/app/src/main/java/cc/devbangs/morpho/ui/icon/ToolIcons.kt b/app/src/main/java/cc/devbangs/morpho/ui/icon/ToolIcons.kt
+index e8dbf19..d1a0bb6 100644
+--- a/app/src/main/java/cc/devbangs/morpho/ui/icon/ToolIcons.kt
++++ b/app/src/main/java/cc/devbangs/morpho/ui/icon/ToolIcons.kt
+@@ -181,6 +181,9 @@ object ToolIcons {
+         "receipt-generator" to PhosphorIcons.Bold.Receipt,
+         "quotation-generator" to PhosphorIcons.Bold.ClipboardText,
+         "scan-to-pdf" to PhosphorIcons.Bold.Camera,
++        "camera" to PhosphorIcons.Bold.Camera,
++        "scan" to PhosphorIcons.Bold.Scan,
++        "code-scanner" to PhosphorIcons.Bold.Scan,
+         "pdf-page-deleter" to PhosphorIcons.Bold.FileX,
+         "pdf-metadata-editor" to PhosphorIcons.Bold.Info,
+         "pdf-image-extractor" to PhosphorIcons.Bold.Images,
+diff --git a/app/src/main/java/cc/devbangs/morpho/ui/tool/kit/CodeScanner.kt b/app/src/main/java/cc/devbangs/morpho/ui/tool/kit/CodeScanner.kt
+new file mode 100644
+index 0000000..506a92d
+--- /dev/null
++++ b/app/src/main/java/cc/devbangs/morpho/ui/tool/kit/CodeScanner.kt
+@@ -0,0 +1,254 @@
++package cc.devbangs.morpho.ui.tool.kit
++
++import android.graphics.Bitmap
++import android.net.Uri
++import androidx.activity.compose.rememberLauncherForActivityResult
++import androidx.activity.result.PickVisualMediaRequest
++import androidx.activity.result.contract.ActivityResultContracts
++import androidx.compose.foundation.background
++import androidx.compose.foundation.clickable
++import androidx.compose.foundation.layout.*
++import androidx.compose.material3.Text
++import androidx.compose.runtime.*
++import androidx.compose.ui.Alignment
++import androidx.compose.ui.Modifier
++import androidx.compose.ui.draw.clip
++import androidx.compose.ui.graphics.Color
++import androidx.compose.ui.platform.LocalContext
++import androidx.compose.ui.text.font.FontWeight
++import androidx.compose.ui.unit.dp
++import androidx.compose.ui.unit.sp
++import cc.devbangs.morpho.core.Shape
++import cc.devbangs.morpho.core.Space
++import cc.devbangs.morpho.ui.icon.MorphoIcon
++import cc.devbangs.morpho.ui.theme.*
++import com.google.zxing.BinaryBitmap
++import com.google.zxing.DecodeHintType
++import com.google.zxing.MultiFormatReader
++import com.google.zxing.RGBLuminanceSource
++import com.google.zxing.common.GlobalHistogramBinarizer
++import com.google.zxing.common.HybridBinarizer
++import com.google.zxing.multi.GenericMultipleBarcodeReader
++import kotlinx.coroutines.Dispatchers
++import kotlinx.coroutines.launch
++import kotlinx.coroutines.withContext
++import java.io.File
++
++/**
++ * Read QR codes and barcodes out of a picture.
++ *
++ * Morpho could write codes and not read one, which is half a tool: the person
++ * who generates a code is usually the same person who later needs to check
++ * what is actually on one.
++ */
++
++private class Decoded(val text: String, val format: String)
++
++@Composable
++fun ScannerTool(accent: Color) {
++    val ctx = LocalContext.current
++    val scope = rememberCoroutineScope()
++    var preview by remember { mutableStateOf<Bitmap?>(null) }
++    var results by remember { mutableStateOf<List<Decoded>>(emptyList()) }
++    var scanning by remember { mutableStateOf(false) }
++    var nothingFound by remember { mutableStateOf(false) }
++    var pendingUri by remember { mutableStateOf<Uri?>(null) }
++
++    fun scan(uri: Uri) {
++        scanning = true
++        nothingFound = false
++        results = emptyList()
++        scope.launch {
++            // Decoding needs the pixels as an IntArray, which is four bytes a
++            // pixel - a 12MP photo would be 48MB. Capped well below that; no
++            // code needs that resolution to read.
++            val bmp = withContext(Dispatchers.IO) { decodeBitmap(ctx, uri, 1600) }
++            preview = bmp
++            val found = if (bmp == null) emptyList()
++                        else withContext(Dispatchers.Default) { decodeCodes(bmp) }
++            results = found
++            nothingFound = found.isEmpty()
++            scanning = false
++        }
++    }
++
++    val gallery = rememberLauncherForActivityResult(
++        ActivityResultContracts.PickVisualMedia()
++    ) { uri -> if (uri != null) scan(uri) }
++
++    val camera = rememberLauncherForActivityResult(
++        ActivityResultContracts.TakePicture()
++    ) { ok ->
++        val u = pendingUri
++        if (ok && u != null) scan(u)
++        pendingUri = null
++    }
++
++    fun capture() {
++        val dir = File(ctx.cacheDir, "shared").apply { mkdirs() }
++        val f = File(dir, "code_${System.currentTimeMillis()}.jpg")
++        val u = androidx.core.content.FileProvider.getUriForFile(
++            ctx, "${ctx.packageName}.fileprovider", f
++        )
++        pendingUri = u
++        camera.launch(u)
++    }
++
++    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
++        Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
++            Box(Modifier.weight(1f)) {
++                SourceTile("Take a photo", "camera", accent) { capture() }
++            }
++            Box(Modifier.weight(1f)) {
++                SourceTile("From gallery", "image-add", accent) {
++                    gallery.launch(
++                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
++                    )
++                }
++            }
++        }
++
++        if (scanning) ProcessingCard("Looking for codes...", accent)
++
++        if (nothingFound && !scanning) ToolErrorCard(
++            title = "No code found",
++            body = "Morpho couldn't read a code in that picture. Get closer so the code " +
++                "fills more of the frame, keep it flat, and avoid glare across it.",
++            accent = accent
++        )
++
++        if (results.isNotEmpty()) {
++            Text(
++                if (results.size == 1) "1 code found" else "${results.size} codes found",
++                color = InkSoft, fontSize = 13.sp
++            )
++            results.forEach { r ->
++                Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
++                    Row(verticalAlignment = Alignment.CenterVertically) {
++                        Box(
++                            Modifier.clip(Shape.pill).background(accent.copy(alpha = 0.12f))
++                                .padding(horizontal = 9.dp, vertical = 4.dp)
++                        ) {
++                            Text(r.format, color = accent, fontSize = 11.sp,
++                                fontWeight = FontWeight.Bold)
++                        }
++                        Spacer(Modifier.width(Space.sm))
++                        Text(payloadKind(r.text), color = InkFaint, fontSize = 11.5.sp)
++                    }
++                    ToolResult(r.text, accent, mono = true, label = "CONTENT")
++                }
++            }
++        }
++    }
++}
++
++@Composable
++private fun SourceTile(label: String, icon: String, accent: Color, onClick: () -> Unit) {
++    Column(
++        Modifier.fillMaxWidth().clip(Shape.card).background(accent.copy(alpha = 0.08f))
++            .clickable(onClick = onClick).padding(vertical = Space.xl),
++        horizontalAlignment = Alignment.CenterHorizontally
++    ) {
++        MorphoIcon(icon, tint = accent, size = 24.dp)
++        Spacer(Modifier.height(Space.sm))
++        Text(label, color = accent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
++    }
++}
++
++/**
++ * Try hard, then give up honestly.
++ *
++ * One pass with the default binarizer misses a lot of real-world pictures:
++ * phone photos of screens, printed labels under uneven light, codes shot at an
++ * angle. Two binarizers across four rotations is still well under a second on
++ * a 1600px bitmap, and it turns most of those misses into reads.
++ */
++private fun decodeCodes(src: Bitmap): List<Decoded> {
++    val hints = mapOf<DecodeHintType, Any>(
++        DecodeHintType.TRY_HARDER to true
++    )
++    for (rotation in listOf(0, 90, 180, 270)) {
++        val bmp = if (rotation == 0) src else rotate(src, rotation.toFloat()) ?: continue
++        try {
++            val w = bmp.width
++            val h = bmp.height
++            val pixels = IntArray(w * h)
++            bmp.getPixels(pixels, 0, w, 0, 0, w, h)
++            val source = RGBLuminanceSource(w, h, pixels)
++            for (useHybrid in listOf(true, false)) {
++                val binary = BinaryBitmap(
++                    if (useHybrid) HybridBinarizer(source) else GlobalHistogramBinarizer(source)
++                )
++                // Multiple reader first: a picture of a sheet of labels holds
++                // more than one code, and returning only the first is wrong.
++                val multi = runCatching {
++                    GenericMultipleBarcodeReader(MultiFormatReader())
++                        .decodeMultiple(binary, hints)
++                }.getOrNull()
++                if (multi != null && multi.isNotEmpty()) {
++                    return multi.map { Decoded(it.text, prettyFormat(it.barcodeFormat.name)) }
++                        .distinctBy { it.text }
++                }
++                val one = runCatching {
++                    MultiFormatReader().apply { setHints(hints) }.decodeWithState(binary)
++                }.getOrNull()
++                if (one != null) {
++                    return listOf(Decoded(one.text, prettyFormat(one.barcodeFormat.name)))
++                }
++            }
++        } catch (e: Exception) {
++            // Next rotation.
++        } catch (e: OutOfMemoryError) {
++            return emptyList()
++        } finally {
++            if (bmp !== src) bmp.recycle()
++        }
++    }
++    return emptyList()
++}
++
++private fun rotate(src: Bitmap, degrees: Float): Bitmap? = try {
++    val m = android.graphics.Matrix().apply { postRotate(degrees) }
++    Bitmap.createBitmap(src, 0, 0, src.width, src.height, m, true)
++} catch (e: Exception) {
++    null
++} catch (e: OutOfMemoryError) {
++    null
++}
++
++private fun prettyFormat(name: String): String = when (name) {
++    "QR_CODE" -> "QR"
++    "EAN_13" -> "EAN-13"
++    "EAN_8" -> "EAN-8"
++    "UPC_A" -> "UPC-A"
++    "UPC_E" -> "UPC-E"
++    "CODE_128" -> "Code 128"
++    "CODE_39" -> "Code 39"
++    "CODE_93" -> "Code 93"
++    "DATA_MATRIX" -> "Data Matrix"
++    "PDF_417" -> "PDF417"
++    "AZTEC" -> "Aztec"
++    "ITF" -> "ITF"
++    "CODABAR" -> "Codabar"
++    else -> name.replace('_', ' ')
++}
++
++/** What the payload actually is, so the raw text is not the only clue. */
++private fun payloadKind(text: String): String {
++    val t = text.trim()
++    val lower = t.lowercase()
++    return when {
++        lower.startsWith("wifi:") -> "Wi-Fi network"
++        lower.startsWith("begin:vcard") || lower.startsWith("mecard:") -> "Contact card"
++        lower.startsWith("begin:vevent") -> "Calendar event"
++        lower.startsWith("mailto:") -> "Email address"
++        lower.startsWith("tel:") -> "Phone number"
++        lower.startsWith("smsto:") || lower.startsWith("sms:") -> "Text message"
++        lower.startsWith("geo:") -> "Location"
++        lower.startsWith("bitcoin:") || lower.startsWith("ethereum:") -> "Crypto address"
++        lower.startsWith("otpauth:") -> "Two-factor setup"
++        lower.startsWith("http://") || lower.startsWith("https://") -> "Web link"
++        t.all { it.isDigit() } && t.length in 8..14 -> "Product number"
++        else -> "Plain text"
++    }
++}
+diff --git a/app/src/main/java/cc/devbangs/morpho/ui/tool/kit/GeneratorTools.kt b/app/src/main/java/cc/devbangs/morpho/ui/tool/kit/GeneratorTools.kt
+index 62b3de4..8fb767c 100644
+--- a/app/src/main/java/cc/devbangs/morpho/ui/tool/kit/GeneratorTools.kt
++++ b/app/src/main/java/cc/devbangs/morpho/ui/tool/kit/GeneratorTools.kt
+@@ -28,7 +28,7 @@ import kotlinx.coroutines.withContext
+ import kotlin.random.Random
+ 
+ fun hasGeneratorTool(id: String): Boolean = id in setOf(
+-    "password-generator","qr-code-generator","barcode-generator","fake-data-generator",
++    "password-generator","qr-code-generator","barcode-generator","code-scanner","fake-data-generator",
+     "username-generator","email-signature-generator","gradient-generator","css-generator",
+     "cover-letter-generator","api-key-generator","hashtag-generator","palette-generator"
+ )
+@@ -37,6 +37,7 @@ fun hasGeneratorTool(id: String): Boolean = id in setOf(
+ fun GeneratorTool(id: String, accent: Color) {
+     when (id) {
+         "password-generator" -> PasswordTool(accent)
++        "code-scanner" -> ScannerTool(accent)
+         "username-generator" -> UsernameTool(accent)
+         "email-signature-generator" -> EmailSigTool(accent)
+         "gradient-generator" -> GradientTool(accent)
+-- 
+2.43.0
+
+
+From 29ec590361105f167ac4c4af7e43eade12546044 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 29 Sep 2026 04:59:11 +0000
+Subject: [PATCH 2/3] Passport & ID Photo: exact sizes, ready to print
+
+An ID photo is a physical measurement, not a pixel count, so the tool
+works in millimetres and dpi: pick 35 x 45 mm at 300 dpi and you get
+413 x 531 px, which is what a print shop needs. Five common formats,
+300 or 600 dpi, and an optional 6 x 4 in sheet tiled with copies and
+hairline cut guides, which is how these are actually printed.
+
+Background replacement reuses the ML Kit subject segmentation already in
+the build for Background Remover, so a plain backdrop costs no new
+dependency and no upload.
+
+Two deliberate honesty calls. Sizes are named by their millimetres with a
+note on the format, never as a claim about any authority's current rules
+- those vary by document and change, and the pitch says to check the form.
+And there is no face detector in this app's dependencies, so the crop is
+manual: a vertical offset the user sets against a live preview, labelled
+as theirs to set. Implying an alignment the app cannot perform would be
+the kind of promise that earns the review we are digging out of.
+
+135 tools, every one dispatched and every one with a pitch. No file under
+ads/ is touched.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_012XVfZwTyFK8AbPiu8JTUsL
+---
+ .../java/cc/devbangs/morpho/data/ToolPitch.kt |   2 +
+ .../cc/devbangs/morpho/data/ToolRegistry.kt   |   1 +
+ .../cc/devbangs/morpho/ui/icon/ToolIcons.kt   |   1 +
+ .../cc/devbangs/morpho/ui/tool/ToolScreen.kt  |   2 +
+ .../morpho/ui/tool/kit/PassportPhoto.kt       | 389 ++++++++++++++++++
+ 5 files changed, 395 insertions(+)
+ create mode 100644 app/src/main/java/cc/devbangs/morpho/ui/tool/kit/PassportPhoto.kt
+
+diff --git a/app/src/main/java/cc/devbangs/morpho/data/ToolPitch.kt b/app/src/main/java/cc/devbangs/morpho/data/ToolPitch.kt
+index ccc23fd..db2f9c4 100644
+--- a/app/src/main/java/cc/devbangs/morpho/data/ToolPitch.kt
++++ b/app/src/main/java/cc/devbangs/morpho/data/ToolPitch.kt
+@@ -57,6 +57,8 @@ object ToolPitch {
+             "Resize an image to exact dimensions. Pick a preset or type your own width and height, choose whether to fit or fill, and see the real output size before you save — no surprise crops.",
+         "background-remover" to
+             "Cut the subject out of a photo and drop the background, leaving a transparent PNG you can put on any colour. Runs on your device, so the photo is never uploaded.",
++        "passport-photo" to
++            "Make an ID or passport photo at an exact physical size \u2014 35 \u00d7 45 mm, 2 \u00d7 2 in and other common formats \u2014 at 300 or 600 dpi for printing. Replace the background with a plain one on your device, set the crop yourself, and lay copies onto a 6 \u00d7 4 in sheet to print and cut. Sizes are named by their millimetres, not by any authority\u2019s rules, so check the spec on your own form.",
+         "image-cropper" to
+             "Crop to a free shape or to a fixed ratio — square, 4:3, 16:9, or the sizes profile pictures actually want. You see the crop before you commit to it.",
+         "jpg-to-png" to
+diff --git a/app/src/main/java/cc/devbangs/morpho/data/ToolRegistry.kt b/app/src/main/java/cc/devbangs/morpho/data/ToolRegistry.kt
+index ce530c1..7967f87 100644
+--- a/app/src/main/java/cc/devbangs/morpho/data/ToolRegistry.kt
++++ b/app/src/main/java/cc/devbangs/morpho/data/ToolRegistry.kt
+@@ -24,6 +24,7 @@ object ToolRegistry {
+         Tool("image-target-size", "Compress to Target Size", "Hit an exact KB limit, not a guess", ToolCategory.IMAGE, "image-compressor", offline = true, popular = true, keywords = listOf("kb", "limit", "under", "exact size", "upload limit", "passport", "exam", "visa", "portal")),
+         Tool("background-remover", "Background Remover", "Remove image backgrounds with AI", ToolCategory.IMAGE, "background-remover", offline = true, popular = true, plus = true),
+         Tool("image-cropper", "Image Cropper", "Crop images to any size or ratio", ToolCategory.IMAGE, "image-cropper", offline = true, popular = false),
++        Tool("passport-photo", "Passport & ID Photo", "Exact photo sizes, ready to print", ToolCategory.IMAGE, "passport-photo", offline = true, popular = true, keywords = listOf("passport", "id photo", "visa", "35x45", "2x2", "print", "biometric")),
+         Tool("jpg-to-png", "JPG to PNG Converter", "Convert JPG images to PNG format", ToolCategory.CONVERTER, "jpg-to-png", offline = true, popular = false),
+         Tool("png-to-jpg", "PNG to JPG Converter", "Convert PNG images to JPG format", ToolCategory.CONVERTER, "png-to-jpg", offline = true, popular = false),
+         Tool("webp-to-png", "WebP to PNG Converter", "Convert WebP images to PNG", ToolCategory.CONVERTER, "webp-to-png", offline = true, popular = false),
+diff --git a/app/src/main/java/cc/devbangs/morpho/ui/icon/ToolIcons.kt b/app/src/main/java/cc/devbangs/morpho/ui/icon/ToolIcons.kt
+index d1a0bb6..e88cc59 100644
+--- a/app/src/main/java/cc/devbangs/morpho/ui/icon/ToolIcons.kt
++++ b/app/src/main/java/cc/devbangs/morpho/ui/icon/ToolIcons.kt
+@@ -182,6 +182,7 @@ object ToolIcons {
+         "quotation-generator" to PhosphorIcons.Bold.ClipboardText,
+         "scan-to-pdf" to PhosphorIcons.Bold.Camera,
+         "camera" to PhosphorIcons.Bold.Camera,
++        "passport-photo" to PhosphorIcons.Bold.IdentificationCard,
+         "scan" to PhosphorIcons.Bold.Scan,
+         "code-scanner" to PhosphorIcons.Bold.Scan,
+         "pdf-page-deleter" to PhosphorIcons.Bold.FileX,
+diff --git a/app/src/main/java/cc/devbangs/morpho/ui/tool/ToolScreen.kt b/app/src/main/java/cc/devbangs/morpho/ui/tool/ToolScreen.kt
+index 80b062e..82f2f17 100644
+--- a/app/src/main/java/cc/devbangs/morpho/ui/tool/ToolScreen.kt
++++ b/app/src/main/java/cc/devbangs/morpho/ui/tool/ToolScreen.kt
+@@ -42,6 +42,7 @@ import cc.devbangs.morpho.ui.tool.kit.TextDevTool
+ import cc.devbangs.morpho.ui.tool.kit.hasGeneratorTool
+ import cc.devbangs.morpho.ui.tool.kit.GeneratorTool
+ import cc.devbangs.morpho.ui.tool.kit.BackgroundRemoverTool
++import cc.devbangs.morpho.ui.tool.kit.PassportPhotoTool
+ import cc.devbangs.morpho.ui.tool.kit.AiTool
+ import cc.devbangs.morpho.ui.tool.kit.hasAiTool
+ import cc.devbangs.morpho.ui.tool.kit.PdfMarkupTool
+@@ -282,6 +283,7 @@ private fun ToolHost(tool: Tool, onOpenTool: (String) -> Unit, onOpenPlus: () ->
+         hasAiTool(tool.id) -> AiTool(tool.id, tool.category.accent)
+         hasMarkupTool(tool.id) -> PdfMarkupTool(tool.id, tool.category.accent)
+         tool.id == "background-remover" -> BackgroundRemoverTool(tool.category.accent)
++        tool.id == "passport-photo" -> PassportPhotoTool(tool.category.accent)
+         tool.id == "pdf-signer" -> PdfSignerTool(tool.category.accent)
+         tool.id == "resume-builder" -> ResumeTool(tool.category.accent)
+         else -> Placeholder(tool)
+diff --git a/app/src/main/java/cc/devbangs/morpho/ui/tool/kit/PassportPhoto.kt b/app/src/main/java/cc/devbangs/morpho/ui/tool/kit/PassportPhoto.kt
+new file mode 100644
+index 0000000..6a4b058
+--- /dev/null
++++ b/app/src/main/java/cc/devbangs/morpho/ui/tool/kit/PassportPhoto.kt
+@@ -0,0 +1,389 @@
++package cc.devbangs.morpho.ui.tool.kit
++
++import android.graphics.Bitmap
++import android.graphics.Canvas
++import android.graphics.Color as AColor
++import android.graphics.Paint
++import android.graphics.Rect
++import androidx.activity.compose.rememberLauncherForActivityResult
++import androidx.activity.result.PickVisualMediaRequest
++import androidx.activity.result.contract.ActivityResultContracts
++import androidx.compose.foundation.Image
++import androidx.compose.foundation.background
++import androidx.compose.foundation.border
++import androidx.compose.foundation.clickable
++import androidx.compose.foundation.layout.*
++import androidx.compose.material3.Text
++import androidx.compose.runtime.*
++import androidx.compose.ui.Alignment
++import androidx.compose.ui.Modifier
++import androidx.compose.ui.draw.clip
++import androidx.compose.ui.graphics.Color
++import androidx.compose.ui.graphics.asImageBitmap
++import androidx.compose.ui.layout.ContentScale
++import androidx.compose.ui.platform.LocalContext
++import androidx.compose.ui.text.font.FontWeight
++import androidx.compose.ui.unit.dp
++import androidx.compose.ui.unit.sp
++import cc.devbangs.morpho.core.Shape
++import cc.devbangs.morpho.core.Space
++import cc.devbangs.morpho.ui.icon.MorphoIcon
++import cc.devbangs.morpho.ui.theme.*
++import com.google.mlkit.vision.common.InputImage
++import com.google.mlkit.vision.segmentation.subject.SubjectSegmentation
++import com.google.mlkit.vision.segmentation.subject.SubjectSegmenterOptions
++
++/**
++ * ID and passport photos at an exact physical size.
++ *
++ * Sizes are named by their millimetres, with a note of where that size is
++ * usually asked for - not as a claim about any authority's current rules.
++ * Requirements change and vary by document, so the tool prints what the user
++ * asked for and tells them to check the spec themselves.
++ *
++ * There is no face detection in the app's dependencies, so the crop is manual:
++ * a vertical offset the user sets while watching the preview. That is honest
++ * about what it does rather than implying an alignment it cannot perform.
++ */
++
++private class PhotoSize(val label: String, val wMm: Double, val hMm: Double, val note: String)
++
++private val PHOTO_SIZES = listOf(
++    PhotoSize("35 × 45 mm", 35.0, 45.0, "The most widely requested passport size"),
++    PhotoSize("2 × 2 in", 50.8, 50.8, "Square format, 51 × 51 mm"),
++    PhotoSize("33 × 48 mm", 33.0, 48.0, "Taller, narrower format"),
++    PhotoSize("50 × 70 mm", 50.0, 70.0, "Large format"),
++    PhotoSize("25 × 35 mm", 25.0, 35.0, "Small ID and licence format")
++)
++
++private class BgChoice(val label: String, val argb: Int?)
++
++private val BG_CHOICES = listOf(
++    BgChoice("Original", null),
++    BgChoice("White", AColor.WHITE),
++    BgChoice("Off-white", AColor.rgb(242, 242, 242)),
++    BgChoice("Light blue", AColor.rgb(198, 219, 239)),
++    BgChoice("Light grey", AColor.rgb(210, 210, 210))
++)
++
++@Composable
++fun PassportPhotoTool(accent: Color) {
++    val ctx = LocalContext.current
++    var src by remember { mutableStateOf<Bitmap?>(null) }
++    var cutout by remember { mutableStateOf<Bitmap?>(null) }
++    var sizeIdx by remember { mutableStateOf(0) }
++    var dpi by remember { mutableStateOf(300) }
++    var bgIdx by remember { mutableStateOf(0) }
++    var offset by remember { mutableStateOf(0) }      // -40..40 percent of slack
++    var sheet by remember { mutableStateOf(false) }
++    var segmenting by remember { mutableStateOf(false) }
++    var error by remember { mutableStateOf("") }
++
++    val size = PHOTO_SIZES[sizeIdx]
++    val wPx = mmToPx(size.wMm, dpi)
++    val hPx = mmToPx(size.hMm, dpi)
++    val bg = BG_CHOICES[bgIdx]
++
++    fun segment(bmp: Bitmap) {
++        segmenting = true
++        error = ""
++        val segmenter = SubjectSegmentation.getClient(
++            SubjectSegmenterOptions.Builder().enableForegroundBitmap().build()
++        )
++        segmenter.process(InputImage.fromBitmap(bmp, 0))
++            .addOnSuccessListener { r ->
++                cutout = r.foregroundBitmap
++                if (r.foregroundBitmap == null) {
++                    error = "Morpho couldn't separate the subject from the background " +
++                        "in this photo. Keep the original background, or retake it " +
++                        "against a plainer wall."
++                    bgIdx = 0
++                }
++                segmenting = false
++                segmenter.close()
++            }
++            .addOnFailureListener {
++                error = "The background model isn't ready yet. It downloads once " +
++                    "through Google Play services - connect to the internet and try " +
++                    "again in a moment."
++                bgIdx = 0
++                segmenting = false
++                segmenter.close()
++            }
++    }
++
++    val picker = rememberLauncherForActivityResult(
++        ActivityResultContracts.PickVisualMedia()
++    ) { uri ->
++        if (uri != null) {
++            val decoded = decodeBitmap(ctx, uri, 2048)
++            src = decoded
++            cutout = null
++            error = if (decoded == null)
++                "Morpho couldn't read that image. Try another photo." else ""
++            if (decoded != null && BG_CHOICES[bgIdx].argb != null) segment(decoded)
++        }
++    }
++    val pick = {
++        picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
++    }
++
++    val preview = remember(src, cutout, sizeIdx, dpi, bgIdx, offset) {
++        val s = src ?: return@remember null
++        buildPhoto(s, cutout, bg.argb, wPx, hPx, offset)
++    }
++
++    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
++        ImagePickPreview(
++            bitmap = src, accent = accent,
++            onPick = pick,
++            onClear = { src = null; cutout = null; error = "" }
++        )
++
++        if (src != null) {
++            Column {
++                FieldLabel("PHOTO SIZE")
++                Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
++                    PHOTO_SIZES.forEachIndexed { i, p ->
++                        val on = i == sizeIdx
++                        Row(
++                            Modifier.fillMaxWidth().clip(Shape.field)
++                                .background(if (on) accent.copy(alpha = 0.12f) else PaperSunk)
++                                .clickable { sizeIdx = i }
++                                .padding(horizontal = Space.md, vertical = 11.dp),
++                            verticalAlignment = Alignment.CenterVertically
++                        ) {
++                            Column(Modifier.weight(1f)) {
++                                Text(p.label, color = Ink, fontSize = 14.5.sp,
++                                    fontWeight = FontWeight.SemiBold)
++                                Text(p.note, color = InkSoft, fontSize = 12.sp)
++                            }
++                            if (on) MorphoIcon("check", tint = accent, size = 16.dp)
++                        }
++                    }
++                }
++            }
++
++            Column {
++                FieldLabel("PRINT RESOLUTION")
++                Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
++                    listOf(300, 600).forEach { d ->
++                        Box(Modifier.weight(1f)) {
++                            ToolButton("$d dpi",
++                                if (d == dpi) accent else accent.copy(alpha = 0.35f)) { dpi = d }
++                        }
++                    }
++                }
++            }
++
++            Column {
++                FieldLabel("BACKGROUND")
++                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
++                    BG_CHOICES.forEachIndexed { i, c ->
++                        val on = i == bgIdx
++                        Column(
++                            Modifier.weight(1f).clip(Shape.field)
++                                .background(if (on) accent.copy(alpha = 0.16f) else PaperSunk)
++                                .clickable {
++                                    bgIdx = i
++                                    val s = src
++                                    if (c.argb != null && cutout == null && s != null) segment(s)
++                                }
++                                .padding(vertical = 8.dp),
++                            horizontalAlignment = Alignment.CenterHorizontally
++                        ) {
++                            Box(
++                                Modifier.size(20.dp).clip(Shape.chip)
++                                    .background(
++                                        if (c.argb == null) InkFaint.copy(alpha = 0.3f)
++                                        else Color(c.argb)
++                                    )
++                                    .border(1.dp, PaperLine, Shape.chip)
++                            )
++                            Spacer(Modifier.height(5.dp))
++                            Text(c.label, color = if (on) Ink else InkSoft, fontSize = 9.5.sp,
++                                maxLines = 1)
++                        }
++                    }
++                }
++            }
++
++            if (segmenting) ProcessingCard("Separating the subject...", accent)
++
++            Column {
++                FieldLabel("VERTICAL POSITION")
++                Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
++                    listOf(-20 to "Up", -5 to "Slight up", 0 to "Centre",
++                           5 to "Slight down", 20 to "Down").forEach { (v, lbl) ->
++                        Box(Modifier.weight(1f)) {
++                            ToolButton(lbl,
++                                if (v == offset) accent else accent.copy(alpha = 0.3f)) {
++                                offset = v
++                            }
++                        }
++                    }
++                }
++                Text(
++                    "Morpho does not detect faces, so the crop is yours to set - " +
++                        "watch the preview and check the head sits where your form asks.",
++                    color = InkFaint, fontSize = 12.sp,
++                    modifier = Modifier.padding(top = 6.dp)
++                )
++            }
++
++            Row(
++                Modifier.fillMaxWidth().clip(Shape.field).background(PaperSunk)
++                    .clickable { sheet = !sheet }
++                    .padding(horizontal = Space.md, vertical = 12.dp),
++                verticalAlignment = Alignment.CenterVertically
++            ) {
++                Box(
++                    Modifier.size(22.dp).clip(Shape.chip)
++                        .background(if (sheet) accent else accent.copy(alpha = 0.15f)),
++                    contentAlignment = Alignment.Center
++                ) { if (sheet) MorphoIcon("check", tint = Paper, size = 13.dp) }
++                Spacer(Modifier.width(Space.md))
++                Column {
++                    Text("Make a 6 × 4 in print sheet", color = Ink, fontSize = 14.5.sp,
++                        fontWeight = FontWeight.SemiBold)
++                    Text("Fills a standard photo print with copies to cut out",
++                        color = InkSoft, fontSize = 12.sp)
++                }
++            }
++
++            if (error.isNotEmpty()) ToolErrorCard("Couldn't do that", error, accent)
++
++            preview?.let { p ->
++                val shown = remember(p, sheet, dpi) {
++                    if (sheet) sheetOf(p, dpi) else p
++                }
++                if (shown == null) {
++                    ToolErrorCard(
++                        "Couldn't build the print sheet",
++                        "That combination needs more memory than this device will give. " +
++                            "Try 300 dpi instead of 600.",
++                        accent
++                    )
++                } else {
++                    Box(
++                        Modifier.fillMaxWidth().heightIn(max = 360.dp).clip(Shape.card)
++                            .background(PaperSunk).padding(Space.md),
++                        contentAlignment = Alignment.Center
++                    ) {
++                        Image(shown.asImageBitmap(), null, Modifier.fillMaxWidth(),
++                            contentScale = ContentScale.Fit)
++                    }
++                    StatGrid(
++                        listOf(
++                            "Photo" to size.label,
++                            "Pixels" to "$wPx×$hPx",
++                            "Output" to if (sheet) "${shown.width}×${shown.height}"
++                                        else "$wPx×$hPx",
++                            "For print" to "$dpi dpi"
++                        ),
++                        accent
++                    )
++                    BitmapResultActions(
++                        accent,
++                        if (sheet) "id_photo_sheet" else "id_photo",
++                        Bitmap.CompressFormat.JPEG, 95
++                    ) { shown }
++                }
++            }
++        }
++    }
++}
++
++private fun mmToPx(mm: Double, dpi: Int): Int =
++    Math.round(mm / 25.4 * dpi).toInt().coerceAtLeast(1)
++
++/**
++ * Composite, crop to the target ratio, and scale to the exact pixel size.
++ *
++ * [offsetPct] slides the crop window through whatever slack the source has in
++ * the cropped direction, so a head too high or too low can be brought in.
++ */
++private fun buildPhoto(
++    src: Bitmap,
++    cutout: Bitmap?,
++    bgArgb: Int?,
++    wPx: Int,
++    hPx: Int,
++    offsetPct: Int
++): Bitmap? = try {
++    val base = if (bgArgb != null && cutout != null) {
++        val layered = Bitmap.createBitmap(cutout.width, cutout.height, Bitmap.Config.ARGB_8888)
++        Canvas(layered).apply {
++            drawColor(bgArgb)
++            drawBitmap(cutout, 0f, 0f, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
++        }
++        layered
++    } else src
++
++    val targetRatio = wPx.toDouble() / hPx.toDouble()
++    val srcRatio = base.width.toDouble() / base.height.toDouble()
++    val cropW: Int
++    val cropH: Int
++    if (srcRatio > targetRatio) {
++        cropH = base.height
++        cropW = (base.height * targetRatio).toInt().coerceAtLeast(1)
++    } else {
++        cropW = base.width
++        cropH = (base.width / targetRatio).toInt().coerceAtLeast(1)
++    }
++    val slackX = base.width - cropW
++    val slackY = base.height - cropH
++    val left = (slackX / 2)
++    // Offset only applies where there is room to move.
++    val top = (slackY / 2 + slackY * offsetPct / 100).coerceIn(0, slackY)
++
++    val cropped = Bitmap.createBitmap(base, left, top, cropW, cropH)
++    val out = Bitmap.createScaledBitmap(cropped, wPx, hPx, true)
++    if (cropped !== out) cropped.recycle()
++    if (base !== src && base !== out) base.recycle()
++    out
++} catch (e: Exception) {
++    null
++} catch (e: OutOfMemoryError) {
++    null
++}
++
++/** Tile copies onto a 6x4 inch sheet, with a hairline to cut along. */
++private fun sheetOf(photo: Bitmap, dpi: Int): Bitmap? = try {
++    val sheetW = 6 * dpi
++    val sheetH = 4 * dpi
++    val gap = Math.round(2.0 / 25.4 * dpi).toInt().coerceAtLeast(2)
++    val margin = gap
++    val cols = ((sheetW - margin * 2 + gap) / (photo.width + gap)).coerceAtLeast(1)
++    val rows = ((sheetH - margin * 2 + gap) / (photo.height + gap)).coerceAtLeast(1)
++
++    val out = Bitmap.createBitmap(sheetW, sheetH, Bitmap.Config.ARGB_8888)
++    val c = Canvas(out)
++    c.drawColor(AColor.WHITE)
++    val cut = Paint(Paint.ANTI_ALIAS_FLAG).apply {
++        color = AColor.rgb(190, 190, 190)
++        style = Paint.Style.STROKE
++        strokeWidth = 1f
++    }
++    val gridW = cols * photo.width + (cols - 1) * gap
++    val gridH = rows * photo.height + (rows - 1) * gap
++    val originX = ((sheetW - gridW) / 2).coerceAtLeast(0)
++    val originY = ((sheetH - gridH) / 2).coerceAtLeast(0)
++    for (r in 0 until rows) {
++        for (col in 0 until cols) {
++            val x = originX + col * (photo.width + gap)
++            val y = originY + r * (photo.height + gap)
++            c.drawBitmap(photo, null,
++                Rect(x, y, x + photo.width, y + photo.height), null)
++            c.drawRect(
++                x.toFloat(), y.toFloat(),
++                (x + photo.width).toFloat(), (y + photo.height).toFloat(), cut
++            )
++        }
++    }
++    out
++} catch (e: Exception) {
++    null
++} catch (e: OutOfMemoryError) {
++    null
++}
+-- 
+2.43.0
+
+
+From 1b00dea54904b4d391ccc8206fdaee61b40bd9d9 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 29 Sep 2026 04:59:30 +0000
+Subject: [PATCH 3/3] Version 1.0.9 (10)
+
+Three new tools since 1.0.8 and a crash fix, so the catalogue goes from
+132 to 135.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_012XVfZwTyFK8AbPiu8JTUsL
+---
+ app/build.gradle.kts | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/app/build.gradle.kts b/app/build.gradle.kts
+index 118caaa..e9379ff 100644
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -20,8 +20,8 @@ android {
+         applicationId = "cc.devbangs.morpho"
+         minSdk = 24
+         targetSdk = 36
+-        versionCode = 9
+-        versionName = "1.0.8"
++        versionCode = 10
++        versionName = "1.0.9"
+         vectorDrawables { useSupportLibrary = true }
+     }
+ 
+-- 
+2.43.0
+

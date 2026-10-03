@@ -1,0 +1,683 @@
+From c0f55e81f037ded3df7ff37ad8109d8061c5db1b Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 29 Sep 2026 04:42:41 +0000
+Subject: [PATCH 1/2] Stop the Voice Recorder crashing, and give it controls
+
+MediaRecorder.prepare() throws IOException and start() throws
+IllegalStateException when the microphone is held by a call or another
+app. Both ran unguarded on the main thread inside the record button's
+click handler, so a busy mic was a process crash rather than a failed
+recording. They are wrapped now, the recorder is released on the failure
+path, and the user is told what happened.
+
+The recorder also produced whatever MediaRecorder defaulted to, with no
+say from the user - against the rule that every tool producing output
+lets the user control it. Three capture presets now, from a 22 kHz mono
+voice note to 44 kHz stereo, with the trade spelled out on each. A clock
+and a level meter make it obvious the microphone is live, the recorder is
+released when the screen goes away instead of holding the mic open, and
+the result goes through ToolResultCard so it can be shared as well as
+saved.
+
+Audio Joiner: joinAudio returning null used to leave the button doing
+nothing at all, which reads as the app ignoring the tap - it now says
+which file it could not decode. Files can be reordered and removed before
+joining, which is the point of a joiner.
+
+Audited alongside this: all 132 registry tools dispatch to a real
+implementation. No file under ads/ is touched.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_012XVfZwTyFK8AbPiu8JTUsL
+---
+ .../devbangs/morpho/ui/tool/kit/LastTools.kt  | 263 ++++++++++++++++--
+ 1 file changed, 234 insertions(+), 29 deletions(-)
+
+diff --git a/app/src/main/java/cc/devbangs/morpho/ui/tool/kit/LastTools.kt b/app/src/main/java/cc/devbangs/morpho/ui/tool/kit/LastTools.kt
+index fbb690e..875405f 100644
+--- a/app/src/main/java/cc/devbangs/morpho/ui/tool/kit/LastTools.kt
++++ b/app/src/main/java/cc/devbangs/morpho/ui/tool/kit/LastTools.kt
+@@ -61,53 +61,186 @@ fun LastTool(id: String, accent: Color) {
+ }
+ 
+ // ---- Voice recorder ----
++
++/** Capture settings, so the user picks the trade rather than inheriting one. */
++private data class RecQuality(
++    val label: String,
++    val detail: String,
++    val sampleRate: Int,
++    val channels: Int,
++    val bitRate: Int
++)
++
++private val REC_QUALITIES = listOf(
++    RecQuality("Voice note", "22 kHz mono - smallest file", 22050, 1, 64_000),
++    RecQuality("Standard", "44 kHz mono - speech and lectures", 44100, 1, 128_000),
++    RecQuality("High", "44 kHz stereo - music and room sound", 44100, 2, 192_000)
++)
++
+ @Composable
+ private fun VoiceRecorder(accent: Color) {
+     val ctx = LocalContext.current
+-    var recording by remember { mutableStateOf(false) }
+     var recorder by remember { mutableStateOf<MediaRecorder?>(null) }
+     var lastFile by remember { mutableStateOf<File?>(null) }
++    var quality by remember { mutableStateOf(1) }
++    var elapsed by remember { mutableStateOf(0L) }
++    var level by remember { mutableStateOf(0f) }
++    var error by remember { mutableStateOf("") }
++    val recording = recorder != null
+     var hasPerm by remember { mutableStateOf(
+         ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+     ) }
+     val permLauncher = rememberLauncherForActivityResult(
+         ActivityResultContracts.RequestPermission()) { hasPerm = it }
+ 
++    // Clock and level meter, so it is obvious the microphone is actually live.
++    LaunchedEffect(recording) {
++        if (!recording) return@LaunchedEffect
++        val began = System.currentTimeMillis()
++        while (true) {
++            kotlinx.coroutines.delay(100)
++            elapsed = System.currentTimeMillis() - began
++            level = (runCatching { recorder?.maxAmplitude ?: 0 }.getOrDefault(0) / 12000f)
++                .coerceIn(0f, 1f)
++        }
++    }
++    // A recorder left running holds the microphone open for the whole app.
++    DisposableEffect(Unit) {
++        onDispose {
++            recorder?.let { r -> runCatching { r.stop() }; runCatching { r.release() } }
++            ToolWork.reset()
++        }
++    }
++
++    fun begin() {
++        error = ""
++        val q = REC_QUALITIES[quality]
++        val f = File(ctx.cacheDir, "rec_${System.currentTimeMillis()}.m4a")
++        val r = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) MediaRecorder(ctx)
++                else @Suppress("DEPRECATION") MediaRecorder()
++        // prepare() throws IOException and start() throws IllegalStateException
++        // when the microphone is held by a call or another app. Unguarded, that
++        // was a process crash rather than a failed recording.
++        try {
++            r.setAudioSource(MediaRecorder.AudioSource.MIC)
++            r.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
++            r.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
++            r.setAudioSamplingRate(q.sampleRate)
++            r.setAudioChannels(q.channels)
++            r.setAudioEncodingBitRate(q.bitRate)
++            r.setOutputFile(f.absolutePath)
++            r.prepare()
++            r.start()
++            recorder = r
++            lastFile = f
++            elapsed = 0L
++            ToolWork.start()
++        } catch (e: Exception) {
++            runCatching { r.release() }
++            f.delete()
++            error = "Morpho couldn't start the microphone. Another app or a call may be using it."
++        }
++    }
++
++    fun finish() {
++        val r = recorder ?: return
++        recorder = null
++        ToolWork.done()
++        val ok = runCatching { r.stop() }.isSuccess
++        runCatching { r.release() }
++        level = 0f
++        if (!ok || (lastFile?.length() ?: 0L) <= 0L) {
++            lastFile?.delete(); lastFile = null
++            error = "That recording came out empty. Try again and speak for a second or two."
++        }
++    }
++
+     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+         if (!hasPerm) {
++            Text("Morpho records straight to your device - nothing is uploaded.",
++                color = InkSoft, fontSize = 14.sp)
+             ToolButton("Grant microphone access", accent) {
+                 permLauncher.launch(Manifest.permission.RECORD_AUDIO)
+             }
+-        } else {
+-            Box(Modifier.fillMaxWidth().clip(Shape.card)
+-                .background(if (recording) accent else accent.copy(alpha = 0.08f))
+-                .clickable {
+-                    if (!recording) {
+-                        val f = File(ctx.cacheDir, "rec_${System.currentTimeMillis()}.m4a")
+-                        val r = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) MediaRecorder(ctx) else MediaRecorder()
+-                        r.setAudioSource(MediaRecorder.AudioSource.MIC)
+-                        r.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+-                        r.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+-                        r.setOutputFile(f.absolutePath)
+-                        r.prepare(); r.start()
+-                        recorder = r; lastFile = f; recording = true
+-                    } else {
+-                        try { recorder?.stop(); recorder?.release() } catch (_: Exception) {}
+-                        recorder = null; recording = false
++            return@Column
++        }
++
++        if (!recording && lastFile == null) {
++            Column {
++                FieldLabel("QUALITY")
++                Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
++                    REC_QUALITIES.forEachIndexed { i, q ->
++                        val on = i == quality
++                        Row(
++                            Modifier.fillMaxWidth().clip(Shape.field)
++                                .background(if (on) accent.copy(alpha = 0.12f) else PaperSunk)
++                                .clickable { quality = i }
++                                .padding(horizontal = Space.md, vertical = 12.dp),
++                            verticalAlignment = Alignment.CenterVertically
++                        ) {
++                            Column(Modifier.weight(1f)) {
++                                Text(q.label, color = Ink, fontSize = 15.sp,
++                                    fontWeight = FontWeight.SemiBold)
++                                Text(q.detail, color = InkSoft, fontSize = 12.5.sp)
++                            }
++                            if (on) MorphoIcon("check", tint = accent, size = 17.dp)
++                        }
+                     }
+-                }.padding(Space.xl), contentAlignment = Alignment.Center) {
+-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+-                    MorphoIcon("cat-audio", tint = if (recording) Paper else accent, size = 36.dp)
+-                    Spacer(Modifier.height(Space.sm))
+-                    Text(if (recording) "Recording… tap to stop" else "Tap to record",
+-                        color = if (recording) Paper else accent, fontSize = 15.sp)
+                 }
+             }
+-            lastFile?.let { f ->
+-                if (!recording) ToolButton("Save recording", accent) {
+-                    saveMediaToGallery(ctx, f, "voice_${System.currentTimeMillis()}.m4a", false)
++        }
++
++        Column(
++            Modifier.fillMaxWidth().clip(Shape.card)
++                .background(if (recording) accent.copy(alpha = 0.12f) else PaperSunk)
++                .padding(vertical = Space.xl),
++            horizontalAlignment = Alignment.CenterHorizontally,
++            verticalArrangement = Arrangement.spacedBy(Space.md)
++        ) {
++            Text(fmtTime(elapsed), color = Ink, fontSize = 34.sp, fontWeight = FontWeight.Bold)
++            Row(
++                Modifier.fillMaxWidth().padding(horizontal = Space.xl),
++                horizontalArrangement = Arrangement.spacedBy(3.dp)
++            ) {
++                repeat(24) { i ->
++                    val lit = recording && level * 24f > i
++                    Box(
++                        Modifier.weight(1f).height(if (lit) 18.dp else 6.dp).clip(Shape.pill)
++                            .background(if (lit) accent else accent.copy(alpha = 0.18f))
++                    )
+                 }
+             }
++            Text(
++                when {
++                    recording -> "Recording"
++                    lastFile != null -> "Recorded"
++                    else -> "Ready"
++                },
++                color = InkSoft, fontSize = 13.sp
++            )
++        }
++
++        if (error.isNotEmpty()) ToolErrorCard("Couldn't record", error, accent)
++
++        if (recording) {
++            ToolButton("Stop recording", accent) { finish() }
++        } else if (lastFile == null) {
++            ToolButton("Start recording", accent) { begin() }
++        } else {
++            val f = lastFile!!
++            ToolResultCard(
++                fileName = f.name,
++                sizeBytes = f.length(),
++                accent = accent,
++                detail = "${fmtTime(elapsed)} · ${REC_QUALITIES[quality].label}",
++                onSave = {
++                    saveMediaToGallery(ctx, f, "voice_${System.currentTimeMillis()}.m4a", false)
++                },
++                onShare = { shareCacheFile(ctx, f, "audio/mp4", "Share audio") }
++            )
++            ToolButton("Record another", accent.copy(alpha = 0.35f)) {
++                lastFile = null; elapsed = 0L; error = ""
++            }
+         }
+     }
+ }
+@@ -119,14 +252,50 @@ private fun AudioJoiner(accent: Color) {
+     var uris by remember { mutableStateOf<List<Uri>>(emptyList()) }
+     var joining by remember { mutableStateOf(false) }
+     val joinScope = androidx.compose.runtime.rememberCoroutineScope()
++    var joinError by remember { mutableStateOf("") }
+     val picker = rememberLauncherForActivityResult(
+-        ActivityResultContracts.OpenMultipleDocuments()) { uris = it }
++        ActivityResultContracts.OpenMultipleDocuments()) { picked ->
++        if (picked.isNotEmpty()) { uris = picked; joinError = "" }
++    }
+     Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
+         PickRow("Choose audio files", "cat-audio", accent) {
+             picker.launch(arrayOf("audio/*"))
+         }
+         if (uris.isNotEmpty()) {
+-            Text("${uris.size} file(s) — joined in order", color = InkSoft, fontSize = 13.sp)
++            Text("${uris.size} file(s) — joined in the order below",
++                color = InkSoft, fontSize = 13.sp)
++            // The order is the whole point of a joiner, so it has to be movable.
++            Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
++                uris.forEachIndexed { i, u ->
++                    Row(
++                        Modifier.fillMaxWidth().clip(Shape.field).background(PaperSunk)
++                            .padding(start = Space.md, end = Space.sm, top = 6.dp, bottom = 6.dp),
++                        verticalAlignment = Alignment.CenterVertically
++                    ) {
++                        Text("${i + 1}", color = accent, fontSize = 14.sp,
++                            fontWeight = FontWeight.Bold,
++                            modifier = Modifier.padding(end = Space.md))
++                        Text(u.lastPathSegment ?: "Audio", color = Ink, fontSize = 13.5.sp,
++                            maxLines = 1, modifier = Modifier.weight(1f))
++                        if (i > 0) Box(
++                            Modifier.size(36.dp).clip(Shape.pill).clickable {
++                                uris = uris.toMutableList()
++                                    .also { it.add(i - 1, it.removeAt(i)) }
++                                joinError = ""
++                            },
++                            contentAlignment = Alignment.Center
++                        ) { MorphoIcon("chevron-up", tint = accent, size = 14.dp) }
++                        Box(
++                            Modifier.size(36.dp).clip(Shape.pill).clickable {
++                                uris = uris.toMutableList().also { it.removeAt(i) }
++                                joinError = ""
++                            },
++                            contentAlignment = Alignment.Center
++                        ) { MorphoIcon("close", tint = InkFaint, size = 14.dp) }
++                    }
++                }
++            }
++            if (joinError.isNotEmpty()) ToolErrorCard("Couldn't join those files", joinError, accent)
+             // Concatenating tracks is not main-thread work, and without this
+             // there was no indication anything was happening at all.
+             if (joining) ProcessingCard("Joining audio\u2026", accent)
+@@ -135,7 +304,15 @@ private fun AudioJoiner(accent: Color) {
+                 val srcs = uris.toList()
+                 joinScope.launch {
+                     val out = withContext(Dispatchers.IO) { joinAudio(ctx, srcs) }
+-                    if (out != null) saveMediaToGallery(ctx, out, "joined_${System.currentTimeMillis()}.m4a", false)
++                    // A null used to mean the button simply did nothing, which
++                    // reads as the app ignoring the tap.
++                    if (out != null) {
++                        joinError = ""
++                        saveMediaToGallery(ctx, out, "joined_${System.currentTimeMillis()}.m4a", false)
++                    } else {
++                        joinError = "Morpho couldn't decode one of those files on this " +
++                            "device. Try removing the last one you added."
++                    }
+                     joining = false
+                 }
+             }
+@@ -225,6 +402,34 @@ private fun PdfStamp(id: String, accent: Color) {
+ }
+ 
+ // ---- helpers ----
++/** Copy a cache file into the shared/ dir and hand it to the chooser. */
++private fun shareCacheFile(
++    ctx: android.content.Context, file: File, mime: String, title: String
++) {
++    try {
++        val dir = File(ctx.cacheDir, "shared").apply { mkdirs() }
++        val copy = File(dir, file.name)
++        file.inputStream().use { i ->
++            java.io.FileOutputStream(copy).use { o -> i.copyTo(o) }
++        }
++        val uri = androidx.core.content.FileProvider.getUriForFile(
++            ctx, "${ctx.packageName}.fileprovider", copy
++        )
++        ctx.startActivity(
++            Intent.createChooser(
++                Intent(Intent.ACTION_SEND).apply {
++                    type = mime
++                    putExtra(Intent.EXTRA_STREAM, uri)
++                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
++                },
++                title
++            )
++        )
++    } catch (e: Exception) {
++        android.widget.Toast.makeText(ctx, "Share failed", android.widget.Toast.LENGTH_SHORT).show()
++    }
++}
++
+ private fun stampHeaderFooter(src: Bitmap, header: String, footer: String): Bitmap {
+     val out = src.copy(Bitmap.Config.ARGB_8888, true); val c = Canvas(out)
+     val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF444444.toInt(); textSize = out.width/40f }
+-- 
+2.43.0
+
+
+From 04fe735b6c6213ba55ee89933c16a75259c2d231 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 29 Sep 2026 04:45:09 +0000
+Subject: [PATCH 2/2] Compress to Target Size: name the limit, not the quality
+
+The compressor asks "what quality?", which nobody knows the answer to.
+Every exam board, visa portal, job site and government form instead
+states a ceiling in kilobytes, so people were nudging a quality slider
+and re-reading the size until it went under. This inverts it: name the
+limit, get the best-looking encode that fits.
+
+Quality is binary-searched rather than stepped, so a 12MP photo costs
+about seven encodes instead of ninety, measured through bitmapBytes,
+which counts the encoded stream without buffering it. If even quality 5
+overshoots, the scale needed is computed from how far over it landed -
+file size tracks pixel count, so sqrt(target/actual) lands close on the
+first try instead of shrinking by a fixed step and encoding at each stop.
+Shrinking is opt-in and off the critical path when quality alone suffices.
+
+PNG is deliberately absent from the format row: it ignores the quality
+argument, so there would be nothing for the search to turn. Failure is a
+real answer here - if the target cannot be met the tool says so and says
+which control would change that, rather than silently returning the
+smallest thing it managed.
+
+133 tools now, and every one has a pitch entry. No file under ads/ is
+touched.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_012XVfZwTyFK8AbPiu8JTUsL
+---
+ .../java/cc/devbangs/morpho/data/ToolPitch.kt |   2 +
+ .../cc/devbangs/morpho/data/ToolRegistry.kt   |   1 +
+ .../devbangs/morpho/ui/tool/kit/ImageTools.kt | 233 +++++++++++++++++-
+ 3 files changed, 235 insertions(+), 1 deletion(-)
+
+diff --git a/app/src/main/java/cc/devbangs/morpho/data/ToolPitch.kt b/app/src/main/java/cc/devbangs/morpho/data/ToolPitch.kt
+index 643bea9..ecb6ee9 100644
+--- a/app/src/main/java/cc/devbangs/morpho/data/ToolPitch.kt
++++ b/app/src/main/java/cc/devbangs/morpho/data/ToolPitch.kt
+@@ -51,6 +51,8 @@ object ToolPitch {
+             "Fix pages that scanned in sideways or upside down. Rotate the whole document or just the pages that are wrong, and save it straight.",
+         "image-compressor" to
+             "Make an image smaller without making it look bad. You choose the quality level and see the resulting file size before you save, so you can hit an upload limit exactly instead of guessing.",
++        "image-target-size" to
++            "Name the size you are allowed - 200 KB, 1 MB, whatever the form says - and Morpho finds the highest quality that still fits underneath it. For exam boards, visa portals and job applications that reject anything over a limit.",
+         "image-resizer" to
+             "Resize an image to exact dimensions. Pick a preset or type your own width and height, choose whether to fit or fill, and see the real output size before you save — no surprise crops.",
+         "background-remover" to
+diff --git a/app/src/main/java/cc/devbangs/morpho/data/ToolRegistry.kt b/app/src/main/java/cc/devbangs/morpho/data/ToolRegistry.kt
+index 9bd9d32..01bbb28 100644
+--- a/app/src/main/java/cc/devbangs/morpho/data/ToolRegistry.kt
++++ b/app/src/main/java/cc/devbangs/morpho/data/ToolRegistry.kt
+@@ -21,6 +21,7 @@ object ToolRegistry {
+         Tool("pdf-page-rotator", "PDF Page Rotator", "Rotate PDF pages to any angle", ToolCategory.PDF, "pdf-page-rotator", offline = true, popular = false),
+         Tool("image-compressor", "Image Compressor", "Compress images without losing quality", ToolCategory.IMAGE, "image-compressor", offline = true, popular = true),
+         Tool("image-resizer", "Image Resizer", "Resize images to exact dimensions", ToolCategory.IMAGE, "image-resizer", offline = true, popular = true),
++        Tool("image-target-size", "Compress to Target Size", "Hit an exact KB limit, not a guess", ToolCategory.IMAGE, "image-compressor", offline = true, popular = true, keywords = listOf("kb", "limit", "under", "exact size", "upload limit", "passport", "exam", "visa", "portal")),
+         Tool("background-remover", "Background Remover", "Remove image backgrounds with AI", ToolCategory.IMAGE, "background-remover", offline = true, popular = true, plus = true),
+         Tool("image-cropper", "Image Cropper", "Crop images to any size or ratio", ToolCategory.IMAGE, "image-cropper", offline = true, popular = false),
+         Tool("jpg-to-png", "JPG to PNG Converter", "Convert JPG images to PNG format", ToolCategory.CONVERTER, "jpg-to-png", offline = true, popular = false),
+diff --git a/app/src/main/java/cc/devbangs/morpho/ui/tool/kit/ImageTools.kt b/app/src/main/java/cc/devbangs/morpho/ui/tool/kit/ImageTools.kt
+index e75192a..32a8424 100644
+--- a/app/src/main/java/cc/devbangs/morpho/ui/tool/kit/ImageTools.kt
++++ b/app/src/main/java/cc/devbangs/morpho/ui/tool/kit/ImageTools.kt
+@@ -48,7 +48,7 @@ import kotlin.math.hypot
+ import kotlin.math.roundToInt
+ 
+ fun hasImageTool(id: String): Boolean = id in setOf(
+-    "image-compressor","image-resizer","image-cropper","image-rotator","image-blur",
++    "image-compressor","image-target-size","image-resizer","image-cropper","image-rotator","image-blur",
+     "sharpen-image","watermark-image","exif-remover","image-metadata-viewer",
+     "batch-image-converter","thumbnail-creator"
+ )
+@@ -115,6 +115,7 @@ fun ImageTool(id: String, accent: Color) {
+         if (bmp != null) {
+             when (id) {
+                 "image-metadata-viewer" -> MetadataBody(bmp, picked, accent)
++                "image-target-size" -> TargetSizeBody(bmp, picked, accent)
+                 "image-cropper" -> CropBody(bmp, accent)
+                 "image-resizer" -> ResizeBody(bmp, picked, accent)
+                 "thumbnail-creator" -> ThumbnailBody(bmp, accent)
+@@ -1976,6 +1977,236 @@ private fun orientationLabel(v: Int): String = when (v) {
+     else -> "Unspecified"
+ }
+ 
++/** What a search settled on: the bitmap to write, and the terms it found. */
++private class FitResult(
++    val bitmap: Bitmap,
++    val quality: Int,
++    val bytes: Long,
++    val width: Int,
++    val height: Int,
++    val resized: Boolean
++)
++
++/**
++ * Find the best-looking encode that still fits under [targetBytes].
++ *
++ * Quality is searched rather than stepped, so a 12MP photo costs about seven
++ * encodes instead of ninety. If even the floor quality overshoots, the scale
++ * needed is computed from how far over it landed - file size goes roughly with
++ * pixel count, so sqrt(target/actual) lands close on the first try instead of
++ * shrinking by a fixed step six times and encoding at every stop.
++ *
++ * Pure and safe off the main thread. Returns null when the target cannot be
++ * met, which is a real answer and not a failure.
++ */
++private fun fitUnder(
++    src: Bitmap,
++    fmt: Bitmap.CompressFormat,
++    targetBytes: Long,
++    allowResize: Boolean
++): FitResult? {
++    fun search(b: Bitmap): Pair<Int, Long>? {
++        var lo = 5
++        var hi = 95
++        var best: Pair<Int, Long>? = null
++        while (lo <= hi) {
++            val mid = (lo + hi) / 2
++            val n = bitmapBytes(b, fmt, mid)
++            if (n in 1..targetBytes) { best = mid to n; lo = mid + 1 } else hi = mid - 1
++        }
++        return best
++    }
++
++    return try {
++        search(src)?.let {
++            return FitResult(src, it.first, it.second, src.width, src.height, false)
++        }
++        if (!allowResize) return null
++
++        var work = src
++        var owned = false          // never recycle the caller's bitmap
++        repeat(4) {
++            val floor = bitmapBytes(work, fmt, 5).coerceAtLeast(1L)
++            if (floor <= targetBytes) return@repeat
++            val factor = kotlin.math.sqrt(targetBytes.toDouble() / floor.toDouble()) * 0.94
++            val w = (work.width * factor).toInt().coerceAtLeast(64)
++            val h = (work.height * factor).toInt().coerceAtLeast(64)
++            if (w >= work.width || h >= work.height) return null
++            val next = Bitmap.createScaledBitmap(work, w, h, true)
++            if (owned) work.recycle()
++            work = next
++            owned = true
++            search(work)?.let {
++                return FitResult(work, it.first, it.second, work.width, work.height, true)
++            }
++        }
++        search(work)?.let {
++            FitResult(work, it.first, it.second, work.width, work.height, work !== src)
++        }
++    } catch (e: Exception) {
++        null
++    } catch (e: OutOfMemoryError) {
++        null
++    }
++}
++
++private val TARGET_PRESETS = listOf(100, 200, 500, 1024, 2048)
++
++/**
++ * Compress to a size the user names.
++ *
++ * The compressor asks "what quality?", which nobody knows the answer to. Every
++ * exam board, visa portal and job site instead states a ceiling in kilobytes,
++ * and people were left nudging a quality slider and re-checking the number.
++ */
++@Composable
++private fun TargetSizeBody(src: Bitmap, picked: Uri?, accent: Color) {
++    val ctx = LocalContext.current
++    val scope = rememberCoroutineScope()
++    var targetKb by remember { mutableStateOf(200) }
++    var custom by remember { mutableStateOf("") }
++    var fmtKey by remember { mutableStateOf("JPEG") }
++    var allowResize by remember { mutableStateOf(true) }
++    var working by remember { mutableStateOf(false) }
++    var busy by remember { mutableStateOf(false) }
++    var result by remember { mutableStateOf<FitResult?>(null) }
++    var impossible by remember { mutableStateOf(false) }
++    val original = remember(picked) { sourceFileSize(ctx, picked) }
++
++    val effectiveKb = custom.trim().toIntOrNull()?.takeIf { it > 0 } ?: targetKb
++    val fmt = compressFormatOf(fmtKey)
++
++    // Any change to the terms invalidates a result found under the old ones.
++    LaunchedEffect(effectiveKb, fmtKey, allowResize) {
++        result = null; impossible = false
++    }
++
++    Column(verticalArrangement = Arrangement.spacedBy(Space.lg)) {
++        Column {
++            FieldLabel("FIT UNDER")
++            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
++                TARGET_PRESETS.forEach { kb ->
++                    val on = custom.isBlank() && kb == targetKb
++                    Box(Modifier.weight(1f)) {
++                        ToolButton(
++                            if (kb >= 1024) "${kb / 1024}MB" else "${kb}KB",
++                            if (on) accent else accent.copy(alpha = 0.35f)
++                        ) { targetKb = kb; custom = "" }
++                    }
++                }
++            }
++        }
++        Column {
++            FieldLabel("OR AN EXACT LIMIT IN KB")
++            ToolInput(custom, { custom = it.filter { c -> c.isDigit() }.take(7) },
++                "e.g. 150", minLines = 1, mono = true)
++        }
++        Column {
++            FieldLabel("FORMAT")
++            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
++                // PNG is left out on purpose: it ignores the quality argument,
++                // so there is nothing for the search to turn.
++                listOf("JPEG" to "Photos", "WEBP" to "Smaller").forEach { (key, hint) ->
++                    val on = key == fmtKey
++                    Column(
++                        Modifier.weight(1f).clip(Shape.field)
++                            .background(if (on) accent else accent.copy(alpha = 0.12f))
++                            .clickable { fmtKey = key }
++                            .padding(vertical = 10.dp),
++                        horizontalAlignment = Alignment.CenterHorizontally
++                    ) {
++                        Text(key, color = if (on) Paper else InkSoft, fontSize = 13.sp,
++                            fontWeight = FontWeight.SemiBold)
++                        Text(hint, color = if (on) Paper.copy(alpha = 0.82f) else InkFaint,
++                            fontSize = 10.sp)
++                    }
++                }
++            }
++        }
++        Row(
++            Modifier.fillMaxWidth().clip(Shape.field).background(PaperSunk)
++                .clickable { allowResize = !allowResize }
++                .padding(horizontal = Space.md, vertical = 12.dp),
++            verticalAlignment = Alignment.CenterVertically
++        ) {
++            Box(
++                Modifier.size(22.dp).clip(Shape.chip)
++                    .background(if (allowResize) accent else accent.copy(alpha = 0.15f)),
++                contentAlignment = Alignment.Center
++            ) { if (allowResize) MorphoIcon("check", tint = Paper, size = 13.dp) }
++            Spacer(Modifier.width(Space.md))
++            Column {
++                Text("Shrink dimensions if needed", color = Ink, fontSize = 14.5.sp,
++                    fontWeight = FontWeight.SemiBold)
++                Text("Only when quality alone cannot reach the limit",
++                    color = InkSoft, fontSize = 12.sp)
++            }
++        }
++
++        if (working) {
++            ProcessingCard("Finding the best quality that fits...", accent)
++        } else {
++            ToolButton("Fit under ${fmtKb(effectiveKb)}", accent) {
++                working = true
++                impossible = false
++                val target = effectiveKb.toLong() * 1024L
++                val allow = allowResize
++                scope.launch {
++                    val found = withContext(Dispatchers.Default) {
++                        fitUnder(src, fmt, target, allow)
++                    }
++                    result = found
++                    impossible = found == null
++                    working = false
++                }
++            }
++        }
++
++        if (impossible) ToolErrorCard(
++            title = "Can't reach ${fmtKb(effectiveKb)}",
++            body = if (allowResize)
++                "Even at the lowest quality and a much smaller size, this image " +
++                    "will not fit under ${fmtKb(effectiveKb)}. Try a higher limit."
++            else
++                "Quality alone will not get this under ${fmtKb(effectiveKb)}. Turn on " +
++                    "\"Shrink dimensions if needed\" and try again.",
++            accent = accent
++        )
++
++        result?.let { r ->
++            StatGrid(
++                listOf(
++                    "Result" to fmtKb((r.bytes / 1024).toInt()),
++                    "Limit" to fmtKb(effectiveKb),
++                    "Quality" to "${r.quality}",
++                    "Size" to "${r.width}\u00d7${r.height}"
++                ),
++                accent
++            )
++            if (r.resized) Text(
++                "Quality alone could not reach the limit, so the image was scaled " +
++                    "from ${src.width}\u00d7${src.height} down to ${r.width}\u00d7${r.height}.",
++                color = InkSoft, fontSize = 12.5.sp
++            ) else if (original > 0L) Text(
++                "Down from ${fmtKb((original / 1024).toInt())}, at full ${src.width}\u00d7${src.height}.",
++                color = InkSoft, fontSize = 12.5.sp
++            )
++            SaveShareRow(
++                accent, enabled = !busy,
++                onSave = {
++                    runSaveAsync(scope, ctx, "fitted", fmt, r.quality, { busy = it }) { r.bitmap }
++                },
++                onShare = {
++                    runShareAsync(scope, ctx, "fitted", fmt, r.quality, { busy = it }) { r.bitmap }
++                }
++            )
++        }
++    }
++}
++
++private fun fmtKb(kb: Int): String =
++    if (kb >= 1024 && kb % 1024 == 0) "${kb / 1024} MB" else "$kb KB"
++
+ @Composable
+ private fun StepControl(label: String, value: Int, opts: List<Int>, accent: Color, onChange: (Int) -> Unit) {
+     Column {
+-- 
+2.43.0
+

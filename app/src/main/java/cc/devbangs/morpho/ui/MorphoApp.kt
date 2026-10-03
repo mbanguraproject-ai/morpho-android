@@ -35,6 +35,7 @@ import cc.devbangs.morpho.ui.components.MorphoBottomBar
 import cc.devbangs.morpho.ui.home.HomeScreen
 import cc.devbangs.morpho.ui.search.SearchScreen
 import cc.devbangs.morpho.ui.settings.SettingsScreen
+import cc.devbangs.morpho.ui.settings.TermsScreen
 import cc.devbangs.morpho.ui.settings.StatsScreen
 import cc.devbangs.morpho.ui.plus.PlusScreen
 import cc.devbangs.morpho.ui.tool.ToolScreen
@@ -157,6 +158,13 @@ fun MorphoApp() {
                     onBack = { nav.popBackStack() },
                     onOpenPlus = { nav.navigate(Dest.Plus.route) },
                     onOpenStats = { nav.navigate(Dest.Stats.route) },
+                    onOpenTerms = { nav.navigate(Dest.Terms.route) },
+                    contentPadding = bottomBarPadding(false)
+                )
+            }
+            composable(Dest.Terms.route) {
+                TermsScreen(
+                    onBack = { nav.popBackStack() },
                     contentPadding = bottomBarPadding(false)
                 )
             }
